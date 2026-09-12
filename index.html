@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-accent="mist">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="个人工作台 · 晨雾奶油 —— 早上规划、白天专注、晚上复盘的温柔工作台">
+<title>个人工作台 · 晨雾奶油</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23f3ede1'/%3E%3Ccircle cx='13' cy='14' r='6' fill='%23a9c6d8' opacity='.7'/%3E%3Ccircle cx='20' cy='18' r='5' fill='%23b9aade' opacity='.6'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#f6f1e7">
+<link rel="stylesheet" href="css/main.css">
+<style>
+/* 本地主字体：霞鹜文楷精简子集（构建单文件时内联为 base64） */
+@font-face{
+  font-family:"LXGW WenKai Subset";
+  src:url("vendor/font/lxgw-wenkai-subset.woff2") format("woff2");
+  font-weight:300 700; font-display:swap;
+}
+</style>
+</head>
+<body>
+<!-- 背景氛围光斑 -->
+<div id="bg-blobs" aria-hidden="true">
+  <div class="blob blob-a"></div>
+  <div class="blob blob-b"></div>
+  <div class="blob blob-c"></div>
+</div>
+
+<!-- 欢迎入场雾层（首帧动画后移除） -->
+<div id="veil" aria-hidden="true"><div class="veil-inner"><div class="veil-title">晨 雾 奶 油</div><div class="veil-sub">今天，也要好好和自己相处</div></div></div>
+
+<div id="app">
+  <aside id="sidebar" aria-label="导航">
+    <div class="side-brand">
+      <svg viewBox="0 0 32 32" class="brand-mark"><circle cx="16" cy="16" r="14" class="bm-base"/><circle cx="13" cy="14" r="6" class="bm-a"/><circle cx="20" cy="18" r="5" class="bm-b"/></svg>
+      <div class="brand-text"><b>个人工作台</b><span>Cream Reverie</span></div>
+    </div>
+    <nav id="side-nav"><!-- router 填充 --></nav>
+    <div class="side-foot">
+      <button class="side-btn" id="btn-sync-state" hidden>已同步</button>
+      <button class="side-btn" data-route="settings" data-icon="settings">设置</button>
+    </div>
+  </aside>
+
+  <div id="main-wrap">
+    <header id="topbar">
+      <button id="btn-menu" class="icon-btn ghost mobile-only" aria-label="菜单"></button>
+      <div id="page-head"><h1 id="page-title">今日</h1><div id="page-sub"></div></div>
+      <div class="top-actions">
+        <button id="btn-cmdk" class="icon-btn ghost" data-icon="search" title="命令面板 Ctrl+K"></button>
+        <button id="btn-theme" class="icon-btn ghost" data-icon="moon" title="切换深浅色 D"></button>
+      </div>
+    </header>
+    <main id="view" tabindex="-1"><!-- 模块渲染区 --></main>
+  </div>
+</div>
+
+<!-- 移动端底部标签栏 -->
+<nav id="bottombar" class="mobile-only" aria-label="底部导航"></nav>
+<!-- 移动端分组抽屉 -->
+<div id="sheet-root" hidden></div>
+
+<!-- 全局浮层 -->
+<canvas id="fx-canvas" aria-hidden="true"></canvas>
+<div id="modal-root"></div>
+<div id="toast-root" aria-live="polite"></div>
+<div id="cmdk-root" hidden></div>
+
+<!-- ===== vendor ===== -->
+<script src="vendor/echarts.min.js"></script>
+<script src="vendor/gsap.min.js"></script>
+<script src="vendor/solarlunar.min.js"></script>
+<script src="vendor/qrcode.js"></script>
+<!-- ===== core（顺序敏感：file:// 下无 ES Module，靠全局命名空间 WB ===== -->
+<script src="js/00-env.js"></script>
+<script src="js/01-utils.js"></script>
+<script src="js/02-store.js"></script>
+<script src="js/03-idb.js"></script>
+<script src="js/04-data-builtin.js"></script>
+<script src="js/04b-data-content.js"></script>
+<script src="js/05-icons.js"></script>
+<script src="js/06-ui.js"></script>
+<script src="js/07-theme.js"></script>
+<script src="js/08-network.js"></script>
+<script src="js/09-router.js"></script>
+<script src="js/10-markdown.js"></script>
+<script src="js/11-calendar-util.js"></script>
+<script src="js/12-daily.js"></script>
+<script src="js/13-exports.js"></script>
+<script src="js/14-cloud.js"></script>
+<script src="js/15-gestures.js"></script>
+<!-- ===== modules ===== -->
+<script src="js/modules/today.js"></script>
+<script src="js/modules/todos.js"></script>
+<script src="js/modules/calendar.js"></script>
+<script src="js/modules/goals.js"></script>
+<script src="js/modules/countdown.js"></script>
+<script src="js/modules/wishes.js"></script>
+<script src="js/modules/habits.js"></script>
+<script src="js/modules/journal.js"></script>
+<script src="js/modules/mood.js"></script>
+<script src="js/modules/notes.js"></script>
+<script src="js/modules/ledger.js"></script>
+<script src="js/modules/media.js"></script>
+<script src="js/modules/health.js"></script>
+<script src="js/modules/skills.js"></script>
+<script src="js/modules/pomodoro.js"></script>
+<script src="js/modules/sound.js"></script>
+<script src="js/modules/links.js"></script>
+<script src="js/modules/fun.js"></script>
+<script src="js/modules/podcasts.js"></script>
+<script src="js/modules/books.js"></script>
+<script src="js/modules/stats.js"></script>
+<script src="js/modules/trash.js"></script>
+<script src="js/modules/settings.js"></script>
+<script src="js/modules/commands.js"></script>
+<script src="js/modules/rituals.js"></script>
+<script src="js/modules/assistant.js"></script>
+<!-- ===== boot ===== -->
+<script src="js/main.js"></script>
+</body>
+</html>

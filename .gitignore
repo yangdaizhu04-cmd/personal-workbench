@@ -1,0 +1,12 @@
+# 临时与本地环境
+.tmp/
+.mimosa/
+*.log
+.DS_Store
+Thumbs.db
+desktop/node_modules/
+node_modules/
+
+# 编辑器
+.vscode/
+.idea/

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "个人工作台",
+  "version": "1.0.0",
+  "identifier": "com.personal.workbench",
+  "build": {
+    "frontendDist": "../cloud/hosting"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "个人工作台 · 晨雾奶油",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 380,
+        "minHeight": 600,
+        "center": true,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": false,
+      "tooltip": "个人工作台 · 双击或 Ctrl+K 唤出"
+    }
+  },
+  "plugins": {
+    "autostart": {
+      "macosLauncher": "launchd",
+      "args": []
+    }
+  }
+}

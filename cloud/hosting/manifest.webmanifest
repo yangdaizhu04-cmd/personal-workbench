@@ -1,0 +1,18 @@
+{
+  "name": "个人工作台 · 晨雾奶油",
+  "short_name": "工作台",
+  "description": "早上规划、白天专注、晚上复盘的温柔工作台",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f6f1e7",
+  "theme_color": "#f6f1e7",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%23f6f1e7'/%3E%3Ccircle cx='210' cy='225' r='95' fill='%23a9c6d8' opacity='.75'/%3E%3Ccircle cx='320' cy='290' r='80' fill='%23b9aade' opacity='.65'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
