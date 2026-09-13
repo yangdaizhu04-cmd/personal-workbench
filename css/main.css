@@ -241,6 +241,9 @@ textarea.input{resize:vertical; min-height:90px; line-height:1.7;}
 .chip.plain{background:var(--card-2); color:var(--ink-2); border:1px solid var(--card-border);}
 .chip.clickable{cursor:pointer; transition:transform .15s;}
 .chip.clickable:hover{transform:translateY(-1px);}
+.wb-mini-spin{display:inline-block; width:11px; height:11px; border:2px solid var(--accent);
+  border-top-color:transparent; border-radius:50%; animation:wbSpin .8s linear infinite; flex:none;}
+@keyframes wbSpin{to{transform:rotate(360deg)}}
 
 .tag{display:inline-block; padding:1px 8px; border-radius:8px; font-size:11.5px;
   background:var(--accent2-soft); color:var(--accent-2); margin-right:6px; cursor:pointer;}

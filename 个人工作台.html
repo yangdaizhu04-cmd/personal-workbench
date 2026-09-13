@@ -251,6 +251,9 @@ textarea.input{resize:vertical; min-height:90px; line-height:1.7;}
 .chip.plain{background:var(--card-2); color:var(--ink-2); border:1px solid var(--card-border);}
 .chip.clickable{cursor:pointer; transition:transform .15s;}
 .chip.clickable:hover{transform:translateY(-1px);}
+.wb-mini-spin{display:inline-block; width:11px; height:11px; border:2px solid var(--accent);
+  border-top-color:transparent; border-radius:50%; animation:wbSpin .8s linear infinite; flex:none;}
+@keyframes wbSpin{to{transform:rotate(360deg)}}
 
 .tag{display:inline-block; padding:1px 8px; border-radius:8px; font-size:11.5px;
   background:var(--accent2-soft); color:var(--accent-2); margin-right:6px; cursor:pointer;}
@@ -9442,8 +9445,9 @@ WB.pomodoro = {state, isFocusing, begin, pause, resume, giveUp, confirmNext, gar
 
 </script>
 <script>
-/* modules/sound.js —— 声音面板：合成白噪 / 生成式专注音乐 / 本地音乐(IndexedDB) / 我的音频库
-   全部 WebAudio 实时合成（无音频文件），多路混合、独立音量、断网可用（本地/URL 音源除外） */
+/* modules/sound.js —— 声音面板：CC0 真实录音(本地 URL 加载) / 合成白噪 / 生成式专注音乐 / 本地音乐(IndexedDB) / 我的音频库
+   雨声/篝火优先加载 vendor/audio 下的 CC0 录音（文件 URL 加载、不内嵌；断网/file 缺失时自动回落 WebAudio 合成），
+   其余音源为实时合成，断网可用；多路混合、独立音量 */
 (function(){
 "use strict";
 const WB = (window.WB = window.WB || {});
@@ -9541,6 +9545,59 @@ const makers = {
     return {stop(){ try{ n.src.stop(); }catch(e){} clearInterval(timer); }};
   },
 };
+
+/* ---------- 真实录音音源（CC0，来源与处理见 vendor/audio/README.md；文件 URL 加载，不内嵌） ---------- */
+const REAL_SRC = {
+  rain: "vendor/audio/rain.ogg",
+  fire: "vendor/audio/fire.ogg",
+};
+const realEls = {};    // key -> HTMLAudioElement（跨次播放复用，浏览器自缓存）
+const realState = {};  // key -> "loading" | "real" | "synth"
+const genTok = {};     // 每路启动代际：停止/重启后使未完成的加载作废
+const synthWarned = {};
+
+function realVolume(key){
+  const p = prefs();
+  return clamp01((p.vol[key] != null ? p.vol[key] : .5) * (p.vol.master != null ? p.vol.master : .9));
+}
+function startReal(key){
+  realState[key] = "loading";
+  refreshPanel();
+  return new Promise(resolve => {
+    let a = realEls[key];
+    if(!a){
+      a = realEls[key] = new Audio();
+      a.loop = true;
+      a.preload = "auto";
+      a.src = REAL_SRC[key];
+    }
+    let settled = false;
+    const finish = ok => {
+      if(settled) return;
+      settled = true;
+      clearTimeout(timer);
+      realState[key] = ok ? "real" : "synth";
+      resolve(ok ? a : null);
+    };
+    const timer = setTimeout(() => finish(a.readyState >= 3), 4000);
+    a.addEventListener("canplaythrough", () => finish(true), {once:true});
+    a.addEventListener("error", () => finish(false), {once:true});
+    try{ a.load(); }catch(e){ finish(false); }
+  });
+}
+function realFallback(key, myTok){
+  if(genTok[key] !== myTok || !prefs().active[key]) return;
+  if(!synthWarned[key]){
+    synthWarned[key] = true;
+    WB.ui.toast((key === "rain" ? "雨声" : "篝火") + "录音文件没找到，先用合成音源", "warn");
+  }
+  const c = ac(); if(!c) return;
+  const out = srcGain(key);
+  const inst = makers[key](c, out);
+  running[key] = {stop(){ try{ inst.stop(); out.disconnect(); }catch(e){} }, out};
+  realState[key] = "synth";
+  refreshPanel();
+}
 
 /* ---------- 生成式专注音乐 ---------- */
 const PENTA = [261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 587.33]; // C 五声
@@ -9661,6 +9718,7 @@ function startSource(key){
   running[key] = {stop(){ try{ inst.stop(); out.disconnect(); }catch(e){} }};
 }
 function stopSource(key){
+  genTok[key] = (genTok[key] || 0) + 1;   // 使该路未完成的加载作废
   if(running[key]){ running[key].stop(); delete running[key]; }
 }
 function anyPlaying(){ return Object.keys(running).length > 0; }
@@ -9670,6 +9728,7 @@ function setVol(key, v){
     Object.keys(running).forEach(k => {
       if(k === "local" && localAudio) localAudio.volume = clamp01(v * (p.vol.local || .8));
       if(k === "url" && urlAudio) urlAudio.volume = clamp01(v * (p.vol.url || .8));
+      if(running[k].el) running[k].el.volume = clamp01((p.vol[k] != null ? p.vol[k] : .5) * v);
     });
     if(localAudio && !running.local) localAudio.volume = clamp01(v * (p.vol.local || .8));
     return;
@@ -9677,6 +9736,7 @@ function setVol(key, v){
   if(running[key]){
     if(key === "local" && localAudio) localAudio.volume = clamp01(v * (p.vol.master || .9));
     else if(key === "url" && urlAudio) urlAudio.volume = clamp01(v * (p.vol.master || .9));
+    else if(running[key].el) running[key].el.volume = clamp01(v * (p.vol.master || .9));
     else{
       const c = ac();
       // running[key].stop 存的是实例；重新拿不到 gain —— 简化：直接改 out（存引用）
@@ -9692,6 +9752,22 @@ startSource = function(key){
   if(key === "local" || key === "url"){ _origStartSource(key); return; }
   const c = ac(); if(!c) return;
   const mk = makers[key]; if(!mk) return;
+  if(REAL_SRC[key]){
+    const myTok = genTok[key] = (genTok[key] || 0) + 1;
+    running[key] = {stop(){}};   // 占位防重复触发；加载完成后替换为真实实例
+    startReal(key).then(a => {
+      if(genTok[key] !== myTok || !prefs().active[key]) return;
+      if(!a){ realFallback(key, myTok); return; }
+      a.volume = realVolume(key);
+      try{ a.currentTime = 0; }catch(e){}
+      a.play().then(() => {
+        if(genTok[key] !== myTok) return;
+        running[key] = {el: a, stop(){ a.pause(); }};
+      }).catch(() => realFallback(key, myTok));
+      refreshPanel();
+    });
+    return;
+  }
   const out = srcGain(key);
   const inst = mk(c, out);
   running[key] = {stop(){ try{ inst.stop(); out.disconnect(); }catch(e){} }, out};
@@ -9774,11 +9850,16 @@ function renderPanelInto(root){
   const rows = el("div", {class: "col", style: {gap: "9px"}});
   SRC_META.forEach(([key, label, ic]) => {
     const on = !!p.active[key];
+    const isReal = !!REAL_SRC[key];
+    const st = realState[key];
+    const showLabel = label + (isReal && on && st === "synth" ? "（合成）" : "");
+    const loading = isReal && on && st === "loading";
     const r = el("div", {class: "row", style: {gap: "10px"}},
       el("button", {
         class: "chip clickable" + (on ? "" : " plain"),
-        html: icon(ic, 14) + "<span>" + label + "</span>",
+        html: (loading ? '<span class="wb-mini-spin"></span>' : icon(ic, 14)) + "<span>" + showLabel + "</span>",
         style: on ? {background: "var(--accent-soft)"} : {},
+        title: isReal ? (st === "synth" ? "录音文件缺失，当前为合成音源" : "CC0 真实录音 · 本地文件无缝循环（vendor/audio）") : "",
         onclick: () => {
           const st = prefs();
           if(st.active[key]){ st.active[key] = false; stopSource(key); }
