@@ -19,6 +19,7 @@ const DEFAULTS = {
   aiEnabled: true,
   funPetDuringRest: false,
   themeCustomBg: "",         // 自定义背景图 dataURL（可选）
+  lastExportTs: 0,           // 上次导出 JSON 备份的时间（快照提醒用）
 };
 
 function all(){

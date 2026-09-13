@@ -8,6 +8,7 @@
     "build:cloud": "node build.js --cloud"
   },
   "devDependencies": {
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "puppeteer-core": "^25.10.0"
   }
 }

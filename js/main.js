@@ -135,6 +135,8 @@ function boot(){
     WB.store.set("lastOpenDay", today);
     if(WB.rituals && WB.rituals.maybeMorning) setTimeout(() => WB.rituals.maybeMorning(), 1800);
   }
+  // 每日数据快照 + 备份提醒（放启动尾部，不抢首屏）
+  if(WB.snapshots && WB.snapshots.maybeDaily) setTimeout(() => WB.snapshots.maybeDaily(), 2600);
   WB.bus.on("route:changed", () => setTimeout(() => animateCards(WB.$("#view")), 60));
 }
 

@@ -69,13 +69,41 @@ WB.registerModule({
     ]));
 
     /* --- 数据管理 --- */
+    const snapBox = el("div", {class: "col", style: {gap: "6px", width: "100%"}});
+    const paintSnaps = async () => {
+      snapBox.innerHTML = "";
+      const snaps = WB.snapshots ? await WB.snapshots.list() : [];
+      if(!snaps.length){
+        snapBox.appendChild(el("div", {class: "small faint", text: "暂无快照，点右侧「立即快照」生成第一份"}));
+        return;
+      }
+      snaps.forEach(sn => {
+        snapBox.appendChild(el("div", {class: "row", style: {gap: "6px"}},
+          el("span", {class: "small", text: sn.date}),
+          el("span", {class: "small faint", text: (sn.label === "auto" ? "自动" : sn.label) + " · " + (sn.bytes / 1024).toFixed(0) + " KB"}),
+          el("span", {class: "grow"}),
+          el("button", {class: "btn sm", text: "恢复", onclick: async () => {
+            if(await WB.snapshots.restore(sn.key)) WB.ui.toast("正在恢复…");
+          }}),
+          el("button", {class: "btn sm ghost", text: "删除", onclick: async () => {
+            if(await WB.ui.confirmBox("删除 " + sn.date + " 的快照？", {danger: true, okLabel: "删除"})){
+              await WB.snapshots.remove(sn.key); paintSnaps();
+            }}})));
+      });
+    };
+    paintSnaps();
     wrap.appendChild(sectionCard("archive", "数据管理", [
-      row("备份", "导出全部数据为 JSON 文件",
+      row("本机快照", "每日自动拍全量快照存 IndexedDB（保留 7 份）；换浏览器/清缓存后可从此恢复",
+        el("button", {class: "btn sm", html: icon("archive", 15) + "<span>立即快照</span>",
+          onclick: async () => { const r = await WB.snapshots.take("手动"); WB.ui.toast("快照完成（" + (r.bytes / 1024).toFixed(0) + " KB）"); paintSnaps(); }})),
+      el("div", {class: "row", style: {alignItems: "flex-start"}}, snapBox),
+      row("备份", "导出全部数据为 JSON 文件（快照只在浏览器里，文件备份才是双保险）",
         el("button", {class: "btn sm", html: icon("download", 15) + "<span>导出 JSON</span>",
           onclick: () => {
             const data = WB.store.exportAll();
             data.__meta = {app: "个人工作台", version: 1, exportedAt: new Date().toISOString()};
             WB.downloadFile("个人工作台备份-" + WB.todayStr() + ".json", JSON.stringify(data, null, 2), "application/json");
+            WB.theme.set("lastExportTs", Date.now());
             WB.ui.toast("已导出 " + Object.keys(data).length + " 类数据");
           }})),
       row("恢复", "从 JSON 备份导入（合并或覆盖）", importBtn()),
