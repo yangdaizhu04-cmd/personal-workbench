@@ -141,10 +141,8 @@ function tickStart(){
     if(!s || !s.running){ tickStop(); return; }
     if(s.remainSec <= 0) finish();
     else {
-      const big = document.getElementById("pomo-time");
-      if(big) big.textContent = fmtRemain(s.remainSec);
       const ringEl = document.getElementById("pomo-ring");
-      if(ringEl && ringEl.__update) ringEl.__update(1 - s.remainSec / s.plannedSec);
+      if(ringEl && ringEl.__update) ringEl.__update(1 - s.remainSec / s.plannedSec, s.remainSec);
     }
   }, 1000);
 }
@@ -271,15 +269,15 @@ WB.registerModule({
       const st = state();
       const ringEl = WB.ui.ring(0, 190, 9);
       ringEl.id = "pomo-ring";
-      ringEl.__update = (pct) => {
+      ringEl.__update = (pct, remainSec) => {
         const fg = ringEl.querySelector(".ring-fg");
         const c = parseFloat(fg.getAttribute("stroke-dasharray"));
         fg.style.strokeDashoffset = c * (1 - WB.clamp(pct, 0, 1));
-        ringEl.querySelector(".ring-label").textContent = fmtRemain(st.remainSec);
+        ringEl.querySelector(".ring-label").textContent = fmtRemain(remainSec != null ? remainSec : Math.ceil(st.plannedSec * (1 - WB.clamp(pct, 0, 1))));
       };
       ringEl.querySelector(".ring-label").style.fontSize = "26px";
       ringEl.querySelector(".ring-label").style.fontWeight = "600";
-      ringEl.__update(1 - st.remainSec / st.plannedSec);
+      ringEl.__update(1 - st.remainSec / st.plannedSec, st.remainSec);
       const timeWrap = el("div", {class: "center pomo-orb-stage", style: {position: "relative", padding: "6px 0"}},
         orbHostEl(), ringEl);
       timerCard.appendChild(timeWrap);

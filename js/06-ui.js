@@ -32,7 +32,7 @@ function modal({title, icon: ic, content, actions, wide, onClose}){
   }
   box.appendChild(body);
   const foot = el("div", {class: "modal-foot"});
-  if(actions && actions.length) box.appendChild(foot);
+  box.appendChild(foot); // 始终挂载：晨间/收工仪式等无 actions 调用方需要自行填充按钮（空时由 CSS 隐藏）
 
   const scrim = el("div", {class: "modal-scrim"}, box);
   function close(ok){
