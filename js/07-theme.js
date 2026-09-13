@@ -7,7 +7,8 @@ const DEFAULTS = {
   theme: "light",            // light | dark | auto
   accent: "mist",            // mist | peach | mint | custom
   accentCustom: "#7fa3bd",
-  wallpaper: false,          // Bing 壁纸开关（默认关）
+  wallpaper: false,          // 兼容旧键：Bing 壁纸开关
+  bgMode: "",                // blobs | dynamic | bing | custom（空=从旧键推导）
   motion: true,              // 动效
   quoteSource: "hitokoto",   // hitokoto | jinrishici | builtin
   pomodoroFocus: 25, pomodoroRest: 5,
@@ -66,17 +67,26 @@ function apply(){
   applyWallpaper();
 }
 
+function bgMode(){
+  const s = all();
+  if(s.bgMode) return s.bgMode;
+  // 旧键兼容：无 bgMode 时从 wallpaper/themeCustomBg 推导
+  return s.themeCustomBg ? "custom" : (s.wallpaper ? "bing" : "blobs");
+}
+
 function applyWallpaper(){
   const html = document.documentElement;
   const body = document.body;
+  const mode = bgMode();
   const bg = get("themeCustomBg");
-  const bingOn = get("wallpaper");
-  if(bg){
+  if(mode === "custom" && bg){
     body.classList.add("wallpaper-on");
+    body.classList.remove("bg-dynamic-on");
     body.style.backgroundImage = "url(" + bg + ")";
     return;
   }
-  if(bingOn){
+  if(mode === "bing"){
+    body.classList.remove("bg-dynamic-on");
     const today = WB.todayStr();
     const cache = WB.store.readCache("bingwp:" + today, 86400000);
     const setIt = url => {
@@ -93,7 +103,8 @@ function applyWallpaper(){
   }
   body.classList.remove("wallpaper-on");
   body.style.backgroundImage = "";
-  if(!bg) html.style.removeProperty("--bg-image");
+  // 动态壁纸：晨露（亮色）/ 夜雾星座（暗色），由 islands/core.js 监听此类名挂载
+  body.classList.toggle("bg-dynamic-on", mode === "dynamic");
 }
 
 function toggleTheme(){
@@ -118,5 +129,5 @@ function init(){
   });
 }
 
-WB.theme = {DEFAULTS, all, get, set, merge, apply, toggleTheme, init, resolvedTheme};
+WB.theme = {DEFAULTS, all, get, set, merge, apply, toggleTheme, init, resolvedTheme, bgMode};
 })();

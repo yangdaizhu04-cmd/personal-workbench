@@ -39,8 +39,26 @@ WB.registerModule({
         WB.ui.toast("已收进书影剧馆「想读」");
         WB.router.render();
       }}));
+    if(!window.WB_SINGLE_FILE)
+      actions.appendChild(el("button", {class: "btn sm", text: "📚 3D 书架",
+        onclick: () => toggleShelf(view, hero)}));
     hero.appendChild(actions);
     view.appendChild(hero);
+
+    /* 3D 书架（ThreeUI BookshelfScene，按需加载 1.7MB island） */
+    function toggleShelf(view, anchor){
+      const exist = view.querySelector("#books-shelf");
+      if(exist){ exist.remove(); return; }
+      const shelf = el("div", {id: "books-shelf", "data-state": "loading", style: {marginBottom: "14px"}});
+      anchor.after(shelf);
+      if(!document.getElementById("shelf-island-script")){
+        const sc = document.createElement("script");
+        sc.id = "shelf-island-script";
+        sc.src = "vendor/threeui/islands/shelf.js";
+        sc.onerror = () => { shelf.dataset.state = "off"; shelf.innerHTML = "<div style='padding:20px;text-align:center' class='small muted'>书架加载失败</div>"; };
+        document.body.appendChild(sc);
+      }
+    }
 
     /* 主题书单 */
     const tabs = el("div", {class: "seg", style: {marginBottom: "12px"}});

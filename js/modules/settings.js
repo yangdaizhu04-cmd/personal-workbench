@@ -40,9 +40,10 @@ WB.registerModule({
       row("点缀色", "三套预设 + 自定义强调色", accentRow),
       row("静音动效", "一键关闭所有动画与音效",
         toggle(s.motion, v => WB.theme.set("motion", v))),
-      row("Bing 每日壁纸", "联网时每天一张，奶油风蒙层不变",
-        toggle(s.wallpaper, v => { WB.theme.set("wallpaper", v); if(!v) WB.theme.set("themeCustomBg", ""); })),
-      row("自定义背景", "上传图片或用 Unsplash（需在下方 BYOK 填 Key）", bgEditor()),
+      row("背景", "光斑 / 动态晨露夜雾 / Bing 每日 / 自定义图片",
+        seg([["blobs", "光斑"], ["dynamic", "动态"], ["bing", "Bing"], ["custom", "自定义"]],
+          WB.theme.bgMode(), v => WB.theme.set("bgMode", v))),
+      row("自定义图片", "上传图片或用 Unsplash（需在下方 BYOK 填 Key），上传后自动启用", bgEditor()),
     ]));
 
     /* --- 番茄钟与提醒 --- */
@@ -239,6 +240,7 @@ WB.registerModule({
           const reader = new FileReader();
           reader.onload = () => {
             WB.theme.set("themeCustomBg", reader.result);
+            WB.theme.set("bgMode", "custom");
             WB.ui.toast("背景已更换");
           };
           reader.readAsDataURL(blob);
@@ -259,11 +261,12 @@ WB.registerModule({
           const url = d && d.results && d.results[0] && (d.results[0].urls.regular || d.results[0].urls.full);
           if(url){
             WB.theme.set("themeCustomBg", url);
+            WB.theme.set("bgMode", "custom");
             WB.ui.toast("背景已更换（Unsplash）");
           }else WB.ui.toast("Unsplash 暂不可用，检查 Key 或网络", "warn");
         }}));
       box.appendChild(el("button", {class: "btn sm ghost", text: "恢复默认",
-        onclick: () => { WB.theme.set("themeCustomBg", ""); WB.theme.set("wallpaper", false); WB.ui.toast("已恢复奶油风"); }}));
+        onclick: () => { WB.theme.set("themeCustomBg", ""); WB.theme.set("bgMode", "blobs"); WB.ui.toast("已恢复奶油风"); }}));
       return box;
     }
     function notifyBtn(){

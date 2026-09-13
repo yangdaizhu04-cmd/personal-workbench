@@ -1,11 +1,15 @@
 /* Service Worker —— 云端版专用（本地 file:// 双击版自动跳过注册）
    策略：静态资源 cache-first + 后台更新；API 请求不缓存 */
-const CACHE = "wb-cache-v1";
+const CACHE = "wb-cache-v2";
 const SHELL = [
   "./",
   "./index.html",
-  "./css/main.css",
   "./manifest.webmanifest",
+  "./css/main.css",
+  "./vendor/font/lxgw-wenkai-subset.woff2",
+  "./vendor/audio/rain.ogg",
+  "./vendor/audio/fire.ogg",
+  "./vendor/threeui/islands/core.js",
 ];
 
 self.addEventListener("install", e => {

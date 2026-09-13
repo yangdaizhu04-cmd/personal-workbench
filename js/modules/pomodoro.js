@@ -24,11 +24,29 @@ function isFocusing(){
   const s = stateRaw();
   return !!(s && s.running && s.mode === "focus");
 }
+/* 球体相位（ThreeUI island）：idle/celebrate/focus-running/focus-paused/rest-running/rest-paused */
+function emitPhase(){
+  const s = stateRaw();
+  let phase = "idle";
+  if(s){
+    if(s.needConfirm) phase = "celebrate";
+    else if(s.running) phase = s.mode + "-running";
+    else phase = s.mode + "-paused";
+  }
+  WB.bus.emit("pomo:phase", {phase});
+}
+/* 持久宿主：模块每次渲染重新搬进计时卡，避免 router 重绘时 React 根被销毁 */
+let orbHost = null;
+function orbHostEl(){
+  if(!orbHost) orbHost = document.getElementById("focus-orb") || el("div", {id: "focus-orb", "data-state": "idle"});
+  return orbHost;
+}
 function begin(mode, plannedMin){
   setState({mode, plannedSec: plannedMin * 60, accumMs: 0, resumeTs: Date.now(), running: true,
     needConfirm: false, bindType: curBind.type, bindId: curBind.id, bindTitle: curBind.title,
     startedAt: Date.now()});
   tickStart();
+  emitPhase();
   if(mode === "focus"){
     WB.bus.emit("pomo:start"); // 声音面板自动恢复上次组合
     if(WB.router.nav() === "today") WB.router.render(); // 内容类卡片立即淡出
@@ -37,12 +55,12 @@ function begin(mode, plannedMin){
 function pause(){
   const s = stateRaw(); if(!s || !s.running) return;
   s.accumMs += Date.now() - s.resumeTs; s.resumeTs = null; s.running = false;
-  setState(s); tickStop();
+  setState(s); tickStop(); emitPhase();
 }
 function resume(){
   const s = stateRaw(); if(!s || s.running) return;
   s.resumeTs = Date.now(); s.running = true; s.needConfirm = false;
-  setState(s); tickStart();
+  setState(s); tickStart(); emitPhase();
 }
 function giveUp(){
   const s = stateRaw(); if(!s) return;
@@ -54,7 +72,7 @@ function giveUp(){
   }else{
     WB.ui.toast("已取消");
   }
-  setState(null); tickStop();
+  setState(null); tickStop(); emitPhase();
   WB.router.render();
 }
 function finish(){
@@ -64,7 +82,7 @@ function finish(){
     bindType: s.bindType, bindId: s.bindId, bindTitle: s.bindTitle, ts: Date.now()});
   s.running = false; s.accumMs = s.plannedSec * 1000; s.resumeTs = null;
   s.needConfirm = true; s.nextMode = s.mode === "focus" ? "rest" : "focus";
-  setState(s); tickStop();
+  setState(s); tickStop(); emitPhase();
   notifyAll(s.mode);
   if(WB.badgeCheck) WB.badgeCheck();
 }
@@ -75,7 +93,7 @@ function confirmNext(){
   begin(s.nextMode, minutes);
   WB.router.render();
 }
-function stopAndClear(){ setState(null); tickStop(); WB.router.render(); }
+function stopAndClear(){ setState(null); tickStop(); emitPhase(); WB.router.render(); }
 
 /* ---------- 提醒三件套 ---------- */
 let titleTimer = null;
@@ -262,8 +280,10 @@ WB.registerModule({
       ringEl.querySelector(".ring-label").style.fontSize = "26px";
       ringEl.querySelector(".ring-label").style.fontWeight = "600";
       ringEl.__update(1 - st.remainSec / st.plannedSec);
-      const timeWrap = el("div", {class: "center", style: {padding: "6px 0"}}, ringEl);
+      const timeWrap = el("div", {class: "center pomo-orb-stage", style: {position: "relative", padding: "6px 0"}},
+        orbHostEl(), ringEl);
       timerCard.appendChild(timeWrap);
+      WB.bus.emit("pomo:orb-attach"); // 宿主已搬回 DOM，让 island 重新对齐相位
 
       timerCard.appendChild(el("div", {class: "muted", style: {marginBottom: "6px"}},
         st.mode === "focus" ? "🍅 专注中" : "🌱 休息中",
@@ -337,6 +357,7 @@ setTimeout(() => {
   // 若离开期间已完成
   const st = state();
   if(st && st.running && st.remainSec <= 0) finish();
+  else emitPhase();
 }, 800);
 
 WB.pomodoro = {state, isFocusing, begin, pause, resume, giveUp, confirmNext, gardenStats, toggleSound(){

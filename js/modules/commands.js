@@ -76,6 +76,13 @@ function buildItems(q){
       out.push({group: "跳转", icon: m.icon || "circle", label: m.title, hint: "打开模块",
         exec: () => WB.router.go(m.id)});
   });
+  // 窗景（ThreeUI 场景页）
+  if(WB.scenes){
+    Object.entries(WB.scenes.SCENES).forEach(([key, s]) => {
+      if(!t || s.title.includes(t)) out.push({group: "窗景", icon: "image", label: s.title, hint: "打开场景页",
+        exec: () => WB.scenes.open(key)});
+    });
+  }
   if(!t){
     out.length = Math.min(out.length, 6);
     out.push({group: "捕捉", icon: "plus", label: "输入文字回车 → 新待办（支持 明天/后天/周五/3月5日）", hint: "",

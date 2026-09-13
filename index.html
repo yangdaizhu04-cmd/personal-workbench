@@ -24,6 +24,10 @@
   <div class="blob blob-b"></div>
   <div class="blob blob-c"></div>
 </div>
+<!-- 动态壁纸层（晨露/夜雾星座，ThreeUI 移植，设置里开启） -->
+<div id="bg-shader" aria-hidden="true"></div>
+<!-- 番茄钟专注球体（持久宿主，渲染时被 pomodoro 移入计时卡圆孔） -->
+<div id="focus-orb" data-state="idle" aria-hidden="true"></div>
 
 <!-- 欢迎入场雾层（首帧动画后移除） -->
 <div id="veil" aria-hidden="true"><div class="veil-inner"><div class="veil-title">晨 雾 奶 油</div><div class="veil-sub">今天，也要好好和自己相处</div></div></div>
@@ -61,6 +65,16 @@
 
 <!-- 全局浮层 -->
 <canvas id="fx-canvas" aria-hidden="true"></canvas>
+<!-- 窗景页（ThreeUI 自包含场景，按需 iframe） -->
+<div id="scene-viewer" hidden role="dialog" aria-label="窗外景致">
+  <div class="scene-frame">
+    <div class="scene-head">
+      <span id="scene-title"></span>
+      <button id="scene-close" class="icon-btn ghost" aria-label="关上窗">✕</button>
+    </div>
+    <iframe id="scene-iframe" title="窗景" scrolling="no"></iframe>
+  </div>
+</div>
 <div id="modal-root"></div>
 <div id="toast-root" aria-live="polite"></div>
 <div id="cmdk-root" hidden></div>
@@ -115,6 +129,9 @@
 <script src="js/modules/commands.js"></script>
 <script src="js/modules/rituals.js"></script>
 <script src="js/modules/assistant.js"></script>
+<script src="js/modules/scenes.js"></script>
+<!-- ThreeUI 视觉 island（构建产物：tools/build-islands.mjs；React 组件打包为普通脚本） -->
+<script src="vendor/threeui/islands/core.js"></script>
 <!-- ===== boot ===== -->
 <script src="js/main.js"></script>
 </body>

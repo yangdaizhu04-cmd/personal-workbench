@@ -105,6 +105,7 @@ function checkReminders(){
 /* ---------- 启动 ---------- */
 function boot(){
   WB.theme.init();
+  if(WB.scenes && WB.scenes.init) WB.scenes.init();
   WB.iconHydrate(document);
   WB.router.init();
   initShortcuts();

@@ -1,6 +1,8 @@
 /* build.js —— 单文件构建：把 CSS/JS/字体全部内联进一个 HTML（双击即开，云端部署用）
    用法：node build.js          → 输出 个人工作台.html
-        node build.js --cloud  → 另存 cloud/hosting/{index.html, manifest.webmanifest, sw.js} */
+        node build.js --cloud  → 另存 cloud/hosting/{index.html, manifest.webmanifest, sw.js}
+   ThreeUI islands：先跑 tools/build-islands.mjs（ThreeUI 仓库存在时），产物 vendor/threeui/islands/*.js
+   已提交仓库；单文件版剥离 islands（动态壁纸/窗景/书架为文件夹版专属），注入 WB_SINGLE_FILE 标记。 */
 const fs = require("fs");
 const path = require("path");
 const ROOT = path.resolve(__dirname);
@@ -12,6 +14,23 @@ function safePath(p){
   return target;
 }
 function read(p){ return fs.readFileSync(safePath(p), "utf8"); }
+
+/* esbuild 压缩（可选依赖：node_modules/esbuild 不存在时原样返回） */
+let esbuild = null;
+try{ esbuild = require("esbuild"); }catch(e){}
+function minifyJS(code){
+  if(!esbuild) return code;
+  try{
+    return esbuild.transformSync(code, {minify: true, legalComments: "none"}).code;
+  }catch(e){ console.warn("  ! JS 压缩失败，使用原样代码:", String(e.message).slice(0, 120)); return code; }
+}
+function minifyCSS(code){
+  if(!esbuild) return code;
+  try{
+    return esbuild.transformSync(code, {loader: "css", minify: true}).code;
+  }catch(e){ console.warn("  ! CSS 压缩失败，使用原样代码:", String(e.message).slice(0, 80)); return code; }
+}
+
 function inlineCSS(css){
   // 字体 → base64
   css = css.replace(/url\(["']?([^"')]+\.woff2)["']?\)/g, (m, p1) => {
@@ -20,10 +39,21 @@ function inlineCSS(css){
     const b64 = fs.readFileSync(fp).toString("base64");
     return 'url(data:font/woff2;base64,' + b64 + ')';
   });
-  return "<style>\n" + css + "\n</style>";
+  return "<style>\n" + minifyCSS(css) + "\n</style>";
 }
 
 let html = read("index.html");
+
+/* 0. 若本地有 ThreeUI 仓库则先重建 islands（否则用已提交产物） */
+try{
+  require("child_process").execSync("node tools/build-islands.mjs", {cwd: ROOT, stdio: "inherit"});
+}catch(e){ /* 仓库缺失：用已提交产物，不阻塞构建 */ }
+
+/* 0.5 单文件版：剥离 islands（含 5.5MB 场景页/1.7MB 书架均不内联），注入标记 */
+html = html.replace(
+  /<script src="vendor\/threeui\/islands\/[^"]+"><\/script>\n?/g,
+  "<script>window.WB_SINGLE_FILE=1;</script>\n"
+);
 
 /* 1. 内联 <link rel="stylesheet"> */
 html = html.replace(/<link rel="stylesheet" href="([^"]+)">/g, (m, href) => inlineCSS(read(href)));
@@ -31,7 +61,7 @@ html = html.replace(/<link rel="stylesheet" href="([^"]+)">/g, (m, href) => inli
 /* 2. 内联 <script src>（保持顺序；转义字符串里的 </script>） */
 html = html.replace(/<script src="([^"]+)"><\/script>/g, (m, src) => {
   const code = read(src);
-  const safe = code.replace(/<\/script>/g, "<\\/script>");
+  const safe = minifyJS(code).replace(/<\/script>/g, "<\\/script>");
   return "<script>\n" + safe + "\n</script>";
 });
 
@@ -56,7 +86,16 @@ if(process.argv.includes("--cloud")){
   const dir = safePath("cloud/hosting");
   fs.mkdirSync(dir, {recursive: true});
   fs.writeFileSync(path.join(dir, "index.html"), html);
-  fs.copyFileSync(safePath("manifest.webmanifest"), path.join(dir, "manifest.webmanifest"));
-  fs.copyFileSync(safePath("sw.js"), path.join(dir, "sw.js"));
-  console.log("✅ 云端产物已写入 cloud/hosting/（index.html + manifest + sw.js）");
+  fs.writeFileSync(path.join(dir, "manifest.webmanifest"), read("manifest.webmanifest"));
+  // SW 预缓存清单自动生成：静态 shell + islands 核心包；场景页/书架走运行时缓存（首次打开后离线可用）
+  const shell = ["./", "./index.html", "./manifest.webmanifest",
+    "./css/main.css", "./vendor/font/lxgw-wenkai-subset.woff2",
+    "./vendor/audio/rain.ogg", "./vendor/audio/fire.ogg",
+    "./vendor/threeui/islands/core.js"];
+  const sw = read("sw.js").replace(
+    /const SHELL = \[[\s\S]*?\];/,
+    "const SHELL = [\n" + shell.map(s => '  "' + s + '",').join("\n") + "\n];"
+  );
+  fs.writeFileSync(path.join(dir, "sw.js"), sw);
+  console.log("✅ 云端产物已写入 cloud/hosting/（index.html + manifest + sw.js，预缓存 %d 项）", shell.length);
 }

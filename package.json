@@ -1,0 +1,13 @@
+{
+  "name": "personal-workbench",
+  "version": "1.0.0",
+  "private": true,
+  "description": "个人工作台 · 晨雾奶油 — 本地优先的效率与生活工作台",
+  "scripts": {
+    "build": "node build.js",
+    "build:cloud": "node build.js --cloud"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

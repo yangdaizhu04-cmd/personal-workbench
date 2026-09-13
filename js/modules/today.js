@@ -6,7 +6,7 @@ const { el, icon, esc } = WB;
 
 const DEFAULT_CARDS = [
   "big3", "todos", "habits", "mood", "pomodoro", "countdown",
-  "goals", "journal", "rate", "word", "memory", "quote", "term", "content",
+  "goals", "journal", "rate", "word", "memory", "quote", "koi", "term", "content",
 ];
 const CARD_META = {
   big3:      {name: "今日三大件", icon: "target"},
@@ -21,6 +21,7 @@ const CARD_META = {
   word:      {name: "每日单词", icon: "book-open"},
   memory:    {name: "每日旧忆", icon: "feather"},
   quote:     {name: "每日一句", icon: "quote"},
+  koi:       {name: "锦鲤引言", icon: "droplet"},
   term:      {name: "节气 · 月相", icon: "moon-star"},
   content:   {name: "今日看点", icon: "sparkle"},
 };
@@ -57,6 +58,15 @@ WB.registerModule({
     /* ===== 顶部：日期 + 班休 + 天气 ===== */
     wrap.appendChild(this.dateCard(dateStr));
 
+    /* ===== 窗景入口（ThreeUI 场景页；单文件版自动隐藏） ===== */
+    if(WB.scenes && !window.WB_SINGLE_FILE){
+      wrap.appendChild(el("div", {class: "row", style: {gap: "8px", flexWrap: "wrap"}},
+        el("span", {class: "small faint", style: {alignSelf: "center"}, text: "窗外："}),
+        Object.entries(WB.scenes.SCENES).map(([key, s]) =>
+          el("button", {class: "btn sm ghost", text: s.title.replace("窗外 · ", ""),
+            onclick: () => WB.scenes.open(key)}))));
+    }
+
     /* ===== 今日三大件（仪式圈选，置顶展示） ===== */
     /* ===== 卡片流（可拖拽排序/显隐） ===== */
     const grid = el("div", {class: "grid grid-2", style: {alignItems: "start"}});
@@ -74,6 +84,7 @@ WB.registerModule({
       word: () => this.wordCard(dateStr),
       memory: () => this.memoryCard(dateStr),
       quote: () => this.quoteCard(dateStr),
+      koi: () => this.koiCard(dateStr),
       term: () => this.termCard(dateStr),
       content: () => this.contentCard(dateStr),
     };
@@ -492,6 +503,49 @@ WB.registerModule({
     const q = WB.data.quoteOf(dateStr);
     paint(q[0], q[1]);
     if(WB.daily && WB.daily.getQuote) WB.daily.getQuote(dateStr).then(r => { if(r) paint(r.zh, r.en, r.from); });
+    return card;
+  },
+
+  /* ---------- 锦鲤引言（水墨和纸卡堆，灵感致敬 ThreeUI koi-studies，MIT） ---------- */
+  koiCard(dateStr){
+    const KOI_QUOTES = [
+      ["如水而行，藏火于心。", "Move like water, keep the fire quiet."],
+      ["游得慢的鱼，看得见水底的月光。", "The slow koi sees moonlight on the pond floor."],
+      ["逆流不是倔强，是认得方向。", "Swimming upstream is knowing where you belong."],
+      ["一池一鱼一天地，一笔一息一浮生。", "One pond, one fish, one whole world."],
+      ["水深则静，人静则明。", "Deep water runs still; a still mind runs clear."],
+      ["今日雨落池中，明日锦鲤过桥。", "Rain tonight, koi over the bridge tomorrow."],
+    ];
+    const card = el("div", {class: "card"},
+      el("div", {class: "card-title", html: icon("droplet", 18) + "<span>锦鲤引言</span><span class='card-sub'>点按或拖动翻卡</span>"}));
+    const stage = el("div", {class: "koi-stack"});
+    card.appendChild(stage);
+    let order = [];
+    const paint = () => {
+      stage.innerHTML = "";
+      order.slice(0, 3).forEach((idx, pos) => {
+        const q = KOI_QUOTES[idx];
+        const cd = el("div", {class: "koi-card koi-pos" + pos},
+          el("div", {class: "koi-seal", text: "鲤"}),
+          el("div", {class: "koi-zh", text: q[0]}),
+          el("div", {class: "koi-en", text: q[1]}),
+          el("div", {class: "koi-hint", text: pos === 0 ? "→ 翻一张" : ""}));
+        stage.appendChild(cd);
+      });
+    };
+    const cycle = () => { order.push(order.shift()); paint(); };
+    // 当日主句排最前，其余轮转
+    const head = WB.pickDaily(KOI_QUOTES.map((_, i) => i), dateStr);
+    order = KOI_QUOTES.map((_, i) => i).filter(i => i !== head);
+    order.unshift(head);
+    paint();
+    let dragX = null;
+    stage.addEventListener("pointerdown", e => { dragX = e.clientX; });
+    stage.addEventListener("pointerup", e => {
+      if(dragX === null) return;
+      const dx = e.clientX - dragX; dragX = null;
+      if(Math.abs(dx) > 8 || dx === 0) cycle();
+    });
     return card;
   },
 
