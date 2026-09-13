@@ -97,4 +97,6 @@ WB.registerModule({
 
   dailyPick,
 });
+
+WB.books = {dailyPick};
 })();

@@ -6,6 +6,10 @@ const { el, icon, esc } = WB;
 
 const daily = dateStr => WB.pickDaily(WB.content.PODCASTS, dateStr);
 const favKey = "podcastFavs";
+function dailyPick(dateStr){
+  const p = daily(dateStr || WB.bizDate());
+  return {name: p[1], intro: p[2]};
+}
 
 function jumpLinks(p){
   const row = el("div", {class: "row", style: {gap: "6px", flexWrap: "wrap"}});
@@ -87,6 +91,8 @@ WB.registerModule({
     paint();
   },
 
-  dailyPick: dateStr => { const p = daily(dateStr || WB.bizDate()); return {name: p[1], intro: p[2]}; },
+  dailyPick,
 });
+
+WB.podcasts = {dailyPick};
 })();
