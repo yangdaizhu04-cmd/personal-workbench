@@ -649,3 +649,359 @@ html[data-theme="dark"] .koi-card{border-color:rgba(150,150,200,.18); box-shadow
 .koi-zh{font-size:18px; font-weight:600; line-height:1.7; color:var(--ink); max-width:82%;}
 .koi-en{margin-top:8px; font-size:12.5px; font-style:italic; color:var(--ink-3); max-width:82%;}
 .koi-hint{position:absolute; left:20px; bottom:10px; font-size:11px; color:var(--ink-3); letter-spacing:.12em;}
+
+/* ============================================================
+   沉浸专注层（js/16-immersive.js）
+   · 层级用 --z-sheet(110)：压住 #app(1)/#bottombar(90)，又低于 modal-scrim(120)、
+     cmdk(150)、toast(160)、fx-canvas(180)、pomo-flash(190)
+     → 沉浸中弹确认框 / 吐司 / 彩带都不需要额外抬层
+   · 配色：场景名 → 一组 --fs-* 变量（亮暗各一套），换色靠可插值属性过渡；
+     背景渐变不可插值 → 由 JS 叠一个旧场景槽位交叉淡入（.fs-scene-out）
+   · 动效：全部 class/keyframes，JS 只改 class 与文本 → html.no-motion 天然熔断
+   ============================================================ */
+#focus-stage{
+  position:fixed; inset:0; z-index:var(--z-sheet); overflow:hidden;
+  color:var(--fs-ink); opacity:0; user-select:none; -webkit-tap-highlight-color:transparent;
+  transition:opacity var(--dur-scene) var(--ease-cross);
+}
+#focus-stage[hidden]{display:none;}
+#focus-stage.is-on{opacity:1;}
+/* 沉浸期间藏掉应用外壳：只用 opacity（不卸载 DOM，退出后视图/滚动位置原样还在） */
+body.immersive-fade #app, body.immersive-fade #bottombar{transition:opacity var(--dur-scene) var(--ease-cross);}
+body.immersive-on #app, body.immersive-on #bottombar{opacity:0; pointer-events:none;}
+
+/* ---------- 场景（四套） ---------- */
+.fs-scene{position:absolute; inset:0; background:var(--fs-bg);
+  transition:opacity var(--dur-scene) var(--ease-cross);}
+/* 场景自身的动态层：每个场景用 ::before/::after 叠两片，全部只动 opacity / transform
+   （合成层内完成，不触发布局、不重绘），且都在 html.no-motion 的熔断范围内 */
+.fs-fx{position:absolute; inset:0; pointer-events:none;}
+.fs-fx::before, .fs-fx::after{content:""; position:absolute; inset:-10%; pointer-events:none;
+  will-change:transform, opacity;}
+/* 星野：两片不同密度的星点各自闪烁（repeat 平铺出整片星空，只用 5 个渐变） */
+.fs-scene[data-scene="star"] .fs-fx::before{
+  inset:0;
+  /* 星点：半径 2.2~3px（1.6px 在 1440 宽下几乎看不见），5 层不同平铺尺寸交错，
+     周期互质 → 不会被人眼看出规律 */
+  background-image:
+    radial-gradient(3px 3px at 12% 18%, rgba(255,255,255,.95), transparent 72%),
+    radial-gradient(2.4px 2.4px at 48% 62%, rgba(226,232,255,.85), transparent 72%),
+    radial-gradient(2.8px 2.8px at 74% 26%, rgba(255,255,255,.90), transparent 72%),
+    radial-gradient(2.2px 2.2px at 30% 82%, rgba(255,255,255,.80), transparent 72%),
+    radial-gradient(2.6px 2.6px at 88% 70%, rgba(210,220,255,.80), transparent 72%);
+  background-size:150px 150px, 210px 210px, 262px 262px, 318px 318px, 386px 386px;
+  background-repeat:repeat;
+  animation:fsTwinkle 6.5s ease-in-out infinite alternate;
+}
+.fs-scene[data-scene="star"] .fs-fx::after{
+  inset:0;
+  /* 银河：一条极淡的斜带，给星空一点层次 */
+  background-image:
+    linear-gradient(118deg, transparent 38%, rgba(180,196,255,.10) 50%, transparent 62%),
+    radial-gradient(3.4px 3.4px at 80% 30%, rgba(255,255,255,.92), transparent 72%),
+    radial-gradient(2.6px 2.6px at 22% 54%, rgba(210,220,255,.80), transparent 72%);
+  background-size:100% 100%, 440px 440px, 300px 300px;
+  background-repeat:no-repeat, repeat, repeat;
+  animation:fsTwinkle 9.5s ease-in-out -3s infinite alternate-reverse;
+}
+@keyframes fsTwinkle{from{opacity:.22;} to{opacity:.86;}}
+/* 深海：几团不规则的大柔光斑各自缓慢游动 —— 水下的"光池"就是这么来的。
+   踩过的坑：① 细硬边条纹叠两层会变成方格纸；② 软边的 repeating 条纹会变成"竖帘子"。
+   凡是看得出的**重复周期**都不像水，所以这里不用任何 repeating 图案，只用大柔光斑 */
+.fs-scene[data-scene="deep"] .fs-fx::before{
+  background:
+    radial-gradient(40% 32% at 22% 28%, rgba(150,230,255,.14), transparent 72%),
+    radial-gradient(34% 26% at 70% 64%, rgba(110,190,240,.12), transparent 74%);
+  animation:fsSway 44s ease-in-out infinite alternate;
+}
+.fs-scene[data-scene="deep"] .fs-fx::after{
+  background:
+    radial-gradient(30% 24% at 80% 20%, rgba(190,240,255,.10), transparent 74%),
+    radial-gradient(36% 28% at 34% 80%, rgba(96,170,225,.10), transparent 74%);
+  animation:fsSway 67s ease-in-out -22s infinite alternate-reverse;
+}
+@keyframes fsSway{
+  from{transform:translate3d(-2.5%,1.5%,0) scale(1);}
+  to{transform:translate3d(2.5%,-1.5%,0) scale(1.06);}
+}
+/* 篝火：火光不规则跳动 + 缓慢上浮的火星 */
+.fs-scene[data-scene="ember"] .fs-fx::before{
+  background:radial-gradient(58% 40% at 50% 84%, rgba(255,168,86,.30), transparent 70%);
+  animation:fsFlicker 5.4s ease-in-out infinite;
+}
+.fs-scene[data-scene="ember"] .fs-fx::after{
+  background-image:
+    radial-gradient(1.6px 1.6px at 40% 60%, rgba(255,196,120,.75), transparent 60%),
+    radial-gradient(1.2px 1.2px at 62% 72%, rgba(255,170,90,.60), transparent 60%);
+  background-size:240px 240px, 180px 180px;
+  background-repeat:repeat;
+  opacity:.45; animation:fsEmber 17s linear infinite;
+}
+@keyframes fsFlicker{
+  0%,100%{opacity:.50; transform:scale(1);}
+  13%{opacity:.86; transform:scale(1.035);}
+  27%{opacity:.58;}
+  44%{opacity:.95; transform:scale(1.05);}
+  61%{opacity:.62;}
+  78%{opacity:.88; transform:scale(1.02);}
+  91%{opacity:.55;}
+}
+@keyframes fsEmber{from{transform:translate3d(0,3%,0);} to{transform:translate3d(0,-6%,0);}}
+/* 晨雾：两道雾带以不同速度横移（极慢，盯一会儿才察觉，正是雾该有的样子） */
+.fs-scene[data-scene="mist"] .fs-fx::before{
+  background:radial-gradient(120% 30% at 30% 38%, rgba(255,255,255,.55), transparent 72%);
+  animation:fsMist 72s ease-in-out infinite alternate;
+}
+.fs-scene[data-scene="mist"] .fs-fx::after{
+  background:radial-gradient(130% 26% at 68% 66%, rgba(255,255,255,.42), transparent 74%);
+  opacity:.8; animation:fsMist 96s ease-in-out -24s infinite alternate-reverse;
+}
+@keyframes fsMist{from{transform:translate3d(-5%,2%,0);} to{transform:translate3d(5%,-2%,0);}}
+/* 进度色温：专注越往后，场景的“特征光”越浓（值由 16-immersive.js 按番茄进度写 --fs-warmth）
+   用单色而不是渐变——渐变不能插值，换场景时会硬跳 */
+.fs-tint{position:absolute; inset:0; pointer-events:none;
+  background:var(--fs-tint); opacity:var(--fs-warmth, 0);
+  transition:opacity 1.4s linear, background-color var(--dur-scene) ease;}
+/* 循环视频背景：叠在 CSS 场景之上、雾面之下。挂 src 的时机与释放由 JS 管（见 16-immersive.js）。
+   轻微的饱和/对比提升抵消「盖了雾面后发灰」的观感 */
+.fs-video{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center;
+  opacity:0; pointer-events:none; transform:translateZ(0);
+  filter:saturate(1.06) contrast(1.03);
+  transition:opacity var(--dur-scene) var(--ease-cross);}
+.fs-video.is-on{opacity:1;}
+/* 暗色主题下视频要压一档，否则白雾/篝火这类亮素材会顶穿夜雾的可读性 */
+html[data-theme="dark"] .fs-video{filter:brightness(.86) saturate(1.06) contrast(1.04);}
+/* 视频真正播起来时，把场景自带的动态层停掉（动画 pause 是真的省 GPU，不只是看不见） */
+#focus-stage.has-video .fs-glow,
+#focus-stage.has-video .fs-fx::before,
+#focus-stage.has-video .fs-fx::after{opacity:0; animation-play-state:paused;}
+/* 可读性光晕：视频是实拍素材，明暗不可控（篝火那支会把深色数字直接吞掉），
+   所以有视频时在「数字区 + 上下控件区」各加一层同色雾。颜色直接复用 --fs-veil，
+   亮色主题是奶油、夜雾主题是深蓝紫 —— 极性自动正确，不用为 8 种组合各写一套 */
+.fs-halo{position:absolute; inset:0; pointer-events:none; opacity:0;
+  background:radial-gradient(46% 36% at 50% 47%, var(--fs-halo, var(--fs-veil)), transparent 70%);
+  background:
+    radial-gradient(46% 36% at 50% 47%, var(--fs-halo, var(--fs-veil)), transparent 70%),
+    linear-gradient(180deg, color-mix(in srgb, var(--fs-halo, var(--fs-veil)) 80%, transparent), transparent 15%),
+    linear-gradient(0deg, color-mix(in srgb, var(--fs-halo, var(--fs-veil)) 84%, transparent), transparent 20%);
+  transition:opacity var(--dur-scene) var(--ease-cross);}
+#focus-stage.has-video .fs-halo{opacity:1;}
+#focus-stage[data-scene="mist"]{--fs-tint:rgba(255,201,143,.9);}
+#focus-stage[data-scene="deep"]{--fs-tint:rgba(96,206,232,.9);}
+#focus-stage[data-scene="ember"]{--fs-tint:rgba(255,146,74,.9);}
+#focus-stage[data-scene="star"]{--fs-tint:rgba(172,146,232,.9);}
+.fs-scene[data-scene="mist"]{
+  --fs-bg:linear-gradient(168deg, #f7f2e8 0%, #eaeaf1 46%, #dedcec 100%);
+  --fs-glow-a:radial-gradient(circle, rgba(169,198,216,.50), transparent 62%);
+  --fs-glow-b:radial-gradient(circle, rgba(185,170,222,.42), transparent 62%);
+}
+.fs-scene[data-scene="deep"]{
+  --fs-bg:linear-gradient(172deg, #07202e 0%, #0b2a3c 46%, #04141f 100%);
+  --fs-glow-a:radial-gradient(circle, rgba(64,150,175,.40), transparent 62%);
+  --fs-glow-b:radial-gradient(circle, rgba(38,92,150,.44), transparent 64%);
+}
+.fs-scene[data-scene="ember"]{
+  --fs-bg:linear-gradient(166deg, #f7ebda 0%, #f1dbc6 48%, #e8c5b0 100%);
+  --fs-glow-a:radial-gradient(circle, rgba(232,164,110,.48), transparent 62%);
+  --fs-glow-b:radial-gradient(circle, rgba(214,120,96,.40), transparent 64%);
+}
+.fs-scene[data-scene="star"]{
+  --fs-bg:linear-gradient(178deg, #0b1024 0%, #131a38 55%, #1c1630 100%);
+  --fs-glow-a:radial-gradient(circle, rgba(120,130,210,.34), transparent 62%);
+  --fs-glow-b:radial-gradient(circle, rgba(180,150,220,.26), transparent 64%);
+}
+html[data-theme="dark"] .fs-scene[data-scene="mist"]{
+  --fs-bg:linear-gradient(168deg, #20203a 0%, #1d2438 50%, #2a2242 100%);
+  --fs-glow-a:radial-gradient(circle, rgba(96,128,168,.42), transparent 62%);
+  --fs-glow-b:radial-gradient(circle, rgba(126,108,178,.38), transparent 62%);
+}
+html[data-theme="dark"] .fs-scene[data-scene="ember"]{
+  --fs-bg:linear-gradient(166deg, #241a17 0%, #2d1d18 50%, #160f10 100%);
+  --fs-glow-a:radial-gradient(circle, rgba(226,140,80,.32), transparent 62%);
+  --fs-glow-b:radial-gradient(circle, rgba(190,86,60,.32), transparent 64%);
+}
+.fs-glow{position:absolute; border-radius:50%; filter:blur(70px); opacity:.55;
+  will-change:transform; pointer-events:none;
+  transition:opacity var(--dur-scene) var(--ease-cross);}
+/* 光斑漂移：比全站 .blob 的 46/58s 快一档（22/31s），幅度也更大——沉浸层要能看出"活" */
+.fs-glow-a{width:58vmax; height:58vmax; left:-16vmax; top:-18vmax; background:var(--fs-glow-a);
+  animation:fsDrift 22s ease-in-out infinite alternate;}
+.fs-glow-b{width:46vmax; height:46vmax; right:-14vmax; bottom:-18vmax; background:var(--fs-glow-b);
+  animation:fsDrift 31s ease-in-out -9s infinite alternate-reverse;}
+@keyframes fsDrift{
+  0%{transform:translate3d(0,0,0) scale(1);}
+  50%{transform:translate3d(5vmax,4vmax,0) scale(1.09);}
+  100%{transform:translate3d(-4vmax,-3vmax,0) scale(.95);}
+}
+html[data-theme="dark"] .fs-glow{opacity:.42;}
+/* 换场景：旧槽位叠在新层之上淡出（渐变不能插值，只能叠层换命） */
+.fs-scene-out{opacity:1; z-index:2;}
+.fs-scene-out.is-gone{opacity:0;}
+.fs-veil{position:absolute; inset:0; background:var(--fs-veil);
+  transition:background var(--dur-scene) ease, opacity var(--dur-scene) var(--ease-cross);}
+/* 视频态把雾面降一档：1080p 的细节不该被雾洗掉，可读性交给 .fs-halo */
+#focus-stage.has-video .fs-veil{opacity:.68;}
+
+/* ---------- 场景 → 文字/控件配色（亮暗各一套） ----------
+   --fs-halo 只在视频背景亮起时才用（见 .fs-halo）：实拍素材明暗不可控，
+   必须在数字区与上下控件区留一层足够厚的同极性雾。极性 = 文字色的反极性 */
+#focus-stage[data-scene="mist"]{ --fs-ink:#3f4b59; --fs-line:rgba(120,132,150,.24);
+  --fs-glass:rgba(255,253,247,.46); --fs-veil:rgba(246,241,231,.26); --fs-ring:#7fa3bd;
+  --fs-halo:rgba(249,245,238,.62);
+  --fs-btn:#45403a; --fs-btn-ink:#fdfaf3;}
+#focus-stage[data-scene="deep"]{ --fs-ink:#e2f1f7; --fs-line:rgba(190,224,236,.22);
+  --fs-glass:rgba(255,255,255,.10); --fs-veil:rgba(3,14,22,.30); --fs-ring:#6fc2d8;
+  --fs-halo:rgba(3,14,22,.58);
+  --fs-btn:#eaf6fa; --fs-btn-ink:#0a2029;}
+#focus-stage[data-scene="ember"]{ --fs-ink:#4a3428; --fs-line:rgba(140,100,70,.22);
+  --fs-glass:rgba(255,251,244,.48); --fs-veil:rgba(70,40,18,.16); --fs-ring:#d08a5e;
+  --fs-halo:rgba(20,10,6,.6);
+  --fs-btn:#5a3a2a; --fs-btn-ink:#fdf6ef;}
+/* 篝火的实拍素材是「黑底 + 满屏亮火」，明暗与它的 CSS 场景（奶油底深字）相反：
+   视频亮起时翻转整套配色极性 —— 浅色字 + 深色光晕，火才有冲击力、数字才读得清 */
+#focus-stage.has-video[data-scene="ember"]{ --fs-ink:#fdf3e7; --fs-line:rgba(244,206,166,.26);
+  --fs-glass:rgba(30,16,8,.46); --fs-ring:#f0b27a;
+  --fs-btn:#fdf3e7; --fs-btn-ink:#2a160c;}
+/* 篝火的实拍素材（黑底火带/暗木柴）明暗与它的 CSS 场景（奶油底深字）相反：
+   视频亮起时翻转整套配色极性 —— 浅色字 + 深色光晕，火才有冲击力、数字才读得清 */
+#focus-stage.has-video[data-scene="ember"]{ --fs-ink:#f8ece1; --fs-line:rgba(238,214,190,.24);
+  --fs-glass:rgba(48,30,22,.44); --fs-ring:#f0b27a;
+  --fs-btn:#f8ece1; --fs-btn-ink:#2a1a12;}
+#focus-stage[data-scene="star"]{ --fs-ink:#e8eaf6; --fs-line:rgba(180,190,235,.22);
+  --fs-glass:rgba(255,255,255,.10); --fs-veil:rgba(6,8,20,.28); --fs-ring:#9aa8e0;
+  --fs-halo:rgba(6,8,20,.58);
+  --fs-btn:#eceefb; --fs-btn-ink:#141830;}
+html[data-theme="dark"] #focus-stage[data-scene="mist"]{ --fs-ink:#ece7f4; --fs-line:rgba(206,206,246,.20);
+  --fs-glass:rgba(40,40,68,.42); --fs-veil:rgba(12,12,26,.26); --fs-ring:#a9c6d8;
+  --fs-halo:rgba(16,18,34,.58);
+  --fs-btn:#f1eee6; --fs-btn-ink:#232339;}
+html[data-theme="dark"] #focus-stage[data-scene="ember"]{ --fs-ink:#f6e3d2; --fs-line:rgba(228,180,140,.20);
+  --fs-glass:rgba(52,32,24,.42); --fs-veil:rgba(12,6,4,.30); --fs-ring:#e0a06a;
+  --fs-halo:rgba(14,8,5,.58);
+  --fs-btn:#f7e6d6; --fs-btn-ink:#2a1a12;}
+
+/* ---------- 骨架 ---------- */
+.fs-body{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; gap:8px;
+  padding:calc(14px + env(safe-area-inset-top,0px)) 22px calc(14px + env(safe-area-inset-bottom,0px));}
+.fs-top{width:100%; max-width:1160px; flex:none; display:flex; align-items:center; gap:12px;
+  transition:opacity var(--dur-scene) var(--ease-cross);}
+.fs-brand{display:flex; align-items:center; gap:10px; flex:1; min-width:0;}
+.fs-dot{width:7px; height:7px; border-radius:50%; flex:none; background:var(--fs-ring);
+  box-shadow:0 0 10px var(--fs-ring);}
+.fs-scene-name{font-size:12px; letter-spacing:.18em; opacity:.7;}
+.fs-bind{font-size:12.5px; opacity:.55; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.fs-tools{display:flex; gap:6px; flex:none;}
+.fs-tool{width:34px; height:34px; border-radius:50%; display:grid; place-items:center;
+  font-size:14px; line-height:1; color:inherit; cursor:pointer;
+  background:var(--fs-glass); border:1px solid var(--fs-line);
+  backdrop-filter:blur(var(--blur-s)); -webkit-backdrop-filter:blur(var(--blur-s));
+  transition:background var(--dur) var(--ease-std), border-color var(--dur), opacity var(--dur), transform var(--dur-tap);}
+.fs-tool:hover{transform:translateY(-1px); border-color:var(--fs-ring);}
+.fs-tool.is-off{opacity:.42;}
+.fs-center{flex:1; min-height:0; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:12px; width:100%;}
+.fs-ringwrap{position:relative; display:grid; place-items:center;}
+/* 呼吸引导：19s 与 JS 的文案周期（4-7-8）严格同步 */
+.fs-ringwrap.is-breathing{animation:fsBreath 19s ease-in-out infinite;}
+@keyframes fsBreath{
+  0%{transform:scale(1);}
+  21.05%{transform:scale(1.055);}
+  57.89%{transform:scale(1.055);}
+  100%{transform:scale(1);}
+}
+.fs-ring{position:relative;}
+.fs-ring svg{display:block; transform:rotate(-90deg);}
+.fs-c-bg{stroke:var(--fs-line); opacity:.5;}
+.fs-c-fg{stroke:var(--fs-ring); stroke-linecap:round; opacity:.92;
+  transition:stroke-dashoffset 1s linear, stroke var(--dur-scene) ease;}
+/* 巨型数字：逐字符定宽（0.6em/位、冒号 0.34em），非等宽字体也不会左右跳 */
+.fs-time{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-size:clamp(52px, 14.5vmin, 142px); line-height:1; font-variant-numeric:tabular-nums;}
+.fs-ch{display:inline-block; width:.6em; text-align:center;}
+.fs-ch.is-colon{width:.34em; opacity:.55;}
+.fs-phase{font-size:11.5px; letter-spacing:.34em; text-indent:.34em; opacity:.62;}
+.fs-task{font-size:13.5px; opacity:.5; max-width:min(560px, 82vw);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.fs-task[hidden]{display:none;}
+.fs-breath{font-size:13px; letter-spacing:.22em; text-indent:.22em; opacity:.5; min-height:1.3em;}
+
+/* ---------- 底栏：进度 / 时钟 / 控件 ---------- */
+.fs-bottom{width:100%; max-width:1160px; flex:none; display:flex; flex-direction:column; align-items:center;
+  gap:10px; transition:opacity var(--dur-scene) var(--ease-cross);}
+.fs-meta{display:flex; gap:18px; font-size:12px; opacity:.55;}
+.fs-controls{display:flex; gap:14px; align-items:flex-end;}
+.fs-btn{width:64px; padding:8px 0; border-radius:16px; display:grid; gap:3px; justify-items:center;
+  color:inherit; cursor:pointer; background:var(--fs-glass); border:1px solid var(--fs-line);
+  backdrop-filter:blur(var(--blur-s)); -webkit-backdrop-filter:blur(var(--blur-s));
+  transition:transform var(--dur-tap) var(--ease-std), background var(--dur) var(--ease-std),
+             border-color var(--dur), box-shadow var(--dur);}
+.fs-btn .fs-ic{font-size:16px; line-height:1;}
+.fs-btn .fs-lb{font-size:10.5px; letter-spacing:.08em; opacity:.72;}
+.fs-btn:hover{transform:translateY(-2px); border-color:var(--fs-ring);}
+.fs-btn:active{transform:scale(.97);}
+.fs-btn-main{width:78px; padding:10px 0; border-color:transparent;
+  background:var(--fs-btn); color:var(--fs-btn-ink); box-shadow:0 10px 30px rgba(10,14,30,.28);}
+.fs-btn-main .fs-ic{font-size:20px;}
+.fs-btn-main .fs-lb{opacity:.8;}
+.fs-hint{font-size:11px; letter-spacing:.1em; opacity:.28;}
+/* 静止自动隐藏 / 准备倒数期间压暗 chrome */
+#focus-stage.chrome-hidden .fs-top,
+#focus-stage.chrome-hidden .fs-bottom{opacity:0; pointer-events:none;}
+#focus-stage.is-prep .fs-top,
+#focus-stage.is-prep .fs-bottom{opacity:.22;}
+
+/* ---------- 中央提示语 ---------- */
+.fs-note{position:fixed; left:50%; top:24%; z-index:2; transform:translate(-50%, 8px);
+  max-width:80vw; padding:10px 18px; border-radius:14px; text-align:center;
+  font-size:14px; color:var(--fs-ink); background:var(--fs-glass); border:1px solid var(--fs-line);
+  backdrop-filter:blur(var(--blur-s)); -webkit-backdrop-filter:blur(var(--blur-s));
+  opacity:0; transition:opacity var(--dur) var(--ease-std), transform var(--dur) var(--ease-std);}
+.fs-note[hidden]{display:none;}
+.fs-note.is-on{opacity:1; transform:translate(-50%, 0);}
+
+/* ---------- 3-2-1 准备倒数 ---------- */
+.fs-prep{position:absolute; inset:0; z-index:3; display:grid; align-content:center; justify-items:center; gap:10px;
+  background:var(--fs-veil); backdrop-filter:blur(var(--blur-l)); -webkit-backdrop-filter:blur(var(--blur-l));
+  pointer-events:none; transition:opacity var(--dur) var(--ease-std);}
+.fs-prep[hidden]{display:none;}
+.fs-prep.is-leaving{opacity:0;}
+.fs-prep-num{font-size:clamp(76px, 20vmin, 176px); line-height:1;}
+.fs-prep-num.is-in{animation:fsPrepop .42s var(--ease-pop) both;}
+@keyframes fsPrepop{from{opacity:.12; transform:scale(.82);} to{opacity:1; transform:none;}}
+.fs-prep-text{font-size:13px; letter-spacing:.24em; text-indent:.24em; opacity:.6;}
+
+/* ---------- 动态壁纸开着时：透出壁纸，只铺一层与主题同色的雾面 ----------
+   动态壁纸本身跟随主题（亮=晨露奶油 / 暗=星座夜雾），所以压暗面也必须跟随主题：
+   亮色用奶油雾 + 深色字，暗色用夜雾 + 浅色字 —— 否则是在浅色壁纸上盖深色，
+   画面会发灰发泥。选择器多带 [data-scene] 一节确保压过上面的场景配色；
+   单文件版没有 islands（无 .wb-islands）→ 照常走纯 CSS 场景，两版表现一致降级 */
+body.bg-dynamic-on.wb-islands .fs-scene{opacity:.26;}
+body.bg-dynamic-on.wb-islands .fs-glow{opacity:.34;}
+body.bg-dynamic-on.wb-islands #focus-stage[data-scene]{
+  --fs-ink:#3f4b59; --fs-line:rgba(120,132,150,.26); --fs-glass:rgba(255,253,247,.52);
+  --fs-veil:rgba(246,241,231,.38); --fs-ring:#7fa3bd;
+  --fs-btn:#45403a; --fs-btn-ink:#fdfaf3;}
+html[data-theme="dark"] body.bg-dynamic-on.wb-islands #focus-stage[data-scene]{
+  --fs-ink:#f0eee8; --fs-line:rgba(235,238,246,.22); --fs-glass:rgba(30,32,48,.38);
+  --fs-veil:rgba(12,14,22,.40); --fs-ring:#dbe2ec;
+  --fs-btn:#f4f1e9; --fs-btn-ink:#1c2030;}
+
+/* ---------- 窄屏 ---------- */
+@media (max-width:600px){
+  .fs-body{padding-left:14px; padding-right:14px;}
+  /* 400px 宽时环约 248px：字号按 19vw 留出余量，5~6 位数字都不会顶到环边 */
+  .fs-time{font-size:clamp(44px, 19vw, 88px);}
+  .fs-tool{width:30px; height:30px; font-size:13px;}
+  .fs-scene-name{display:none;}
+  .fs-btn{width:56px; border-radius:14px;}
+  .fs-btn-main{width:66px;}
+  .fs-controls{gap:10px;}
+  .fs-hint{display:none;}
+  .fs-meta{font-size:11px; gap:12px;}
+  .fs-note{top:19%; font-size:13px; padding:8px 14px;}
+  .fs-task{font-size:12.5px;}
+}
+@media (max-height:560px){
+  .fs-time{font-size:clamp(40px, 12vmin, 78px);}
+  .fs-hint{display:none;}
+}

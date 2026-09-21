@@ -42,8 +42,10 @@ for(const target of targets){
     page.on("console", msg => {
       if(msg.type() !== "error") return;
       const text = msg.text();
-      // 联网层设计为离线优雅降级：断网时的资源加载失败不算脚本错误
-      if(/Failed to load resource|net::ERR_/.test(text)) return;
+      // 联网层设计为离线优雅降级：断网/第三方接口拒绝时的资源加载失败不算脚本错误。
+      // 2026-09-22 补 CORS 一类：60s.viki.moe 限流(429)时不回 Access-Control-Allow-Origin，
+      // 浏览器会打 CORS policy 报错——同样属于外部服务状态，应用侧卡片会自动隐藏
+      if(/Failed to load resource|net::ERR_|CORS policy/.test(text)) return;
       errors.push("[console] " + text);
     });
     page.on("pageerror", err => errors.push("[pageerror] " + err.message));

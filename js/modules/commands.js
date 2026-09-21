@@ -76,6 +76,20 @@ function buildItems(q){
       out.push({group: "跳转", icon: m.icon || "circle", label: m.title, hint: "打开模块",
         exec: () => WB.router.go(m.id)});
   });
+  // 沉浸专注（番茄钟全屏层）：空查询时会额外调一次（截断之后），防重靠 group 判断
+  const focusItems = () => {
+    if(!WB.immersive || !WB.pomodoro) return;
+    if(out.some(i => i.group === "专注")) return;
+    if(!t || "沉浸专注番茄".includes(t)){
+      if(WB.immersive.isActive())
+        out.push({group: "专注", icon: "timer", label: "退出沉浸专注", hint: "Esc",
+          exec: () => WB.immersive.exit()});
+      else if(WB.pomodoro.state())
+        out.push({group: "专注", icon: "timer", label: "进入沉浸专注", hint: "F",
+          exec: () => WB.immersive.enter()});
+    }
+  };
+  focusItems();
   // 窗景（ThreeUI 场景页）
   if(WB.scenes){
     Object.entries(WB.scenes.SCENES).forEach(([key, s]) => {
@@ -91,6 +105,7 @@ function buildItems(q){
       exec: () => {}});
     out.push({group: "捕捉", icon: "translate", label: "「翻译 xxx」→ 中英互译", hint: "",
       exec: () => {}});
+    focusItems();     // 放在 out.length 截断之后，否则会被砍掉
     return out;
   }
   // 翻译

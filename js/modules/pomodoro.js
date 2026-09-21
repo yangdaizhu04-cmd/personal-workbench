@@ -51,6 +51,12 @@ function begin(mode, plannedMin){
     WB.bus.emit("pomo:start"); // 声音面板自动恢复上次组合
     if(WB.router.nav() === "today") WB.router.render(); // 内容类卡片立即淡出
   }
+  /* 自动进沉浸：默认关闭（设置 → 番茄钟与提醒 → 开始专注时自动进入）。
+     延迟交给浏览器先跑完点击反馈；仍在用户激活窗口内，全屏请求有效 */
+  const th = WB.theme.all();
+  if(mode === "focus" && WB.immersive && th.pomoImmersive !== false && th.pomoImmersiveAuto){
+    setTimeout(() => { if(isFocusing() && !WB.immersive.isActive()) WB.immersive.enter({auto: true}); }, 160);
+  }
 }
 function pause(){
   const s = stateRaw(); if(!s || !s.running) return;
@@ -73,6 +79,7 @@ function giveUp(){
     WB.ui.toast("已取消");
   }
   setState(null); tickStop(); emitPhase();
+  WB.bus.emit("pomo:finish", {mode: s.mode, status: "quit"});
   WB.router.render();
 }
 function finish(){
@@ -84,6 +91,8 @@ function finish(){
   s.needConfirm = true; s.nextMode = s.mode === "focus" ? "rest" : "focus";
   setState(s); tickStop(); emitPhase();
   notifyAll(s.mode);
+  /* 声音面板监听 pomo:finish 做淡出后静音，但此前全项目无人 emit（死订阅） */
+  WB.bus.emit("pomo:finish", {mode: s.mode, status: "done"});
   if(WB.badgeCheck) WB.badgeCheck();
 }
 function confirmNext(){
@@ -93,16 +102,28 @@ function confirmNext(){
   begin(s.nextMode, minutes);
   WB.router.render();
 }
-function stopAndClear(){ setState(null); tickStop(); emitPhase(); WB.router.render(); }
+function stopAndClear(){
+  setState(null); tickStop(); emitPhase();
+  WB.bus.emit("pomo:finish", {mode: "stop", status: "stop"});
+  WB.router.render();
+}
 
 /* ---------- 提醒三件套 ---------- */
 let titleTimer = null;
 const baseTitle = document.title;
+/* 停掉标题闪烁（函数声明，供 setTimeout 提前引用；同时把 titleTimer 归零，
+   沉浸层靠 titleFlashing() 判断要不要接管 document.title） */
+function stopFlash(){
+  clearInterval(titleTimer);
+  titleTimer = null;
+  document.title = baseTitle;
+}
 function notifyAll(mode){
   const st = WB.theme.all();
   const isFocusEnd = mode === "focus";
   if(st.pomoSound) WB.ui.chime(isFocusEnd ? "big" : "done");
-  if(st.pomoFlash) flashOverlay(isFocusEnd);
+  // 沉浸层自己会给中央提示，别再叠一层全屏 flash
+  if(st.pomoFlash && !(WB.immersive && WB.immersive.isActive())) flashOverlay(isFocusEnd);
   if(st.pomoTitle){
     let on = false;
     const text = isFocusEnd ? "🍅 专注完成！休息一下" : "⏰ 休息结束，回来专注";
@@ -110,8 +131,8 @@ function notifyAll(mode){
     titleTimer = setInterval(() => {
       document.title = on ? baseTitle : text; on = !on;
     }, 900);
-    setTimeout(() => { clearInterval(titleTimer); document.title = baseTitle; }, 12000);
-    const stop = () => { clearInterval(titleTimer); document.title = baseTitle; removeEventListener("click", stop); };
+    setTimeout(stopFlash, 12000);
+    const stop = () => { stopFlash(); removeEventListener("click", stop); };
     addEventListener("click", stop, {once: true});
   }
   WB.notify(isFocusEnd ? "🍅 专注完成" : "🌱 休息结束", isFocusEnd ? "休息 " + WB.theme.get("pomodoroRest") + " 分钟吧" : "准备好开始下一轮专注了吗");
@@ -140,8 +161,12 @@ function tickStart(){
     if(!s || !s.running){ tickStop(); return; }
     if(s.remainSec <= 0) finish();
     else {
+      const pct = 1 - s.remainSec / s.plannedSec;
       const ringEl = document.getElementById("pomo-ring");
-      if(ringEl && ringEl.__update) ringEl.__update(1 - s.remainSec / s.plannedSec, s.remainSec);
+      if(ringEl && ringEl.__update) ringEl.__update(pct, s.remainSec);
+      /* 广播给沉浸层：秒级粒度（1s 一次），环与数字都靠它推进 */
+      WB.bus.emit("pomo:tick", {remainSec: s.remainSec, elapsedSec: s.elapsedSec, pct: pct,
+        mode: s.mode, plannedSec: s.plannedSec, running: s.running});
     }
   }, 1000);
 }
@@ -290,6 +315,10 @@ WB.registerModule({
         timerCard.appendChild(el("div", {class: "small faint", style: {marginBottom: "8px"}, text: "计时基于真实时间，切走/最小化也在走"}));
 
       const btns = el("div", {class: "row", style: {justifyContent: "center", gap: "10px", marginTop: "12px"}});
+      // 沉浸入口：全屏专注模式（细线环 + 巨型数字 + 环境音联动，快捷键 F）
+      if(WB.immersive && settings.pomoImmersive !== false)
+        btns.appendChild(el("button", {class: "btn", html: icon("timer", 16) + "<span>沉浸</span>",
+          title: "沉浸专注（F）", onclick: () => WB.immersive.enter()}));
       if(st.needConfirm){
         timerCard.appendChild(el("div", {class: "chip", style: {fontSize: "14px", padding: "8px 16px"},
           text: st.nextMode === "rest" ? "一段专注完成了！确认后才开始休息" : "休息结束，确认后开始下一轮专注"}));
@@ -357,7 +386,11 @@ setTimeout(() => {
   else emitPhase();
 }, 800);
 
-WB.pomodoro = {state, isFocusing, begin, pause, resume, giveUp, confirmNext, gardenStats, toggleSound(){
-  if(WB.sound && WB.sound.toggle) WB.sound.toggle();
-}};
+/* finish / stopAndClear 原先没导出：沉浸层要「完成本段 / 先到这」两个动作，必须补上 */
+WB.pomodoro = {state, isFocusing, begin, pause, resume, giveUp, confirmNext, gardenStats,
+  finish, stopAndClear,
+  titleFlashing(){ return !!titleTimer; },
+  toggleSound(){
+    if(WB.sound && WB.sound.toggle) WB.sound.toggle();
+  }};
 })();

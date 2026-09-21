@@ -260,7 +260,7 @@ function srcGain(key){
   const c = ac();
   const g = c.createGain();
   const p = prefs();
-  g.gain.value = (p.vol[key] != null ? p.vol[key] : .5) * (p.vol.master != null ? p.vol.master : .9);
+  g.gain.value = (p.vol[key] != null ? p.vol[key] : .5) * (p.vol.master != null ? p.vol.master : .9) * duckFactor;
   g.connect(ensureMaster());
   return g;
 }
@@ -280,6 +280,66 @@ function stopSource(key){
   if(running[key]){ running[key].stop(); delete running[key]; }
 }
 function anyPlaying(){ return Object.keys(running).length > 0; }
+
+/* ---------- 主音量渐变 / 专注压低（沉浸专注层用） ----------
+   两条链路必须一起管：合成音源在 WebAudio 的 gain 节点上（running[k].out），
+   真实录音 / 本地音乐 / 音频库是 HTMLAudioElement（running[k].el / localAudio / urlAudio）。
+   duckFactor 是独立乘数层，不写进 soundPrefs → 与用户的音量滑块互不覆盖。 */
+let duckFactor = 1, duckTimer = null;
+function rampNode(param, to, ms){
+  const c = ac();
+  if(!c){ param.value = to; return; }
+  const now = c.currentTime;
+  try{
+    param.cancelScheduledValues(now);
+    param.setValueAtTime(param.value, now);
+    param.linearRampToValueAtTime(to, now + Math.max(.01, ms / 1000));
+  }catch(e){ param.value = to; }
+}
+function applyLevel(v){
+  const p = prefs();
+  const mv = p.vol.master != null ? p.vol.master : .9;
+  Object.keys(running).forEach(k => {
+    const r = running[k];
+    const base = (p.vol[k] != null ? p.vol[k] : .5) * mv;
+    if(r.el) r.el.volume = clamp01(base * v);
+    if(r.out) rampNode(r.out.gain, clamp01(base * v), 60);
+  });
+  if(localAudio) localAudio.volume = clamp01((p.vol.local != null ? p.vol.local : .8) * mv * v);
+  if(urlAudio) urlAudio.volume = clamp01((p.vol.url != null ? p.vol.url : .8) * mv * v);
+}
+/* 把环境音整体渐变到基准音量的 v 倍（1=恢复，0.55=专注压低，0=静音）
+   没有音源在播时只记下目标值：不建 AudioContext、不排定时器（待机零成本），
+   之后新起播的音源会按 srcGain/realVolume 里的 duckFactor 直接以该音量入场 */
+function setDuck(to, ms){
+  to = clamp01(to);
+  if(duckFactor === to && !duckTimer) return;
+  const from = duckFactor;
+  duckFactor = to;
+  if(duckTimer){ clearInterval(duckTimer); duckTimer = null; }
+  if(!Object.keys(running).length) return;
+  if(!ms){ applyLevel(to); return; }
+  const steps = Math.max(2, Math.min(30, Math.round(ms / 40)));
+  let i = 0;
+  duckTimer = setInterval(() => {
+    i++;
+    applyLevel(from + (to - from) * (i / steps));
+    if(i >= steps){ clearInterval(duckTimer); duckTimer = null; applyLevel(to); }
+  }, Math.max(20, ms / steps));
+}
+/* 只改乘数、不动当前音量：用于「马上要从 0 渐入」的起点 */
+function duckReset(v){ duckFactor = clamp01(v); }
+/* 渐出到静音再执行收尾（番茄结束/放弃） */
+function fadeOutThen(ms, done){
+  if(!Object.keys(running).length){ duckFactor = 1; done(); return; }
+  setDuck(0, ms);
+  setTimeout(() => {
+    if(duckTimer){ clearInterval(duckTimer); duckTimer = null; }
+    duckFactor = 1;
+    done();
+  }, ms + 80);
+}
+
 function setVol(key, v){
   const p = prefs(); p.vol[key] = v; setPrefs(p);
   if(key === "master"){
@@ -289,6 +349,7 @@ function setVol(key, v){
       if(running[k].el) running[k].el.volume = clamp01((p.vol[k] != null ? p.vol[k] : .5) * v);
     });
     if(localAudio && !running.local) localAudio.volume = clamp01(v * (p.vol.local || .8));
+    applyLevel(duckFactor);   // 滑杆之后重新落一遍压低乘数，避免专注中被拉回满音量
     return;
   }
   if(running[key]){
@@ -301,6 +362,7 @@ function setVol(key, v){
       if(running[key].out) running[key].out.gain.value = clamp01(v * (p.vol.master || .9));
     }
   }
+  applyLevel(duckFactor);
 }
 function clamp01(x){ return Math.max(0, Math.min(1, x)); }
 /* 把 out 引用记下来以便调音量 */
@@ -316,7 +378,7 @@ startSource = function(key){
     startReal(key).then(a => {
       if(genTok[key] !== myTok || !prefs().active[key]) return;
       if(!a){ realFallback(key, myTok); return; }
-      a.volume = realVolume(key);
+      a.volume = clamp01(realVolume(key) * duckFactor);   // 起播即带当前压低乘数，避免 40ms 内的爆音
       try{ a.currentTime = 0; }catch(e){}
       a.play().then(() => {
         if(genTok[key] !== myTok) return;
@@ -563,10 +625,12 @@ function restoreCombo(){
 }
 
 WB.registerModule({id: "sound-internal", title: "声音", icon: "music", hidden: true, render(){}});
-WB.sound = {renderPanel(elx){ renderPanelInto(elx); }, toggle: toggleAll, muteAll, restoreCombo, anyPlaying};
+WB.sound = {renderPanel(elx){ renderPanelInto(elx); }, toggle: toggleAll, muteAll, restoreCombo, anyPlaying,
+  setDuck, duckReset, duckLevel(){ return duckFactor; }};
 
-/* 番茄开始自动恢复组合；结束/收工自动静音 */
+/* 番茄开始自动恢复组合；结束/收工先淡出再静音（原来 pomo:finish 全项目没人 emit，
+   属于死订阅，2026-09-21 随沉浸专注层一并接上） */
 WB.bus.on("pomo:start", restoreCombo);
-WB.bus.on("pomo:finish", muteAll);
+WB.bus.on("pomo:finish", () => fadeOutThen(900, muteAll));
 WB.bus.on("ritual:offwork", muteAll);
 })();

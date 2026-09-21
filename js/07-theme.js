@@ -13,6 +13,14 @@ const DEFAULTS = {
   quoteSource: "hitokoto",   // hitokoto | jinrishici | builtin
   pomodoroFocus: 25, pomodoroRest: 5,
   pomoSound: true, pomoFlash: true, pomoTitle: true,
+  /* 沉浸专注层（js/16-immersive.js）：默认手动进入，快捷键 F 或计时卡「沉浸」 */
+  pomoImmersive: true,           // 总开关
+  pomoImmersiveAuto: false,      // 开始专注时自动进入
+  pomoImmersiveScene: "mist",    // mist 晨雾 | deep 深海 | ember 篝火 | star 星野
+  pomoImmersiveFull: true,       // 进入时请求浏览器全屏（被拒也能用）
+  pomoImmersiveGuide: true,      // 3-2-1 准备 + 休息呼吸引导 + 静止自动隐藏控件
+  pomoImmersiveVideo: true,      // 沉浸层的循环视频背景（vendor/video，4.5MB，仅沉浸时加载）
+  pomoSoundDuck: true,           // 专注运行中把环境音压到约 55%
   offworkHour: 18, birthdayAhead: 7,
   weatherCity: "",           // 手动城市（空=IP 定位）
   currencies: ["USD", "EUR", "JPY", "HKD"],

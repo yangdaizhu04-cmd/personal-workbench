@@ -149,6 +149,8 @@
 <script src="js/modules/rituals.js"></script>
 <script src="js/modules/assistant.js"></script>
 <script src="js/modules/scenes.js"></script>
+<!-- 沉浸专注层：排在 modules/sound.js 之后，保证 pomo:start 的渐入排在 restoreCombo 之后能听到 -->
+<script src="js/16-immersive.js"></script>
 <!-- ThreeUI 视觉 island（构建产物：tools/build-islands.mjs；React 组件打包为普通脚本） -->
 <script src="vendor/threeui/islands/core.js"></script>
 <!-- ===== boot ===== -->

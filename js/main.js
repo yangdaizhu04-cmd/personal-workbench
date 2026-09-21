@@ -45,6 +45,18 @@ function initShortcuts(){
       return;
     }
     if(isTyping(e)) return;
+    /* 沉浸专注：F/Esc 进退、空格暂停/继续（沉浸里空格不再是环境音开关）。
+       层上若压着确认框（放弃计时），Esc 先关弹窗、再退沉浸 */
+    if(WB.immersive && WB.immersive.isActive()){
+      if(WB.modalOpen && WB.modalOpen()){
+        if(e.key === "Escape") WB.closeTopModal();
+        return;
+      }
+      if(e.key === "Escape"){ e.preventDefault(); WB.immersive.exit(); return; }
+      if(e.key === "f" || e.key === "F"){ e.preventDefault(); WB.immersive.exit(); return; }
+      if(e.key === " "){ e.preventDefault(); WB.immersive.toggleRun(); return; }
+      return;
+    }
     if(WB.modalOpen && WB.modalOpen()){ // 弹窗内只留 Esc
       if(e.key === "Escape") WB.closeTopModal();
       return;
@@ -57,6 +69,7 @@ function initShortcuts(){
       case "n": case "N": WB.router.go("notes"); if(WB.notes && WB.notes.quickAdd) WB.notes.quickAdd(); break;
       case "t": case "T": WB.router.go("todos"); if(WB.todos && WB.todos.quickAdd) WB.todos.quickAdd(); break;
       case "d": case "D": WB.theme.toggleTheme(); break;
+      case "f": case "F": if(WB.immersive) WB.immersive.toggle(); break;
       case " ":
         if(WB.pomodoro && WB.pomodoro.toggleSound){ e.preventDefault(); WB.pomodoro.toggleSound(); }
         break;

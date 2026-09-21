@@ -6,6 +6,9 @@ const WB = (window.WB = window.WB || {});
 
 let sx = 0, sy = 0, t0 = 0, pulling = false, pullStartY = 0;
 
+/* 沉浸专注层打开时让位：横滑切页 / 下拉刷新都不该在沉浸里生效（改动见 js/16-immersive.js） */
+function immersiveBusy(){ return !!(WB.immersive && WB.immersive.isActive()); }
+
 /* 左右滑动：在当前分组内的模块顺序里切换 */
 function groupOrderOf(id){
   const groups = WB.router.groups;
@@ -63,6 +66,7 @@ function pullReset(){
 }
 
 document.addEventListener("touchstart", e => {
+  if(immersiveBusy()) return;
   if(e.touches.length !== 1) return;
   sx = e.touches[0].clientX;
   sy = e.touches[0].clientY;
@@ -73,6 +77,7 @@ document.addEventListener("touchstart", e => {
 }, {passive: true});
 
 document.addEventListener("touchmove", e => {
+  if(immersiveBusy()) return;
   if(!pullStartY) return;
   const dy = e.touches[0].clientY - pullStartY;
   if(dy <= 0) return;
@@ -89,6 +94,7 @@ document.addEventListener("touchmove", e => {
 }, {passive: true});
 
 document.addEventListener("touchend", e => {
+  if(immersiveBusy()){ if(pullStartY){ pullRelease(); pullReset(); } return; }
   const dx = e.changedTouches[0].clientX - sx;
   const dy = e.changedTouches[0].clientY - sy;
   const dt = Date.now() - t0;

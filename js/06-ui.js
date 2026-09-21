@@ -130,17 +130,23 @@ function modal({title, icon: ic, content, actions, wide, onClose}){
 
 function confirmBox(msg, {title = "确认一下", okLabel = "确认", danger} = {}){
   return new Promise(resolve => {
-    const m = modal({
+    /* 两处修正（2026-09-21，沉浸专注层回归时发现）：
+       ① 带 onClick 的动作 modal() 不会自动关（由调用方负责，见 todos.js 的「不自动关」约定），
+          而这两个按钮原来既不自己关也不返回 true → 点完按钮全屏遮罩永久留在 DOM 里挡住整页，
+          连 Esc 都关不掉。这里补上 m.close()。
+       ② 改走 WB.ui.modal（main.js 包装过的带栈版本）：入栈后 Esc / modalOpen() 才认得它，
+          否则沉浸专注层里弹的确认框会被 Esc 直接穿过（先退沉浸、弹窗还挂着）。
+          resolve 先到者为准：close() 会触发 onClose→resolve(false)，不覆盖已 resolve 的结果 */
+    const open = (WB.ui && WB.ui.modal) ? WB.ui.modal : modal;
+    const m = open({
       title,
       content: '<p style="line-height:1.8">' + msg + "</p>",
       actions: [
-        {label: "再想想", onClick: () => { resolve(false); return false; }},
-        {label: okLabel, primary: !danger, danger, onClick: () => { resolve(true); return false; }},
+        {label: "再想想", onClick: () => { resolve(false); m.close(); return true; }},
+        {label: okLabel, primary: !danger, danger, onClick: () => { resolve(true); m.close(); return true; }},
       ],
       onClose: () => resolve(false),
     });
-    // 修正：点"再想想"也会触发 onClose→resolve(false)，以先到者为准
-    m.el.addEventListener("click", () => {}, {once: true});
   });
 }
 
