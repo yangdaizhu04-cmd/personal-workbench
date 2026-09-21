@@ -6,8 +6,12 @@ const SHELL = [
   "./index.html",
   "./css/main.css",
   "./manifest.webmanifest",
-  "./vendor/audio/rain.ogg",   // CC0 录音预缓存（约 5.4MB，保证离线可用）
+  "./vendor/audio/rain.ogg",   // CC0 录音预缓存（六源合计约 8MB，保证离线可用）
   "./vendor/audio/fire.ogg",
+  "./vendor/audio/white.ogg",
+  "./vendor/audio/piano.ogg",
+  "./vendor/audio/pad.ogg",
+  "./vendor/audio/lofi.ogg",
 ];
 
 self.addEventListener("install", e => {

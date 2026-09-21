@@ -50,9 +50,16 @@ function resolvedTheme(){
   return t;
 }
 
+/* 用户是否显式设置过动效开关：显式设置优先于系统偏好（4.2） */
+function motionUserSet(){
+  const s = WB.store.get("settings", {});
+  return Object.prototype.hasOwnProperty.call(s, "motion");
+}
+
 function apply(){
   const html = document.documentElement;
-  html.dataset.theme = resolvedTheme();
+  const cur = resolvedTheme();
+  html.dataset.theme = cur;
   const acc = get("accent");
   html.dataset.accent = acc === "custom" ? "mist" : acc;
   // 自定义强调色：覆盖 --accent / --accent-soft
@@ -65,6 +72,14 @@ function apply(){
     html.style.removeProperty("--accent-soft");
   }
   html.classList.toggle("no-motion", !get("motion"));
+  // 3.3 地址栏/状态栏配色跟随主题（否则深色下仍是米白）
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.content = cur === "dark" ? "#232339" : "#f6f1e7";
+  // 月亮/太阳图标必须在 apply() 里同步，不能只写在 toggleTheme()：
+  // 设置页的分段控件走的是 theme.set、auto 模式还会跟随系统变化，
+  // 只挂 toggleTheme 会让图标和实际主题脱节（亮色下显示太阳）
+  const btn = WB.$("#btn-theme");
+  if(btn && WB.ui && WB.ui.swapIcon) WB.ui.swapIcon(btn, "moon", "sun", cur === "dark");
   applyWallpaper();
 }
 
@@ -76,7 +91,6 @@ function bgMode(){
 }
 
 function applyWallpaper(){
-  const html = document.documentElement;
   const body = document.body;
   const mode = bgMode();
   const bg = get("themeCustomBg");
@@ -84,6 +98,7 @@ function applyWallpaper(){
     body.classList.add("wallpaper-on");
     body.classList.remove("bg-dynamic-on");
     body.style.backgroundImage = "url(" + bg + ")";
+    adaptVeil(bg);
     return;
   }
   if(mode === "bing"){
@@ -94,6 +109,7 @@ function applyWallpaper(){
       if(url){
         body.classList.add("wallpaper-on");
         body.style.backgroundImage = "url(" + url + ")";
+        adaptVeil(url);
       }
     };
     if(cache && cache.d){ setIt(cache.d); return; }
@@ -104,31 +120,60 @@ function applyWallpaper(){
   }
   body.classList.remove("wallpaper-on");
   body.style.backgroundImage = "";
+  body.style.removeProperty("--wp-veil");
   // 动态壁纸：晨露（亮色）/ 夜雾星座（暗色），由 islands/core.js 监听此类名挂载
   body.classList.toggle("bg-dynamic-on", mode === "dynamic");
 }
 
+/* 3.5 壁纸对比度自适应：按图片平均亮度算蒙层透明度（700ms 由 CSS 过渡接管）
+   跨域图会让 canvas 变成 tainted，getImageData 抛错 → 静默回落 CSS 默认值 */
+function adaptVeil(url){
+  const body = document.body;
+  if(!url){ body.style.removeProperty("--wp-veil"); return; }
+  const img = new Image();
+  if(/^https?:/i.test(url)) img.crossOrigin = "anonymous";  // 仅远程图需要，dataURL 设了反而可能失败
+  const fallback = () => body.style.removeProperty("--wp-veil");
+  img.onload = () => {
+    try{
+      const N = 24, c = document.createElement("canvas");
+      c.width = N; c.height = N;
+      const g = c.getContext("2d", {willReadFrequently: true});
+      g.drawImage(img, 0, 0, N, N);
+      const d = g.getImageData(0, 0, N, N).data;
+      let lum = 0;
+      for(let i = 0; i < d.length; i += 4) lum += (.2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2]) / 255;
+      lum /= (d.length / 4);
+      // 亮壁纸压得更实，暗壁纸可以多透出一些
+      const alpha = Math.min(.86, Math.max(.55, .52 + lum * .34));
+      body.style.setProperty("--wp-veil", alpha.toFixed(2));
+    }catch(e){ fallback(); }
+  };
+  img.onerror = fallback;
+  img.src = url;
+}
+
 function toggleTheme(){
+  // 冷却闸门：与 --dur-scene(.7s) 交叉过渡对齐。否则连按 D 会在淡入淡出中途反复重启，
+  // 渐变层被撕成两半（2.1）。返回 false 表示冷却中，本次操作整体丢弃。
+  if(!WB.ui.lock("theme", 700)) return;
   const cur = resolvedTheme();
-  set("theme", cur === "dark" ? "light" : "dark");
-  const btn = WB.$("#btn-theme");
-  if(btn){
-    btn.innerHTML = WB.icon(cur === "dark" ? "sun" : "moon");
-    WB.ui.toast(cur === "dark" ? "回到晨雾奶油" : "夜雾模式，晚安");
-  }
+  set("theme", cur === "dark" ? "light" : "dark");   // set → apply，图标一并同步
+  WB.ui.toast(cur === "dark" ? "回到晨雾奶油" : "夜雾模式，晚安");
 }
 
 function init(){
-  apply();
-  const btn = WB.$("#btn-theme");
-  if(btn){
-    btn.innerHTML = WB.icon(resolvedTheme() === "dark" ? "sun" : "moon");
-    btn.addEventListener("click", toggleTheme);
+  apply();   // 图标 / meta / 壁纸的同步都在 apply 里，这里不再重复
+  // 4.2 系统「减弱动态效果」作为默认值来源；用户显式设置过动效开关后以设置为准
+  if(!motionUserSet() && matchMedia("(prefers-reduced-motion: reduce)").matches){
+    document.documentElement.classList.add("no-motion");
   }
+  const btn = WB.$("#btn-theme");
+  if(btn) btn.addEventListener("click", toggleTheme);
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
     if(get("theme") === "auto") apply();
   });
 }
 
-WB.theme = {DEFAULTS, all, get, set, merge, apply, toggleTheme, init, resolvedTheme, bgMode};
+WB.theme = {DEFAULTS, all, get, set, merge, apply, toggleTheme, init, resolvedTheme, bgMode,
+  motionUserSet, adaptVeil};
 })();

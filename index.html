@@ -7,6 +7,23 @@
 <title>个人工作台 · 晨雾奶油</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23f3ede1'/%3E%3Ccircle cx='13' cy='14' r='6' fill='%23a9c6d8' opacity='.7'/%3E%3Ccircle cx='20' cy='18' r='5' fill='%23b9aade' opacity='.6'/%3E%3C/svg%3E">
 <meta name="theme-color" content="#f6f1e7">
+<script>
+/* 首帧主题：必须在样式表之前同步执行（3.4）。
+   否则夜雾用户每次启动都会看到一次「米白 → 深蓝」的 .5s 变色（#veil 只遮住一部分）。
+   键名与 02-store.js 的 PREFIX("wb:") 保持一致；读失败就退回 index.html 上的静态 light。 */
+(function(){
+  try{
+    var s = JSON.parse(localStorage.getItem("wb:settings") || "{}");
+    var t = s.theme;
+    if(t === "auto") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    var html = document.documentElement;
+    if(t === "dark" || t === "light") html.dataset.theme = t;
+    if(s.accent) html.dataset.accent = s.accent === "custom" ? "mist" : s.accent;
+    if(s.accent === "custom" && s.accentCustom) html.style.setProperty("--accent", s.accentCustom);
+    if(s.motion === false) html.classList.add("no-motion");   // 动效关掉时首帧就别播入场
+  }catch(e){}
+})();
+</script>
 <link rel="stylesheet" href="css/main.css">
 <style>
 /* 本地主字体：霞鹜文楷精简子集（构建单文件时内联为 base64） */
@@ -35,7 +52,7 @@
 <div id="app">
   <aside id="sidebar" aria-label="导航">
     <div class="side-brand">
-      <svg viewBox="0 0 32 32" class="brand-mark"><circle cx="16" cy="16" r="14" class="bm-base"/><circle cx="13" cy="14" r="6" class="bm-a"/><circle cx="20" cy="18" r="5" class="bm-b"/></svg>
+      <svg viewBox="0 0 32 32" class="brand-mark breathe"><circle cx="16" cy="16" r="14" class="bm-base"/><circle cx="13" cy="14" r="6" class="bm-a"/><circle cx="20" cy="18" r="5" class="bm-b"/></svg>
       <div class="brand-text"><b>个人工作台</b><span>Cream Reverie</span></div>
     </div>
     <nav id="side-nav"><!-- router 填充 --></nav>
@@ -51,7 +68,8 @@
       <div id="page-head"><h1 id="page-title">今日</h1><div id="page-sub"></div></div>
       <div class="top-actions">
         <button id="btn-cmdk" class="icon-btn ghost" data-icon="search" title="命令面板 Ctrl+K"></button>
-        <button id="btn-theme" class="icon-btn ghost" data-icon="moon" title="切换深浅色 D"></button>
+        <!-- 太阳/月亮走 icon-swap 交叉变形，图标由 07-theme.js 注入，不挂 data-icon -->
+        <button id="btn-theme" class="icon-btn ghost" title="切换深浅色 D"></button>
       </div>
     </header>
     <main id="view" tabindex="-1"><!-- 模块渲染区 --></main>
@@ -70,7 +88,7 @@
   <div class="scene-frame">
     <div class="scene-head">
       <span id="scene-title"></span>
-      <button id="scene-close" class="icon-btn ghost" aria-label="关上窗">✕</button>
+      <button id="scene-close" class="icon-btn ghost" data-icon="close" aria-label="关上窗"></button>
     </div>
     <iframe id="scene-iframe" title="窗景" scrolling="no"></iframe>
   </div>

@@ -237,7 +237,7 @@ function todoRow(t){
   row.appendChild(el("button", {
     html: icon(t.done ? "check-circle" : "circle", 21),
     style: {color: t.done ? "var(--ok)" : "var(--accent)", display: "flex", flex: "none",
-      transition: "transform .2s cubic-bezier(.34,1.6,.5,1)"},
+      transition: "transform var(--dur-tap) var(--ease-pop)"},
     onclick: e => checkTodo(t, e),
   }));
   const mid = el("div", {class: "grow", style: {minWidth: 0, cursor: "pointer"},

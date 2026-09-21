@@ -203,7 +203,9 @@ function petModal(){
     // 内置插画兜底
     body.innerHTML = "";
     const [emoji, text] = PET_ART[Math.floor(Math.random() * PET_ART.length)];
-    body.appendChild(el("div", {style: {fontSize: "84px", animation: "blobFloat 4s ease-in-out infinite alternate"}, text: emoji}));
+    // 走 .breathe（3s 短周期）而不是复用 blob 的 46s blobFloat：
+    // 内联 animation 还会绕过 html.no-motion 的熔断
+    body.appendChild(el("div", {class: "pet-art breathe", text: emoji}));
     body.appendChild(el("div", {class: "muted", style: {textAlign: "center", lineHeight: 1.9}, text}));
     body.appendChild(el("div", {class: "small faint", text: "（离线奶油风插画 · 联网可看真实猫猫狗狗）"}));
   }
@@ -235,7 +237,7 @@ WB.registerModule({
     const overlay = el("div", {id: "dish-wheel", style: {width: wheelSize + "px", height: wheelSize + "px", borderRadius: "50%",
       background: "conic-gradient(" + conic.slice(0, -2) + ")",
       border: "6px solid var(--card)", boxShadow: "var(--shadow)",
-      transition: "transform 2.5s cubic-bezier(.15,.9,.25,1)", position: "relative"}});
+      transition: "transform 2.5s var(--ease-spin)", position: "relative"}});
     // 选项文字
     arr.forEach((name, i) => {
       const angle = (i * seg + seg / 2) * Math.PI / 180;

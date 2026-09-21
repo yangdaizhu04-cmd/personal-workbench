@@ -2,8 +2,59 @@
 (function(){
 "use strict";
 const WB = (window.WB = window.WB || {});
-const { el, esc, icon } = WB;
+/* $$ 必须一起解构：draggable() 的 dragover/dragend 里用了 $$，
+   此前漏解构 → 每次拖动都抛 "$$ is not defined"，整条拖拽重排链路静默失效 */
+const { el, esc, icon, $$ } = WB;
 const motionOff = () => document.documentElement.classList.contains("no-motion");
+
+/* ---------- 冷却闸门（交互互斥） ----------
+   ms 必须 ≥ 对应 CSS 动画时长，否则动画会叠加；返回 false = 冷却中，调用方直接忽略本次操作 */
+const locks = new Map();
+function lock(key, ms){
+  if(locks.has(key)) return false;
+  locks.set(key, setTimeout(() => locks.delete(key), ms));
+  return true;
+}
+
+/* ---------- 图标交叉变形 ---------- */
+/* 两个图标绝对叠放，靠 .icon-swap.is-b 交叉（CSS 在 main.css 的「动效原子」段） */
+function swapIcon(btn, iconA, iconB, showB){
+  if(!btn || !WB.icon) return;
+  if(!btn.dataset.swapReady){
+    btn.innerHTML = "<span>" + WB.icon(iconA) + "</span><span>" + WB.icon(iconB) + "</span>";
+    btn.classList.add("icon-swap");
+    btn.dataset.swapReady = "1";
+    btn.__iconed = true;   // 挡住 iconHydrate 的 data-icon 补图，否则会被塞进第三个图标
+  }
+  btn.classList.toggle("is-b", !!showB);
+}
+
+/* ---------- 错峰入场 ----------
+   延迟用 CSS 变量 --d 传，transition 本身写在 CSS 里，
+   这样 html.no-motion 的 !important 熔断依然生效（不要改成内联 animation） */
+function staggerTargets(scope){
+  let nodes = Array.from(scope.children);
+  if(nodes.length === 1 && nodes[0].children.length > 1) nodes = Array.from(nodes[0].children);
+  return nodes.filter(n => !n.classList.contains("stagger-item"));
+}
+function staggerIn(scope, step = 50, base = 100){
+  if(!scope || motionOff()) return;
+  const nodes = staggerTargets(scope);
+  if(nodes.length < 2) return;   // 单项做错峰只会显得迟钝
+  nodes.forEach((n, i) => {
+    n.classList.add("stagger-item");
+    n.style.setProperty("--d", (base + i * step) + "ms");
+  });
+  void scope.offsetHeight;       // 先让初始态落地，再加 is-in 才有过渡
+  nodes.forEach(n => n.classList.add("is-in"));
+}
+
+/* 有全屏遮罩时给 body 挂 scrim-open：让侧栏摘掉 backdrop-filter。
+   减少「同时存在」的模糊层数，比给它们加 will-change 更有效（4.5） */
+function syncScrim(){
+  document.body.classList.toggle("scrim-open",
+    !!document.querySelector(".modal-scrim, .cmdk-scrim, .sheet-scrim"));
+}
 
 /* ---------- 吐司 ---------- */
 function toast(msg, type){
@@ -23,38 +74,58 @@ function modal({title, icon: ic, content, actions, wide, onClose}){
   const root = WB.$("#modal-root");
   const body = el("div", {class: "modal-body"});
   const box = el("div", {class: "modal" + (wide ? " wide" : ""), role: "dialog"});
+  /* 关闭统一走 m.close：main.js 的 modal 栈包装只替换返回对象上的 close，
+     × 按钮/遮罩若直调内部 close 会漏弹栈，modalOpen 恒真导致快捷键被拦（踩坑 #028） */
+  const m = {el: box, body, close: null};
+  let closing = false;
+  function close(ok){
+    if(closing) return;               // 防抖：× 按钮与 onClose 可能在同一轮里各调一次
+    closing = true;
+    // 退场动画：时长与进场对齐但短约 30%。事件与出栈必须在「退场开始时」就完成，
+    // 等 setTimeout 会让 200ms 窗口期内快捷键仍被弹窗栈拦住（踩坑 #028）
+    // syncScrim 必须跟在「真正移除」之后：退场期间遮罩还在 DOM 里，
+    // 提前调用会让 body.scrim-open 永远摘不掉，侧栏白丢一层 backdrop-filter
+    if(motionOff() || !scrim.isConnected){
+      scrim.remove();
+      syncScrim();
+    }else{
+      scrim.classList.add("leaving");
+      box.classList.add("leaving");
+      setTimeout(() => { scrim.remove(); syncScrim(); }, 200);
+    }
+    WB.bus.emit("modal:closed");
+    if(onClose) onClose(ok);
+  }
+  m.close = close;
   if(title || ic){
     box.appendChild(el("div", {class: "modal-head"},
       ic ? el("span", {html: icon(ic, 20), style: {color: "var(--accent)", display: "flex"}}) : null,
       el("h3", {text: title}),
       el("button", {class: "icon-btn", html: icon("close", 18), "aria-label": "关闭",
-        onclick: () => close()})));
+        onclick: () => m.close()})));
   }
   box.appendChild(body);
   const foot = el("div", {class: "modal-foot"});
   box.appendChild(foot); // 始终挂载：晨间/收工仪式等无 actions 调用方需要自行填充按钮（空时由 CSS 隐藏）
 
   const scrim = el("div", {class: "modal-scrim"}, box);
-  function close(ok){
-    scrim.remove();
-    WB.bus.emit("modal:closed");
-    if(onClose) onClose(ok);
-  }
   (actions || []).forEach(a => {
     foot.appendChild(el("button", {
       class: "btn" + (a.primary ? " primary" : "") + (a.danger ? " danger" : "") + (a.sm ? " sm" : ""),
       text: a.label, onclick: () => {
         const keep = a.onClick ? a.onClick(box, body) : false;
         if(!keep && a.onClick) return;
-        if(!a.onClick || !keep) close(true);
+        if(!a.onClick || !keep) m.close(true);
       },
     }));
   });
   if(typeof content === "string") body.innerHTML = content;
   else if(content) body.appendChild(content);
-  scrim.addEventListener("mousedown", e => { if(e.target === scrim) close(); });
+  scrim.addEventListener("mousedown", e => { if(e.target === scrim) m.close(); });
   root.appendChild(scrim);
-  return {el: box, body, close};
+  syncScrim();
+  staggerIn(body);   // 多分区表单依次浮现；单项弹窗自动跳过（2.4）
+  return m;
 }
 
 function confirmBox(msg, {title = "确认一下", okLabel = "确认", danger} = {}){
@@ -76,7 +147,7 @@ function confirmBox(msg, {title = "确认一下", okLabel = "确认", danger} = 
 /* ---------- 空状态 ---------- */
 function emptyState(ic, title, hint, action){
   const box = el("div", {class: "empty"},
-    el("div", {html: icon(ic, 52)}),
+    el("div", {class: "breathe", html: icon(ic, 52)}),
     el("div", {class: "e-title", text: title}),
     hint ? el("div", {class: "e-hint", html: hint}) : null,
     action || null);
@@ -181,6 +252,31 @@ function ring(pct, size = 44, strokeW = 4, label){
 /* ---------- 拖拽排序（列表/卡片通用） ---------- */
 function draggable(container, {itemSel = "[data-drag-id]", onReorder, handle = false} = {}){
   let dragEl = null;
+  const sel = () => Array.from(container.querySelectorAll(itemSel));
+  /* 手写 FLIP：DOM 换位前记位置 → 换位后反向位移 → 下一帧交还 CSS 过渡（2.8）
+     不使用 GSAP Flip 插件，避免额外体积 */
+  function flipMove(prev){
+    for(const n of sel()){
+      if(n === dragEl) continue;
+      const before = prev.get(n);
+      if(!before) continue;
+      const after = n.getBoundingClientRect();
+      const dx = before.left - after.left, dy = before.top - after.top;
+      if(!dx && !dy) continue;
+      n.style.transition = "none";                       // 先钉在旧位置
+      n.style.transform = "translate(" + dx + "px," + dy + "px)";
+      requestAnimationFrame(() => {
+        void n.offsetWidth;                              // 样式落地后才起跑过渡
+        n.classList.add("flip-anim");
+        n.style.transition = "";                         // 交还 CSS
+        n.style.transform = "";
+        n.addEventListener("transitionend", function done(){
+          n.classList.remove("flip-anim");
+          n.removeEventListener("transitionend", done);
+        });
+      });
+    }
+  }
   container.addEventListener("mousedown", e => {
     if(handle && !e.target.closest("[data-drag-handle]")) return;
     const item = e.target.closest(itemSel);
@@ -205,12 +301,16 @@ function draggable(container, {itemSel = "[data-drag-id]", onReorder, handle = f
     e.preventDefault();
     const target = e.target.closest(itemSel);
     $$(".drop-target", container).forEach(n => n.classList.remove("drop-target"));
-    if(target && target !== dragEl){
-      const rect = target.getBoundingClientRect();
-      const before = e.clientY < rect.top + rect.height / 2;
-      container.insertBefore(dragEl, before ? target : target.nextSibling);
-      target.classList.add("drop-target");
-    }
+    if(!target || target === dragEl) return;
+    const rect = target.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    const next = before ? target : target.nextSibling;
+    // 原位插入不产生位移动画，也避免无意义的 layout 读
+    if(next === dragEl || next === dragEl.nextSibling){ target.classList.add("drop-target"); return; }
+    const prev = motionOff() ? null : new Map(sel().map(n => [n, n.getBoundingClientRect()]));
+    container.insertBefore(dragEl, next);
+    if(prev) flipMove(prev);
+    target.classList.add("drop-target");
   });
   container.addEventListener("drop", e => {
     e.preventDefault();
@@ -222,13 +322,10 @@ function draggable(container, {itemSel = "[data-drag-id]", onReorder, handle = f
 function enableDrag(elm){ elm.setAttribute("draggable", "true"); }
 
 /* ---------- 骨架屏 ---------- */
+/* 微光动画走 .card.skeleton（CSS 里定义 @keyframes skShine）：内联 animation 会绕过 no-motion 熔断 */
 function skeleton(rows = 3){
   const box = el("div");
-  for(let i = 0; i < rows; i++){
-    box.appendChild(el("div", {class: "card", style: {marginBottom: "12px", height: "64px", opacity: .55,
-      background: "linear-gradient(100deg, var(--card-2) 40%, var(--card) 50%, var(--card-2) 60%)",
-      backgroundSize: "200% 100%", animation: "skShine 1.4s infinite"}}));
-  }
+  for(let i = 0; i < rows; i++) box.appendChild(el("div", {class: "card skeleton"}));
   return box;
 }
 
@@ -269,6 +366,7 @@ function countUp(node, to, {dur = 0.9, suffix = ""} = {}){
 Object.assign(WB.ui = {}, {
   toast, modal, confirmBox, emptyState, confetti, starBurst, celebrate,
   ring, draggable, enableDrag, skeleton, chime, countUp, getCtx, motionOff,
+  lock, swapIcon, staggerIn, syncScrim,
 });
 WB.draggable = draggable;
 WB.enableDrag = enableDrag;

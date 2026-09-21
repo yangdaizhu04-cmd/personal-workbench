@@ -117,10 +117,9 @@ function notifyAll(mode){
   WB.notify(isFocusEnd ? "🍅 专注完成" : "🌱 休息结束", isFocusEnd ? "休息 " + WB.theme.get("pomodoroRest") + " 分钟吧" : "准备好开始下一轮专注了吗");
 }
 function flashOverlay(isFocusEnd){
-  const div = el("div", {style: {position: "fixed", inset: 0, zIndex: 190, display: "flex",
-    alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "12px",
-    background: "var(--veil)", backdropFilter: "blur(10px)",
-    transition: "opacity .6s", opacity: "0"}});
+  // 层级/模糊全部走 CSS 变量与类，避免「CSS 里查不到的 z-index / 内联模糊值」
+  const div = el("div", {class: "pomo-flash"});
+  div.style.opacity = "0";
   div.innerHTML = '<div style="font-size:54px">' + (isFocusEnd ? "🍅" : "🌱") + "</div>" +
     '<div style="font-size:22px;font-weight:600">' + (isFocusEnd ? "专注完成！" : "休息结束") + "</div>" +
     '<div class="muted">' + (isFocusEnd ? "去喝口水，看看远处" : "深呼吸，我们开始下一轮") + "</div>";

@@ -168,4 +168,6 @@ WB.registerModule({
 
   quickAdd(){ noteModal(null); },
 });
+
+WB.notes = {quickAdd(){ noteModal(null); }};
 })();

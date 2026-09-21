@@ -103,6 +103,10 @@ const makers = {
 const REAL_SRC = {
   rain: "vendor/audio/rain.ogg",
   fire: "vendor/audio/fire.ogg",
+  white: "vendor/audio/white.ogg",
+  piano: "vendor/audio/piano.ogg",
+  pad: "vendor/audio/pad.ogg",
+  lofi: "vendor/audio/lofi.ogg",
 };
 const realEls = {};    // key -> HTMLAudioElement（跨次播放复用，浏览器自缓存）
 const realState = {};  // key -> "loading" | "real" | "synth"
@@ -142,7 +146,8 @@ function realFallback(key, myTok){
   if(genTok[key] !== myTok || !prefs().active[key]) return;
   if(!synthWarned[key]){
     synthWarned[key] = true;
-    WB.ui.toast((key === "rain" ? "雨声" : "篝火") + "录音文件没找到，先用合成音源", "warn");
+    const meta = SRC_META.find(m => m[0] === key);
+    WB.ui.toast((meta ? meta[1] : key) + "录音文件没找到，先用合成音源", "warn");
   }
   const c = ac(); if(!c) return;
   const out = srcGain(key);
@@ -533,7 +538,7 @@ function toggleAll(){
   if(anyPlaying()){
     Object.keys(running).forEach(stopSource);
     // local/url 也停
-    renderPanelInto(panelRoot);
+    refreshPanel();
   }else{
     if(!actives.length){
       // 默认开雨声
@@ -543,7 +548,7 @@ function toggleAll(){
       if(actives.includes("local")){ const st = prefs(); st.active.local = true; setPrefs(st); startSource("local"); }
       if(actives.includes("url")){ const st = prefs(); st.active.url = true; setPrefs(st); startSource("url"); }
     }
-    renderPanelInto(panelRoot);
+    refreshPanel();
   }
 }
 function muteAll(){

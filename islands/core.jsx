@@ -11,8 +11,8 @@ import { EnergyOrb } from "../../../灵感开发项目一/threeui/src/shaders/en
 const bgHost = document.getElementById("bg-shader");
 if (bgHost && !document.documentElement.classList.contains("no-motion")) {
   document.body.classList.add("wb-islands"); // 单文件版无 islands：光斑不被动态模式隐藏
-  const bgRoot = createRoot(bgHost);
   let bgKind = null;
+  const slotRoots = new Map();   // slot 元素 → 它自己的 React root（卸载时必须成对）
 
   const NightIframe = () => h("iframe", {
     src: "vendor/threeui/pages/constellation-night.html",
@@ -29,16 +29,46 @@ if (bgHost && !document.documentElement.classList.contains("no-motion")) {
     return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
   }
 
+  function mountSlot(box, key) {
+    const root = createRoot(box);
+    slotRoots.set(box, root);
+    if (key === "light") {
+      root.render(h(CondensationBackground, { speed: 0.7, dropAmount: 0.8, opacity: 0.55 }));
+    } else {
+      root.render(h(NightIframe));
+    }
+  }
+
+  function dropSlot(box) {
+    const root = slotRoots.get(box);
+    slotRoots.delete(box);
+    if (root) root.unmount();
+    box.remove();
+  }
+
+  /* 双槽位交叉淡入（2.3）：新层先以 opacity:0 挂载，下一帧加 .is-on；
+     旧层淡出后再卸载。整层替换（组件 ↔ iframe）时因此是淡出淡入，而不是换源白屏。 */
+  function fadeInSlot(key) {
+    const box = document.createElement("div");
+    box.className = "bg-slot";
+    bgHost.appendChild(box);
+    mountSlot(box, key);
+    requestAnimationFrame(() => box.classList.add("is-on"));
+    return box;
+  }
+
+  function fadeOutSlot(box) {
+    box.classList.remove("is-on");
+    setTimeout(() => dropSlot(box), 700);   // 与 --dur-scene 对齐
+  }
+
   function bgSync() {
     const want = bgDesired();
     if (want === bgKind) return;
     bgKind = want;
-    if (!want) { bgRoot.render(null); return; }
-    if (want === "light") {
-      bgRoot.render(h(CondensationBackground, { speed: 0.7, dropAmount: 0.8, opacity: 0.55 }));
-    } else {
-      bgRoot.render(h(NightIframe));
-    }
+    const olds = Array.from(bgHost.querySelectorAll(".bg-slot.is-on"));
+    if (want) fadeInSlot(want);
+    olds.forEach(fadeOutSlot);
   }
 
   new MutationObserver(bgSync).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "class"] });

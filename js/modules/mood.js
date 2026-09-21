@@ -25,7 +25,7 @@ WB.registerModule({
       const level = i + 1;
       row.appendChild(el("button", {
         text: emoji,
-        style: {fontSize: rec && rec.level === level ? "44px" : "32px", transition: "all .25s cubic-bezier(.34,1.5,.5,1)",
+        style: {fontSize: rec && rec.level === level ? "44px" : "32px", transition: "all var(--dur) var(--ease-pop)",
           filter: rec && rec.level === level ? "none" : "grayscale(.8)", opacity: rec && rec.level === level ? 1 : .55},
         onclick: () => setMood(today, level, rec && rec.note, true),
         title: label,

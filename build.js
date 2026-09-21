@@ -91,6 +91,8 @@ if(process.argv.includes("--cloud")){
   const shell = ["./", "./index.html", "./manifest.webmanifest",
     "./css/main.css", "./vendor/font/lxgw-wenkai-subset.woff2",
     "./vendor/audio/rain.ogg", "./vendor/audio/fire.ogg",
+    "./vendor/audio/white.ogg", "./vendor/audio/piano.ogg",
+    "./vendor/audio/pad.ogg", "./vendor/audio/lofi.ogg",
     "./vendor/threeui/islands/core.js"];
   const sw = read("sw.js").replace(
     /const SHELL = \[[\s\S]*?\];/,

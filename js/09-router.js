@@ -62,9 +62,18 @@ function render(){
   WB.$$("#side-nav .nav-item, #bottombar .bb-item").forEach(n => {
     n.classList.toggle("active", n.dataset.route === mod.id);
   });
-  // 转场动画
-  if(WB.gsapReady && WB.gsapReady() && !WB.ui.motionOff()){
-    gsap.fromTo(inner, {opacity: 0, y: 10}, {opacity: 1, y: 0, duration: .38, ease: "power2.out", clearProps: "all"});
+  // 转场动画：冷却闸门只锁「动画」，不锁渲染本身。
+  // 若把 lock 卡在 render 入口，快速切页要么丢渲染（hash 与视图不一致）、要么内容延迟出现；
+  // 锁在动画上则在冷却期内直接以终态呈现，既不掉内容也不叠帧（2.1）
+  if(WB.ui.lock("route", 400)){
+    if(WB.gsapReady && WB.gsapReady() && !WB.ui.motionOff()){
+      gsap.fromTo(inner, {opacity: 0, y: 10}, {opacity: 1, y: 0, duration: .38, ease: "power2.out", clearProps: "all"});
+    }else{
+      inner.classList.add("fresh");
+    }
+    // 注意：这里不要再对 inner 做 staggerIn。列表型模块的错峰统一由
+    // main.js 的 animateCards 负责（有 .card 走 GSAP，没有才走 CSS 错峰），
+    // 两处同时上会让同一批节点的 opacity/transform 被两套动画争抢。
   }
   view.scrollTop = 0;
   WB.bus.emit("route:changed", mod.id);
@@ -117,12 +126,27 @@ function buildNav(){
     }));
   });
 }
+let sheetPhase = "closed";   // closed | open | leaving
+let sheetToken = 0;
+function sheetOpen(){ return sheetPhase === "open"; }
+/* 抽屉开合时汉堡 ↔ 叉号交叉变形（2.2） */
+function menuBtnSync(open){
+  const btn = WB.$("#btn-menu");
+  if(btn && WB.ui.swapIcon) WB.ui.swapIcon(btn, "menu", "close", open);
+}
+
 function openSheet(ids){
   const root = WB.$("#sheet-root");
+  sheetPhase = "open";
+  sheetToken++;
   root.hidden = false;
   root.innerHTML = "";
   const sheet = el("div", {class: "sheet"});
-  sheet.appendChild(el("div", {class: "center", style: {width: "44px", height: "4px", borderRadius: "4px", background: "var(--card-border)", margin: "0 auto 8px"}}));
+  /* 遮罩层压在内容层之上，移动端顶栏不可达——抽屉必须自带显式关闭入口（4.1） */
+  sheet.appendChild(el("div", {class: "sheet-head"},
+    el("div", {class: "sheet-grip"}),
+    el("button", {class: "icon-btn", html: icon("close", 18), "aria-label": "关闭抽屉",
+      onclick: closeSheet})));
   ids.forEach(id => {
     const m = routes[id];
     if(!m) return;
@@ -135,18 +159,37 @@ function openSheet(ids){
   const scrim = el("div", {class: "sheet-scrim", onclick: closeSheet});
   root.appendChild(scrim);
   root.appendChild(sheet);
+  if(WB.ui.syncScrim) WB.ui.syncScrim();
+  menuBtnSync(true);
+  if(WB.ui.staggerIn) WB.ui.staggerIn(sheet, 40, 60);
 }
 function closeSheet(){
   const root = WB.$("#sheet-root");
-  root.hidden = true;
-  root.innerHTML = "";
+  if(sheetPhase === "closed") return;
+  sheetPhase = "leaving";
+  menuBtnSync(false);
+  const tk = ++sheetToken;
+  const body = root.querySelector(".sheet");
+  const scrim = root.querySelector(".sheet-scrim");
+  const done = () => {
+    if(tk !== sheetToken) return;       // 期间又开了新抽屉，别把新面板清掉
+    sheetPhase = "closed";
+    root.hidden = true;
+    root.innerHTML = "";
+    if(WB.ui.syncScrim) WB.ui.syncScrim();
+  };
+  if(!body || WB.ui.motionOff()){ done(); return; }
+  body.classList.add("leaving");
+  if(scrim) scrim.classList.add("leaving");
+  setTimeout(done, 220);
 }
 
 /* 菜单按钮（移动端） */
 function initChrome(){
   buildNav();
-  WB.$("#btn-menu").innerHTML = icon("menu", 19);
+  menuBtnSync(false);
   WB.$("#btn-menu").addEventListener("click", () => {
+    if(sheetOpen()){ closeSheet(); return; }
     const ids = [];
     groups.forEach(g => g.items.forEach(id => ids.push(id)));
     ids.push("trash", "settings");
@@ -164,5 +207,6 @@ function init(){
   render();
 }
 
-WB.router = {register, getRoute, allRoutes, groups, buildNav, nav, render, go, init, current, openSheet, closeSheet};
+WB.router = {register, getRoute, allRoutes, groups, buildNav, nav, render, go, init, current,
+  openSheet, closeSheet, sheetOpen};
 })();

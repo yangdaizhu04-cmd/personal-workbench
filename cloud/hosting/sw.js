@@ -9,6 +9,10 @@ const SHELL = [
   "./vendor/font/lxgw-wenkai-subset.woff2",
   "./vendor/audio/rain.ogg",
   "./vendor/audio/fire.ogg",
+  "./vendor/audio/white.ogg",
+  "./vendor/audio/piano.ogg",
+  "./vendor/audio/pad.ogg",
+  "./vendor/audio/lofi.ogg",
   "./vendor/threeui/islands/core.js",
 ];
 

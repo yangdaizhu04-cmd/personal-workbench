@@ -12,6 +12,7 @@ const SCENES = {
 };
 
 let openKey = null;
+let gen = 0;   // 每次开/关都自增：退场的兜底定时器不能把「期间重新打开」的窗景关掉
 
 function frame(){
   return {
@@ -21,18 +22,33 @@ function frame(){
   };
 }
 
+const motionOff = () => document.documentElement.classList.contains("no-motion");
+/* 开窗 .55s / 关窗 .32s：重叠会打架，开窗整体走冷却闸门（2.1） */
+const OPEN_LOCK_MS = 600;
+
+/* 中断进行中的补间：否则开窗动画未播完就关窗，两条 tween 会各写各的 transform */
+function killTweens(viewer){
+  if(!window.gsap || !viewer) return;
+  const target = viewer.querySelector(".scene-frame");
+  if(target) gsap.killTweensOf(target);
+  gsap.killTweensOf(viewer);
+}
+
 function open(key){
   const s = SCENES[key];
   if(!s) return;
   if(window.WB_SINGLE_FILE){ WB.ui.toast("单文件版不含窗景，用文件夹版（启动工作台.bat）打开"); return; }
+  if(!WB.ui.lock("scene", OPEN_LOCK_MS)) return;
   const f = frame();
   if(!f.viewer || !f.iframe) return;
+  gen++;
   openKey = key;
+  killTweens(f.viewer);
   f.title.textContent = s.title;
   f.iframe.src = s.file; // 关闭时清空释放 GPU
   f.viewer.hidden = false;
-  const noMotion = document.documentElement.classList.contains("no-motion");
-  if(window.gsap && !noMotion){
+  f.viewer.style.opacity = "";
+  if(window.gsap && !motionOff()){
     gsap.fromTo(f.viewer.querySelector(".scene-frame"),
       {scale: 0.92, y: 28, filter: "blur(10px)", opacity: 0},
       {scale: 1, y: 0, filter: "blur(0px)", opacity: 1, duration: 0.55, ease: "power3.out"});
@@ -45,16 +61,23 @@ function close(){
   openKey = null;
   const f = frame();
   if(!f.viewer) return;
+  const g = ++gen;
+  let settled = false;
+  let guard = null;
   const done = () => {
+    if(settled || g !== gen) return;   // 期间已重新开窗 → 放弃本次收尾
+    settled = true;
+    if(guard) clearTimeout(guard);
     f.viewer.hidden = true;
+    f.viewer.style.opacity = "";
     f.iframe.src = ""; // 释放场景内存/GPU
   };
-  const noMotion = document.documentElement.classList.contains("no-motion");
-  if(window.gsap && !noMotion){
+  killTweens(f.viewer);
+  if(window.gsap && !motionOff()){
     gsap.to(f.viewer.querySelector(".scene-frame"),
-      {scale: 0.94, y: 18, filter: "blur(8px)", opacity: 0, duration: 0.32, ease: "power2.in",
-       onComplete: done});
-    gsap.to(f.viewer, {opacity: 0, duration: 0.3});
+      {scale: 0.94, y: 18, filter: "blur(8px)", opacity: 0, duration: 0.32, ease: "power2.in"});
+    gsap.to(f.viewer, {opacity: 0, duration: 0.3, onComplete: done});
+    guard = setTimeout(done, 500); // 后台标签页 rAF 会停摆，GSAP 补间冻结（踩坑 #014）
   }else done();
 }
 

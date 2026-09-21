@@ -8,10 +8,15 @@ const gsapReady = () => typeof gsap !== "undefined";
 function animateCards(container){
   if(!gsapReady() || WB.ui.motionOff()) return;
   const cards = container.querySelectorAll(".card");
-  if(!cards.length) return;
-  gsap.fromTo(cards,
-    {opacity: 0, y: 18},
-    {opacity: 1, y: 0, duration: .55, ease: "power2.out", stagger: .055, clearProps: "opacity,transform"});
+  if(cards.length){
+    gsap.fromTo(cards,
+      {opacity: 0, y: 18},
+      {opacity: 1, y: 0, duration: .55, ease: "power2.out", stagger: .055, clearProps: "opacity,transform"});
+    return;
+  }
+  // 没有卡片的列表型模块：交给 CSS 错峰（2.4 的第 4 个挂载点）。
+  // 不能和上面的 GSAP 卡片的 opacity/y 同时作用于同一批节点，所以二选一。
+  if(WB.ui.staggerIn) WB.ui.staggerIn(container);
 }
 
 /* ---------- 欢迎入场：雾气晕开 → 标题浮现 → 移除 ---------- */
@@ -49,8 +54,8 @@ function initShortcuts(){
         if(WB.closeTopModal) WB.closeTopModal();
         else if(WB.commands && WB.commands.close) WB.commands.close();
         break;
-      case "n": case "N": go("notes"); if(WB.notes && WB.notes.quickAdd) WB.notes.quickAdd(); break;
-      case "t": case "T": go("todos"); if(WB.todos && WB.todos.quickAdd) WB.todos.quickAdd(); break;
+      case "n": case "N": WB.router.go("notes"); if(WB.notes && WB.notes.quickAdd) WB.notes.quickAdd(); break;
+      case "t": case "T": WB.router.go("todos"); if(WB.todos && WB.todos.quickAdd) WB.todos.quickAdd(); break;
       case "d": case "D": WB.theme.toggleTheme(); break;
       case " ":
         if(WB.pomodoro && WB.pomodoro.toggleSound){ e.preventDefault(); WB.pomodoro.toggleSound(); }
@@ -95,9 +100,15 @@ function checkReminders(){
     m.close = function(){ const i = stack.indexOf(m); if(i >= 0) stack.splice(i, 1); origClose.apply(m, arguments); };
     return m;
   };
-  WB.modalOpen = () => stack.length > 0 || !WB.$("#cmdk-root").hidden;
+  /* 判断「有浮层」一律走各面板自己的 phase 状态，不要看 DOM 是否隐藏：
+     退场动画期间 DOM 还在，但逻辑上已经关掉了（踩坑 #028） */
+  const cmdkOpen = () => !!(WB.commands && WB.commands.isOpen && WB.commands.isOpen());
+  const sheetOpen = () => !!(WB.router && WB.router.sheetOpen && WB.router.sheetOpen());
+  WB.modalOpen = () => stack.length > 0 || cmdkOpen() || sheetOpen();
   WB.closeTopModal = () => {
     if(stack.length) stack[stack.length - 1].close();
+    else if(sheetOpen()) WB.router.closeSheet();
+    else if(cmdkOpen()) WB.commands.close();
     else if(WB.commands && WB.commands.close) WB.commands.close();
   };
 })();

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人工作台 · 晨雾奶油 — 竞品调研与优化方向报告</title>
+<style>
+  :root{
+    --bg:#f6f1e7; --card:#fdfaf3; --ink:#3d3a35; --ink-soft:#6f6a60;
+    --mist:#7fa3bd; --lav:#a294c9; --peach:#e0b8a3; --mint:#a3c6ab;
+    --line:#e7ddcc; --shadow:0 10px 30px rgba(150,130,100,.12);
+    --p0:#d97b66; --p1:#d9a45b; --p2:#8fa98a;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"LXGW WenKai","霞鹜文楷","Microsoft YaHei",system-ui,sans-serif;
+    line-height:1.75; padding:32px 18px 80px;
+  }
+  .wrap{max-width:1080px; margin:0 auto}
+  header{
+    background:var(--card); border-radius:24px; padding:44px 40px;
+    box-shadow:var(--shadow); border:1px solid var(--line); margin-bottom:28px;
+  }
+  h1{font-size:30px; letter-spacing:1px; margin-bottom:10px}
+  h1 .sub{display:block; font-size:15px; color:var(--ink-soft); font-weight:normal; margin-top:6px}
+  .meta{font-size:13px; color:var(--ink-soft); margin-top:14px}
+  .verdict{
+    margin-top:22px; padding:18px 22px; border-left:4px solid var(--mist);
+    background:#eef3f6; border-radius:0 14px 14px 0; font-size:15.5px;
+  }
+  .verdict b{color:#4a7a96}
+  h2{
+    font-size:22px; margin:44px 0 16px; padding-left:14px;
+    border-left:5px solid var(--lav);
+  }
+  h3{font-size:17.5px; margin:26px 0 10px; color:#5a5266}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:20px;
+    padding:24px 26px; box-shadow:var(--shadow); margin-bottom:18px;
+  }
+  table{width:100%; border-collapse:collapse; font-size:13.5px; margin:10px 0; background:#fffdf8}
+  th,td{border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top}
+  th{background:#efe7d6; font-weight:600; white-space:nowrap}
+  tr:nth-child(even) td{background:#faf5ea}
+  a{color:#4a7a96; text-decoration:none; word-break:break-all}
+  a:hover{text-decoration:underline}
+  .tag{display:inline-block; padding:1px 9px; border-radius:999px; font-size:12px; margin:1px 3px 1px 0}
+  .t-ok{background:#e3efe4; color:#4f7a55}
+  .t-gap{background:#f7e6dd; color:#b2654f}
+  .t-src{background:#e8eaf3; color:#5c6799}
+  .badge{display:inline-block; padding:2px 10px; border-radius:8px; color:#fff; font-size:12.5px; font-weight:600}
+  .b0{background:var(--p0)} .b1{background:var(--p1)} .b2{background:var(--p2)}
+  .lead{font-size:15px; color:var(--ink)}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  .okbox{background:#eef5ee; border-radius:14px; padding:14px 18px; margin:8px 0}
+  .gapbox{background:#fbf0ea; border-radius:14px; padding:14px 18px; margin:8px 0}
+  .okbox h4,.gapbox h4{font-size:14.5px; margin-bottom:6px}
+  .okbox h4{color:#4f7a55} .gapbox h4{color:#b2654f}
+  ul{padding-left:22px} li{margin:4px 0; font-size:14px}
+  .star{color:#b8860b}
+  .dim-table td:first-child{white-space:nowrap; font-weight:600; background:#f3ecdd !important}
+  .foot{font-size:12.5px; color:var(--ink-soft); margin-top:8px}
+  .num{font-weight:700; color:#4a7a96}
+  .note{font-size:13px; color:var(--ink-soft); background:#f1e9d8; border-radius:10px; padding:8px 14px; margin:10px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>🌫️ 个人工作台 · 晨雾奶油 Cream Reverie
+    <span class="sub">同类优秀作品调研 × 多维度差距分析 × 按优先级排序的优化建议</span>
+  </h1>
+  <div class="meta">调研日期 2026-09-16 ｜ 对标项目 16 个 ｜ 分析维度 8 个 ｜ 建议 30 条（P0×8 / P1×11 / P2×11）</div>
+  <div class="verdict">
+    <b>一句话结论：</b>你的项目在「功能密度、仪式感设计、晨雾奶油视觉、本地优先、断网优雅降级、工程化」六个方面已经是 90 分作品——这不是客套，是和 16 个对标作品逐项对出来的。<b>真正的短板不在功能多少，而在三件事：① 缺一条"持续激励闭环"（做完了没有地方"花"）；② 首页卡片是静态信息、缺"一眼看到今天状态"的活气；③ 分发与数据流通的渠道还没打通（新标签页入口、WebDAV 同步、云端加密）。</b>把下面 P0 的 8 件事做了，就从"很好用的个人工具"变成"每天舍不得关掉的产品"。
+  </div>
+</header>
+
+<h2>一、调研对象与人气证据</h2>
+<div class="card">
+  <p class="lead">按与本项目形态的相似度分三组挑选，star 数为 2026-09-16 前后 GitHub API / 第三方追踪站实时核实值（随时间浮动）：</p>
+  <table>
+    <tr><th>组别</th><th>项目</th><th>一句话定位</th><th>人气证据</th><th>来源</th></tr>
+    <tr><td rowspan="6"><b>自托管仪表盘<br>/起始页</b></td>
+      <td>Glance</td><td>Go 单二进制信息聚合仪表盘（RSS/天气/股价/服务状态）</td><td class="star">★ ≈37k</td><td><a href="https://github.com/glanceapp/glance">github.com/glanceapp/glance</a></td></tr>
+    <tr><td>Homepage</td><td>homelab 事实标准的服务聚合导航</td><td class="star">★ ≈32.6k</td><td><a href="https://github.com/gethomepage/homepage">github.com/gethomepage/homepage</a></td></tr>
+    <tr><td>Dashy</td><td>功能最全的自托管仪表盘，带可视化编辑器</td><td class="star">★ ≈26.5k</td><td><a href="https://github.com/Lissy93/dashy">github.com/Lissy93/dashy</a></td></tr>
+    <tr><td>Homer / Homarr / Flame</td><td>极简静态起始页 / 容器直控仪表盘 / 轻量带编辑器起始页</td><td class="star">★ 11.6k / 7.2k / 6.5k</td><td><a href="https://github.com/bastienwirtz/homer">homer</a> · <a href="https://github.com/ajnart/homarr">homarr</a> · <a href="https://github.com/pawelmalak/flame">flame</a></td></tr>
+    <tr><td>Bento / Bonjourr / Howdz</td><td>极简可 Hack 起始页 / iOS 风新标签页扩展 / 组件化拖拽起始页</td><td class="star">★ 2.1k / 1.7k / 1.1k</td><td><a href="https://github.com/migueravila/Bento">bento</a> · <a href="https://github.com/victrme/Bonjourr">bonjourr</a> · <a href="https://github.com/leon-kfd/Dashboard">howdz</a></td></tr>
+    <tr><td>SiYuan 思源笔记</td><td>块级本地优先知识管理 + 社区市场 + 多端同步</td><td class="star">★ ≈46k</td><td><a href="https://github.com/siyuan-note/siyuan">github.com/siyuan-note/siyuan</a></td></tr>
+
+    <tr><td rowspan="4"><b>第二大脑<br>/轻笔记</b></td>
+      <td>Obsidian</td><td>纯 Markdown 文件落盘 + 2700+ 插件生态之王</td><td>核心闭源；releases 仓 ≈21k★；约 150 万 MAU</td><td><a href="https://obsidian.md">obsidian.md</a></td></tr>
+    <tr><td>Anytype / Logseq</td><td>本地优先+E2EE+P2P(CRDT) 的 Everything App ／ 块级大纲+日记入口</td><td>≈8.8k★ ／ ≈33k+★（AGPL）</td><td><a href="https://anytype.io">anytype.io</a> · <a href="https://github.com/logseq/logseq">logseq</a></td></tr>
+    <tr><td>flomo 浮墨笔记</td><td>卡片流+层级标签+微信输入，仪式感设计极致</td><td>上百万用户；App Store 至美奖/金米奖</td><td><a href="https://flomoapp.com">flomoapp.com</a></td></tr>
+    <tr><td>Notion / Craft / Bear / Tana / Capacities</td><td>全能块级 SaaS ／ 苹果设计美学标杆 ／ ADA 获奖写作工具 ／ Supertag 类型化 AI 原生 ／ 对象化笔记</td><td>各赛道头部商业产品</td><td><a href="https://notion.com">notion</a> · <a href="https://craft.do">craft</a> · <a href="https://bear.app">bear</a> · <a href="https://tana.inc">tana</a> · <a href="https://capacities.io">capacities</a></td></tr>
+
+    <tr><td rowspan="3"><b>效率/游戏化<br>/AI 日记</b></td>
+      <td>Habitica</td><td>把任务变成 8-bit RPG：金币/职业/组队副本</td><td class="star">★ ≈14.2k</td><td><a href="https://github.com/HabitRPG/habitica">habitica</a></td></tr>
+    <tr><td>TickTick ／ Todoist ／ Forest ／ 小日常</td><td>任务+日历+番茄四合一 ／ Quick Add 自然语言+Karma ／ 专注种树 ／ 中文极简打卡"只坚持一件事"</td><td>App Store 4.8+ ／ 全球最流行任务器 ／ 6000 万+下载 ／ App Store 4.8</td><td><a href="https://dida365.com/">dida365</a> · <a href="https://todoist.com/">todoist</a> · <a href="https://apps.apple.com/cn/app/id1263789061">小日常</a></td></tr>
+    <tr><td>Reflect Diary</td><td>AES-256-GCM 端到端加密 + AI 主动周报反思日记</td><td>商业产品口碑款</td><td><a href="https://reflectdiary.app">reflectdiary.app</a></td></tr>
+  </table>
+</div>
+
+<h2>二、八维度对比总表（精选核心对手 × 本项目）</h2>
+<div class="card">
+  <table class="dim-table">
+    <tr><th>维度</th><th>本项目 v15</th><th>Glance/Homepage 系</th><th>Obsidian/Anytype 系</th><th>flomo/Craft 系</th><th>Habitica/Forest 系</th></tr>
+    <tr><td>① 产品定位</td><td><b>效率+生活双线聚合 23 模块</b>，功能密度全场最高</td><td>只做"一屏信息聚合"，5–8 个 widget</td><td>重笔记/数据库，不碰生活记录</td><td>只做写作记录单线</td><td>只做任务/习惯单线</td></tr>
+    <tr><td>② UX/仪式感</td><td><b>晨间/收工双仪式+GSAP 庆祝+小花园，全场最强</b></td><td>纯信息展示，无仪式感</td><td>图谱/Canvas，偏效率不偏情绪</td><td>flomo 昨日回声/随机漫步明信片是唯一对标的情绪设计</td><td>Forest 树枯死/图鉴，情绪反馈极强</td></tr>
+    <tr><td>③ 技术架构</td><td><b>零框架零构建双击即开 + registerModule + 冒烟回归</b>，工程化意识个人项目里罕见</td><td>需 Go 二进制 / Node 服务端 / Docker</td><td>Electron 重应用；Obsidian 插件=JS+manifest</td><td>闭源 SaaS / 原生</td><td>商业全栈云</td></tr>
+    <tr><td>④ 数据隐私备份</td><td>localStorage+IDB+每日快照×7+回收站 30 天+三格式导出，<b>但同步是明文、无可移植文件格式</b></td><td>单机不同步（承认仪表盘不需要多端）</td><td>Obsidian 纯 .md 落盘；Anytype E2EE+CRDT；SiYuan WebDAV/S3</td><td>flomo 云端；Craft/Bear iCloud</td><td>全部厂商云端</td></tr>
+    <tr><td>⑤ 扩展生态</td><td>BYOK AI + 23 模块固定，<b>无用户侧扩展能力</b></td><td>YAML 声明 widget；Homepage 100+ 服务集成</td><td>Obsidian 2700+ 插件；SiYuan bazaar 市场；Tana Supertag</td><td>flomo PRO API/MCP</td><td>Habitica 开放 API/Webhook</td></tr>
+    <tr><td>⑥ 设计视觉</td><td><b>晨雾奶油+霞鹜文楷+ThreeUI 3D 扩展，气质独一档</b></td><td>扁平工具感为主；Dashy 40+ 主题</td><td>社区主题数千套但 UI 偏裸</td><td>Craft/Bear/flomo 多次设计奖，"纸感"路线与你同向</td><td>Forest 治愈手绘；Habitica 像素风刻意不精致</td></tr>
+    <tr><td>⑦ 性能/体积</td><td>单文件 1.5MB（含字体内联），<b>已属第一梯队但 ECharts 全量是大头</b></td><td>Glance 单二进制 &lt;20MB 毫秒启动，极致参照</td><td>Electron 数百 MB，重</td><td>原生 App 秒开</td><td>原生极小</td></tr>
+    <tr><td>⑧ 分发/多端</td><td>文件夹/单文件/PWA 三形态+Tauri 物料待打包，<b>缺"打开浏览器就到"的入口</b></td><td>Docker 一键起；Homer 扔静态托管</td><td>全平台桌面+移动</td><td>App Store 全端</td><td>App Store + Chrome 扩展</td></tr>
+  </table>
+  <p class="foot">读法：本项目在 ①②③⑥ 三行是领跑方；在 ④⑤⑦⑧ 四行有明确可抄作业的点；③ 行工程化基础（registerModule/冒烟测试）本身就是做扩展生态的好地基。</p>
+</div>
+
+<h2>三、分维度深度分析（哪些已做好 / 哪些真有差距）</h2>
+
+<div class="card">
+<h3>① 产品定位与功能</h3>
+<div class="okbox"><h4>✅ 你已经领先</h4>功能密度碾压全部对手（23 模块 vs 对标 5–8 个）；"效率+生活+轻娱乐"双线融合是独家；晨间/收工双仪式没有任何对标品有类似设计。</div>
+<div class="gapbox"><h4>⚠️ 真正的差距</h4>
+<ul>
+<li><b>跨模块是"目录式"而非"网络化"</b>：日志里写"读完了《xx》"还要手动跳去书影剧馆新建。Capacities 靠"提到即创建"、Tana 靠 Supertag（打 <code>#书</code> 标签自动弹出作者/评分/短评字段，填完自动入库）把模块间摩擦降到零——<span class="tag t-src">Tana / Capacities</span></li>
+<li><b>AI 只读不写</b>：你的 AI 助手是问答+标签建议。Notion AI Agent、Tana、Reflect 都已做到"AI 填数据/改数据"——选中一段日志自动识别出待办/心情/事件，一键确认写回对应模块。<span class="tag t-src">Notion / Tana / Reflect</span></li>
+<li><b>总览卡片只能排序显隐，不能"加新卡"</b>：Howdz 把所有功能做成物料库，用户像搭积木自由增删；你手里其实已经有"今日一书/播客推荐/汇率速览"等内容模块没上总览。<span class="tag t-src">Howdz</span></li>
+</ul></div>
+</div>
+
+<div class="card">
+<h3>② UX / 交互 / 仪式感（你最强的一维度，但仍有两处情绪缺口）</h3>
+<div class="okbox"><h4>✅ 你已经领先</h4>晨间/收工双仪式、打勾星光、彩带、小花园生长、静音动效开关——对标品里只有 flomo 的"昨日回声/随机漫步明信片"在同一个情绪赛道上。</div>
+<div class="gapbox"><h4>⚠️ 真正的差距</h4>
+<ul>
+<li><b>缺"和历史自己对话"的回流设计</b>：flomo「昨日回声」AI 读今天+几天前的记录，找一条真实的呼应/矛盾/延续，一句话呈现（不强行编造）；「随机漫步」随机翻一条旧笔记，走到尽头给一张记录了多少天多少字的"明信片"。你有 4000 周人生刻度图，但那是数据可视化，不是情绪回流。→ 晨间仪式插一步"昨日回声"，轻娱乐角/收工仪式加"时光胶囊"（随机抽一年前的今天日志全屏展示）。<span class="tag t-src">flomo</span></li>
+<li><b>庆祝"看完就没了"</b>：小日常全打卡完送一张可保存的纪念卡片；Forest 中断的番茄留下一棵灰色枯树桩形成心理张力。你现在三大件全完成的彩带一过就结束了。→ 生成一张奶油风"今日纪念卡"（日期+完成数+插画）可存图可分享；放弃的番茄在小花园留灰树桩。<span class="tag t-src">小日常 / Forest</span></li>
+<li><b>14 卡对新用户偏挤</b>：Craft 的哲学是"打开就有结构"、Capacities 强调"零配置不教用户搭系统"。→ 首次打开只露今日总览/待办/日志三块，其余收进"更多模块"；另做一个"极简模式"一键只剩时钟+三件+天气（与 Bonjourr 极简美学、你的专注淡出理念一致）。<span class="tag t-src">Craft / Capacities / Bonjourr</span></li>
+</ul></div>
+</div>
+
+<div class="card">
+<h3>③ 技术架构与工程化</h3>
+<div class="okbox"><h4>✅ 你已经领先</h4>零框架零构建双击即开（Glance 要 Go 二进制、Homepage 要 Node、SiYuan 要 Electron）；23 模块一文件 + registerModule；无头浏览器冒烟回归（110 路由零错误）；字体子集化；窗景页懒加载释放 GPU。这套工程化在个人项目里属顶尖。</div>
+<div class="gapbox"><h4>⚠️ 真正的差距</h4>
+<ul>
+<li><b>同步冲突是"记录级新者胜"</b>：两台设备同时改同一条待办，后写的直接覆盖。Anytype 的 any-sync 用 CRDT 解决无冲突合并——CRDT 对你太重，但至少应做到"字段级合并 or 冲突时弹'保留两版'"。<span class="tag t-src">Anytype</span></li>
+<li><b>联网 API 直连浏览器端</b>：天气/汇率/宠物/翻译都从浏览器直连，跨域与弱网脆弱。Glance 哲学是"服务端拉、前端渲染"——你的 CloudBase 云函数已在代理热搜/iTunes/AI，把其余公共 API 收编即可彻底解决跨域+统一缓存策略。<span class="tag t-src">Glance</span></li>
+<li><b>笔记/日志是整篇存储，无块级 ID</b>：SiYuan/Obsidian/Logseq 的核心竞争力是"块级引用"——某一段话有唯一 ID，可在周报里精确嵌入、改源处全链更新。这是笔记系统的长期地基。<span class="tag t-src">SiYuan / Logseq</span></li>
+</ul></div>
+</div>
+
+<div class="card">
+<h3>④ 数据 / 隐私 / 备份安全（最该补课的一维度）</h3>
+<div class="okbox"><h4>✅ 你已经领先</h4>每日快照×7、回收站 30 天、JSON/MD/CSV 三导出、BYOK 密钥只存本机——比绝大多数个人工具周到。</div>
+<div class="gapbox"><h4>⚠️ 真正的差距</h4>
+<ul>
+<li><b>导出≠可移植</b>：JSON 是"备份格式"不是"可打开格式"，浏览器清缓存即全丢。Obsidian 的答案是纯 .md 落盘——你应加"导出为每日一 .md 的文件夹结构（Obsidian Vault 兼容）"，让用户能 git 备份、能导入任何笔记软件。这是数据主权的终极一步。<span class="tag t-src">Obsidian / Logseq</span></li>
+<li><b>云端同步目前是明文 JSON</b>：有访问密码但数据库被攻破则全泄。Reflect Diary 的卖点是 AES-256-GCM 端到端加密——Web Crypto API 原生支持，加"同步加密密钥"、push 前加密 pull 后解密、密钥只留本机即可。<span class="tag t-src">Reflect Diary / Anytype</span></li>
+<li><b>同步渠道只有 CloudBase 一条，部署门槛高</b>：SiYuan 支持 WebDAV/S3（坚果云/Nextcloud/群晖用户填个 URL 就能多端同步，无需云函数）；Bonjourr 用 GitHub Gist+Token 零服务器同步。WebDAV 是个人用户最容易拿到的多端通道。<span class="tag t-src">SiYuan / Bonjourr</span></li>
+</ul></div>
+</div>
+
+<div class="card">
+<h3>⑤ 扩展性 / 集成 / 生态</h3>
+<div class="okbox"><h4>✅ 你已经领先</h4>BYOK 兼容 OpenAI 系、8 个联网 API 全实测可用且断网静默、模块间已有联动（番茄绑待办/技能、日志自动摘要）。</div>
+<div class="gapbox"><h4>⚠️ 真正的差距</h4>
+<ul>
+<li><b>模块写死在仓库里，用户无法加东西</b>：Obsidian 插件=一个 JS 文件+manifest，靠 2700+ 插件撑起生态。你的 registerModule 已经是现成地基，可开放极简加载器——设置页贴一段 JS/拖入 .js 即可注册自定义卡片或命令面板入口。<span class="tag t-src">Obsidian</span></li>
+<li><b>自然语言输入只做了一半</b>：Todoist Quick Add 纯正则离线解析日期/优先级/清单分配；你 ⌘K 已有日期词+标签，缺"每周一/每天 8 点/每月 1 号"重复规则和"!1/!2/!3"优先级符号——纯字符串处理，工作量小、体验质变。<span class="tag t-src">Todoist / TickTick</span></li>
+<li><b>⌘K 与 AI 是两个入口</b>：Notion 的 Cmd+K 直接回答"这个月花了多少"并给跳转。把 AI 问答并进 ⌘K 才是杀手感。<span class="tag t-src">Notion</span></li>
+</ul></div>
+</div>
+
+<div class="card">
+<h3>⑥ 设计 / 视觉</h3>
+<div class="okbox"><h4>✅ 你已经领先</h4>晨雾奶油材质体系、霞鹜文楷、~70 枚手绘 SVG 图标、ThreeUI 着色器/窗景页/3D 书架/锦鲤翻卡——在所有对标品里"美感"是你最强的护城河，工具类对手全是"工具感"。</div>
+<div class="gapbox"><h4>⚠️ 真正的差距</h4>
+<ul>
+<li><b>换肤只改强调色，不改氛围</b>：Dashy/Bento 的"主题包"是配色+圆角+阴影+字体整套打包。可做 3–5 套完整皮肤（奶油/夜雾/蜜桃/薄荷/极简白纸）。<span class="tag t-src">Dashy / Bento</span></li>
+<li><b>壁纸与 UI 两张皮</b>：Bonjourr 从壁纸自动提主色当主题色。Canvas 提色技术成熟，与奶油气质很搭。<span class="tag t-src">Bonjourr</span></li>
+<li><b>写作区缺"专注模式"</b>：Bear 的 Focus Mode 全屏只剩文字。日志/笔记按 F 进入——侧栏底栏全藏、背景微暗。<span class="tag t-src">Bear</span></li>
+</ul></div>
+</div>
+
+<div class="card">
+<h3>⑦ 性能 / 体积 / 加载</h3>
+<div class="okbox"><h4>✅ 你已经领先</h4>单文件 1.5MB（含字体）在同类里已是第一梯队；字体子集 4500 字、DPR≤1.5、hidden 暂停渲染、reduced-motion 回退。</div>
+<div class="gapbox"><h4>⚠️ 真正的差距</h4>
+<ul>
+<li><b>ECharts 全量打包是体积大头</b>：统计看板只用了柱/折/饼/热力图等 7 种，换 <code>echarts/core</code> 按需注册可砍 300–600KB，单文件压到 ~1MB，这是 Glance &lt;20MB 哲学下你最容易摘的果子。<span class="tag t-src">Glance</span></li>
+<li><b>首屏感知可更快</b>：1.5MB 单文件首次打开要等字体+JS 解析，可做骨架屏+渐进加载（先渲染日期/导航/空卡片，ECharts 异步再挂）。<span class="tag t-src">Homer 纯静态秒开</span></li>
+</ul></div>
+</div>
+
+<div class="card">
+<h3>⑧ 分发 / 部署 / 多端适配</h3>
+<div class="okbox"><h4>✅ 你已经领先</h4>三形态齐全、Tauri 物料就绪、GitHub Pages 在线版可装 PWA、移动端手势切模块/下拉刷新/底栏导航。</div>
+<div class="gapbox"><h4>⚠️ 真正的差距</h4>
+<ul>
+<li><b>没有"打开浏览器就到"的入口</b>：Bonjourr/Howdz 都验证过——打包成 Manifest V3 新标签页扩展，业务代码零改动，用户每天开浏览器第一眼就是工作台。这是最低成本最高收益的分发动作。<span class="tag t-src">Bonjourr / Howdz</span></li>
+<li><b>Tauri 只差执行</b>：物料 100% 就绪，缺的只是装 Rust 环境跑一次 <code>npx tauri build</code>；托盘常驻/全局快捷键/开机自启是浏览器版替代不了的体验。<span class="tag t-src">SiYuan / Dashy</span></li>
+<li><b>总览缺"一键动作"</b>：Homarr 不只是看还能直接操作。高频操作不该跳页——总览放"开始今日番茄/一键备份/写今日日志"三个直触按钮。<span class="tag t-src">Homarr</span></li>
+</ul></div>
+</div>
+
+<h2>四、按优先级排序的优化建议清单</h2>
+
+<div class="card">
+<h3><span class="badge b0">P0</span>　本季就做 · 高 ROI · 与现有架构增量兼容</h3>
+<table>
+<tr><th style="width:34px">#</th><th style="width:150px">建议</th><th>改什么（具体到文件/机制）</th><th>为什么</th><th style="width:120px">对标</th></tr>
+<tr><td>1</td><td><b>晨雾币奖励闭环</b></td><td>完成任务/打卡/番茄赚"晨雾币"，设置页自定义奖励价码（"玩 30 分钟=200 币"），总览常驻币数；高优先级任务双倍币</td><td>你现在 9 枚徽章是一次性解锁，<b>缺"可消费出口"</b>——Habitica/Forest 全靠货币闭环让人坚持</td><td>Habitica 奖励商店 / Forest 金币</td></tr>
+<tr><td>2</td><td><b>番茄小花园 → 植物图鉴</b></td><td>"每 4 番茄开一花"升级为解锁树：小草→玫瑰→樱花→雾中银杏；中断的番茄留灰色枯树桩</td><td>比纯数字专注史有收集欲；枯树桩强化"不想中断"的张力；不破坏温柔气质</td><td>Forest 树种图鉴</td></tr>
+<tr><td>3</td><td><b>总览卡片"活气化"</b></td><td>每张卡显示一个实时变化的数：待办"3 件·1 逾期"、记账"本周 ¥234/¥500"、番茄"今日 2/3"、心情"本周 😊😊😐…"</td><td>现在卡片偏静态，加实时数字后<b>首页一眼知道今天状态</b>——这是 Homepage 服务卡片的核心手法</td><td>Homepage 实时状态卡</td></tr>
+<tr><td>4</td><td><b>⌘K 自然语言再进化</b></td><td>解析"每周一/每天 8 点/每月 1 号"重复规则、"!1 !2 !3"优先级符号、"3 天后"相对日期</td><td>纯正则离线可用，工作量小体验质变</td><td>Todoist Quick Add</td></tr>
+<tr><td>5</td><td><b>昨日回声 + 时光胶囊</b></td><td>晨间仪式插一步 AI 读今日+3 天前日志找一条呼应/矛盾，一句话呈现；收工/轻娱乐角随机抽"一年前的今天"全屏展示+纪念卡</td><td>补上"和历史自己对话"的情绪回流，这是 flomo 最打动人的设计</td><td>flomo 昨日回声/随机漫步</td></tr>
+<tr><td>6</td><td><b>今日纪念卡片</b></td><td>三大件全完成时自动生成奶油风插画+日期+完成数图片，canvas 导出 PNG 可存可分享</td><td>彩带动效看完就没，一张可带走的卡片才有传播价值</td><td>小日常每日卡片</td></tr>
+<tr><td>7</td><td><b>导出 Obsidian 兼容 .md 文件夹</b></td><td>扩展 13-exports.js：日志/笔记/账单按日导出为 .md 文件夹树（含 frontmatter），zip 下载</td><td>JSON 是备份不是可移植；纯文本落盘才是浏览器清缓存后仍活着的数据主权</td><td>Obsidian / Logseq</td></tr>
+<tr><td>8</td><td><b>打包浏览器新标签页扩展</b></td><td>Manifest V3 + chrome_url_overrides.newtab 指向 index.html，业务代码零改动</td><td>"每天开浏览器第一眼就是工作台"是最自然入口；Bonjourr/Howdz 已验证此路</td><td>Bonjourr / Howdz</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3><span class="badge b1">P1</span>　下个版本值得做 · 体验跃升</h3>
+<table>
+<tr><th style="width:34px">#</th><th style="width:150px">建议</th><th>改什么</th><th>为什么</th><th style="width:120px">对标</th></tr>
+<tr><td>9</td><td>云端同步客户端加密</td><td>Web Crypto AES-GCM，用户设备设同步密钥，push 前加密 pull 后解密，密钥不出本机</td><td>当前云端明文存储是数据安全最大隐患</td><td>Reflect / Anytype</td></tr>
+<tr><td>10</td><td>WebDAV 同步通道</td><td>设置页填 WebDAV URL+账密，REST 读写 JSON，无需云函数</td><td>坚果云/Nextcloud 用户零成本多端，比 CloudBase 部署简单一个数量级</td><td>SiYuan</td></tr>
+<tr><td>11</td><td>AI 从"问答"升级为"写回"</td><td>选中一段日志→AI 识别待办/心情/事件一键写回；每周日自动生成一段 AI 复盘周报；⌘K 里直接回答"本月花了多少"</td><td>把 AI 从装饰变助理，是 Notion/Tana/Reflect 已验证的下一代体验</td><td>Notion / Tana / Reflect</td></tr>
+<tr><td>12</td><td>标签属性（轻量 Supertag）</td><td>笔记打 #书影剧 自动弹"书名/评分/短评"小字段，填完自动入书影剧馆；日志写"读完《xx》"提示一键收录</td><td>打通模块间手动跳转的最大摩擦</td><td>Tana / Capacities</td></tr>
+<tr><td>13</td><td>晨雾指数曲线</td><td>按时完成 +5 / 逾期 -3 / 番茄 +2，画 30 天曲线，总览显示"今日状态 78"</td><td>比徽章有"今天状态如何"的实时感</td><td>Todoist Karma</td></tr>
+<tr><td>14</td><td>总览视图切换 + 卡片调宽</td><td>晨间/工作/晚间三视图一键切换；卡片可拖拽拉宽压扁（番茄/统计大卡，汇率/天气小卡）</td><td>与你双仪式哲学天然契合；高频卡大、低频卡小</td><td>Dashy 多页 / Homarr 自由网格</td></tr>
+<tr><td>15</td><td>数据健康小卡</td><td>总览一张卡："上次快照 3 天前 / localStorage 已用 65% / 同步正常 / 有链接失效 2 条"</td><td>把你零散的 7 天提醒系统化成仪表盘</td><td>Dashy 健康检查</td></tr>
+<tr><td>16</td><td>ECharts 按需引入瘦身</td><td>echarts/core 只注册用到的 7 种图表类型，单文件 1.5MB→~1MB</td><td>单文件版首屏更快，Glance 哲学下最容易摘的果子</td><td>Glance</td></tr>
+<tr><td>17</td><td>同步冲突字段级合并</td><td>同记录多端编辑时按字段比对而非整记录覆盖，冲突弹"保留两版"</td><td>现在两端改同一条会静默丢数据</td><td>Anytype CRDT 思想</td></tr>
+<tr><td>18</td><td>完成 Tauri 打包</td><td>装 Rust 工具链跑 npx tauri build，产出托盘常驻 .exe</td><td>物料 100% 就绪只差执行</td><td>SiYuan / Dashy</td></tr>
+<tr><td>19</td><td>RSS 订阅卡片</td><td>总览加"我的订阅"卡，用户贴自己的 RSS 源做信息流</td><td>比单一热点 API 更个性化，Glance 核心形态</td><td>Glance</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3><span class="badge b2">P2</span>　锦上添花 · 有余力再做</h3>
+<table>
+<tr><th style="width:34px">#</th><th>建议</th><th>对标</th></tr>
+<tr><td>20</td><td>极简模式：一键只剩时钟+三件+天气</td><td>Bonjourr</td></tr>
+<tr><td>21</td><td>完整皮肤包（奶油/夜雾/蜜桃/薄荷/白纸整套换，非只换强调色）</td><td>Dashy 40 主题 / Bento</td></tr>
+<tr><td>22</td><td>壁纸自动提主色 → 应用为强调色（Canvas API）</td><td>Bonjourr</td></tr>
+<tr><td>23</td><td>日志/笔记块级 ID + [[]] 双链 + ECharts graph 关系图（长期地基）</td><td>SiYuan / Obsidian / Logseq</td></tr>
+<tr><td>24</td><td>专注写作模式：按 F 全屏只剩正文</td><td>Bear Focus</td></tr>
+<tr><td>25</td><td>⌘K 前缀过滤语法：#标签 / $金额 / !未完成</td><td>Bear / Todoist Filter</td></tr>
+<tr><td>26</td><td>极简插件加载器：贴 JS / 拖 .js 注册自定义卡片与命令</td><td>Obsidian 插件机制</td></tr>
+<tr><td>27</td><td>配置一键导出分享（朋友导入即得同款工作台）+ 浏览器书签 HTML 导入</td><td>Homer / Flame</td></tr>
+<tr><td>28</td><td>GitHub Gist 轻量同步（Token+Gist ID 零服务器）</td><td>Bonjourr</td></tr>
+<tr><td>29</td><td>骨架屏 + 渐进 hydration；GSAP 换 Web Animations API 再砍 ~50KB</td><td>Homer / Glance</td></tr>
+<tr><td>30</td><td>自定义 CSS 注入 textarea（高级用户覆盖样式）+ 双向习惯（坏习惯扣分，谨慎别破坏温柔感）</td><td>Bonjourr / Habitica</td></tr>
+</table>
+<p class="note">⚠️ <b>刻意不建议做的</b>：Habitica 式重度 RPG 组队副本、Homelab 100+ 服务集成（不符合"温柔个人工作台"定位）、多用户协作——这些与你的设计哲学冲突，不抄。</p>
+</div>
+
+<h2>五、你已经做对、不用改的 10 件事</h2>
+<div class="card">
+<ol>
+<li><b>本地优先 + 双击即开</b>：比 TickTick/Todoist/Forest 全部更尊重隐私，与 Glance/Homer 同哲学。</li>
+<li><b>断网优雅降级</b>：8 个联网 API 失败静默回退——Glance 断网空白、Homepage 断网报错，你做得比多数对手好。</li>
+<li><b>晨间/收工双仪式 + GSAP 庆祝体系</b>：全场对标品没有第二家。</li>
+<li><b>晨雾奶油视觉体系 + 霞鹜文楷 + ThreeUI 3D 扩展</b>："美感"是你区别于所有工具类对手的护城河。</li>
+<li><b>每日快照×7 + 回收站 30 天</b>：数据安全设计比绝大多数个人工具周到。</li>
+<li><b>⌘K 命令面板</b>：对标 Linear/Raycast 的高阶交互，在单页 HTML 同类里罕见。</li>
+<li><b>23 模块 registerModule 注册制 + 冒烟回归</b>：架构清晰，本身就是做 P2 插件生态的现成地基。</li>
+<li><b>六源 CC0 声音面板</b>：比 Forest/TickTick 白噪音丰富一个量级。</li>
+<li><b>农历生日/节气/月相/业务日</b>：本土化细度超过所有西方竞品。</li>
+<li><b>单文件 1.5MB 构建 + 字体子集化</b>：在"零依赖"赛道已属第一梯队。</li>
+</ol>
+</div>
+
+<h2>六、信息来源</h2>
+<div class="card">
+<ul class="foot">
+<li>GitHub star 数：api.github.com 实时查询（2026-09-16）—— Glance / Homepage / Dashy / Homer / Homarr / Flame / Habitica / Bento / Bonjourr / Howdz / SiYuan / Logseq / Anytype / Obsidian releases 仓。</li>
+<li>产品特性交叉核实：<a href="https://github.com/gethomepage/homepage">homepage</a> · <a href="https://github.com/glanceapp/glance">glance</a> · <a href="https://dashy.to">dashy.to</a> · <a href="https://www.habitica.com/static/features">habitica features</a> · <a href="https://todoist.com/help/articles/introduction-to-karma-OgWwy">Todoist Karma 官方文档</a> · <a href="https://apps.apple.com/cn/app/id1263789061">小日常 App Store 页</a> · <a href="https://obsidian.md">obsidian.md</a> · <a href="https://anytype.io">anytype.io</a> · <a href="https://flomoapp.com">flomoapp.com</a> · <a href="https://reflectdiary.app">reflectdiary.app</a> · <a href="https://github.com/victrme/Bonjourr">Bonjourr</a> · <a href="https://github.com/siyuan-note/siyuan">思源笔记</a> · <a href="https://tana.inc">Tana</a> · <a href="https://capacities.io">Capacities</a> · <a href="https://craft.do">Craft</a> · <a href="https://bear.app">Bear</a></li>
+<li>本项目事实引自：项目内 README.md / 开发交接文档.md（§2 设计哲学、§3 数据架构、§4 模块清单）/ 开发踩坑.md。</li>
+</ul>
+<p class="foot">原始三路调研笔记另存于项目目录：调研报告-竞品分析.md（仪表盘/效率类 11 项详版）、竞品调研报告.md（单文件/AI 日记类 8 项详版）。</p>
+</div>
+
+</div>
+</body>
+</html>

@@ -146,8 +146,17 @@ async function doTranslate(text){
 }
 
 /* ---------- 打开/关闭 ---------- */
+/* closed | open | leaving：退场期间 modalOpen() 必须已经算「关掉了」，
+   否则 .leaving 的 200ms 内快捷键仍会被弹窗栈拦住（踩坑 #028） */
+let phase = "closed";
+let token = 0;
+let firstPaint = false;
+function isOpen(){ return phase === "open"; }
+
 function open(){
   const root = WB.$("#cmdk-root");
+  token++;
+  phase = "open";
   root.hidden = false;
   root.innerHTML = "";
   const scrim = el("div", {class: "cmdk-scrim", onclick: close});
@@ -168,22 +177,42 @@ function open(){
     }
   });
   listEl = el("div", {class: "cmdk-list"});
-  const boxEl = el("div", {class: "cmdk"},
+  box = el("div", {class: "cmdk"},
     el("div", {class: "cmdk-input"}, el("span", {html: icon("search", 19)}), input),
     listEl);
   root.appendChild(scrim);
-  root.appendChild(boxEl);
+  root.appendChild(box);
+  WB.ui.syncScrim();
   selIdx = 0;
+  firstPaint = true;      // 错峰只在首次列表上播；输入重绘时逐条重播会很吵（2.4）
   paint();
+  firstPaint = false;
   setTimeout(() => input.focus(), 50);
 }
 function close(){
+  if(phase !== "open") return;
+  phase = "leaving";
   const root = WB.$("#cmdk-root");
-  root.hidden = true;
-  root.innerHTML = "";
-  input = null; box = null;
+  const tk = ++token;
+  const panel = box, scrim = root.querySelector(".cmdk-scrim");
+  const done = () => {
+    if(tk !== token) return;        // 退场期间又打开了新面板，别把新的清掉
+    phase = "closed";
+    root.hidden = true;
+    root.innerHTML = "";
+    input = null; box = null; listEl = null;
+    WB.ui.syncScrim();
+  };
+  // 退场动画 200ms，但「已关闭」的状态立刻生效（踩坑 #028）
+  if(!panel || WB.ui.motionOff()){ done(); return; }
+  panel.classList.add("leaving");
+  if(scrim) scrim.classList.add("leaving");
+  setTimeout(done, 200);
 }
 function paint(){
+  // 输入防抖 120ms：若在这 120ms 内回车关闭，input/listEl 已被清空，
+  // 旧的防抖回调仍会触发 → 必须守卫，否则 TypeError（原实现漏了这一层）
+  if(!input || !listEl) return;
   items = buildItems(input.value);
   selIdx = Math.min(selIdx, Math.max(0, items.length - 1));
   listEl.innerHTML = "";
@@ -205,11 +234,12 @@ function paint(){
     listEl.appendChild(row);
   });
   if(!items.length) listEl.appendChild(el("div", {class: "cmdk-item", text: "没有匹配结果"}));
+  if(firstPaint) WB.ui.staggerIn(listEl, 30, 0);
 }
 function paintSel(){
   listEl.querySelectorAll(".cmdk-item").forEach(n => n.classList.toggle("sel", Number(n.dataset.idx) === selIdx));
 }
 
 WB.registerModule({id: "commands-internal", title: "命令面板", icon: "search", hidden: true, render(){}});
-WB.commands = {open, close, parseDateWords};
+WB.commands = {open, close, isOpen, parseDateWords};
 })();
