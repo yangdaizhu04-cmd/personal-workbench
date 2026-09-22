@@ -224,7 +224,7 @@ for(const target of targets){
   check(target.name, "面板开着时 Esc 只关面板、不退出沉浸", !escp.open && escp.active, JSON.stringify(escp));
   await page.evaluate(() => document.querySelector('#focus-stage [data-act="scene"]').click());
   await sleep(350);
-  await page.evaluate(() => document.querySelector('#focus-stage .fs-pick[data-pick="rain"]').click());
+  await page.evaluate(() => document.querySelector('#focus-stage .fs-pick[data-pick="snow"]').click());
   await sleep(450);
   const pk2 = await page.evaluate(() => ({
     scene: document.getElementById("focus-stage").dataset.scene,
@@ -232,7 +232,7 @@ for(const target of targets){
     saved: WB.theme.get("pomoImmersiveScene"),
   }));
   check(target.name, "面板里选场景：切换生效、记住偏好、面板自动关闭",
-    pk2.scene === "rain" && !pk2.open && pk2.saved === "rain", JSON.stringify(pk2));
+    pk2.scene === "snow" && !pk2.open && pk2.saved === "snow", JSON.stringify(pk2));
   await page.evaluate(() => WB.immersive.scene("mist", true));   // 回到默认场景，别影响后续断言
   await sleep(600);
 
@@ -408,8 +408,8 @@ for(const target of targets){
     await page.setViewport({width: 1440, height: 900});
     await sleep(400);
     const FX = {mist: "fsMist", deep: "fsSway", ember: "fsFlicker", star: "fsTwinkle",
-      cafe: "fsBreathe", study: "fsBreathe", rain: "fsBreathe", lamp: "fsLampGlow"};
-    for(const sc of ["mist", "deep", "ember", "star", "cafe", "study", "rain", "lamp"]){
+      snow: "fsSnow", lake: "fsShimmer", sea: "fsShimmer", meadow: "fsSway"};
+    for(const sc of ["mist", "deep", "ember", "star", "snow", "lake", "sea", "meadow"]){
       await page.evaluate(s => WB.immersive.scene(s, true), sc);
       await page.mouse.move(700, 500);
       await sleep(900);

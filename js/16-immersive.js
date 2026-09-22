@@ -14,10 +14,11 @@
 const WB = (window.WB = window.WB || {});
 
 /* 场景表（id → 中文名）。id 同时也是 CSS 的 data-scene 与视频文件名 vendor/video/{id}.mp4；
-   2026-09-22 由 4 场景扩到 8 场景：新增室内组（咖啡馆/书房/雨窗/暖灯），切换由「循环」改为「选择面板」 */
+   2026-09-22 由 4 场景扩到 8 场景：后四席定为「世界自然风光」（雪山/湖泊/碧海/草甸）。
+   中途曾试过室内组（咖啡馆/书房/雨窗/暖灯），用户评价「效果非常差」后整体换成风光。 */
 const SCENES = {mist: "晨雾", deep: "深海", ember: "篝火", star: "星野",
-  cafe: "咖啡馆", study: "书房", rain: "雨窗", lamp: "暖灯"};
-const SCENE_ORDER = ["mist", "deep", "ember", "star", "cafe", "study", "rain", "lamp"];
+  snow: "雪山", lake: "湖泊", sea: "碧海", meadow: "草甸"};
+const SCENE_ORDER = ["mist", "deep", "ember", "star", "snow", "lake", "sea", "meadow"];
 const HIDE_MOUSE = 3200, HIDE_TOUCH = 4600;
 const BREATH_MS = 19000;      // 4-7-8：吸 4s / 屏 7s / 呼 8s，与 CSS 的 breathe-478 严格同步
 const DUCK_LEVEL = .55;       // 专注中环境音压到 55%

@@ -763,78 +763,57 @@ body.immersive-on #app, body.immersive-on #bottombar{opacity:0; pointer-events:n
   opacity:.8; animation:fsMist 96s ease-in-out -24s infinite alternate-reverse;
 }
 @keyframes fsMist{from{transform:translate3d(-5%,2%,0);} to{transform:translate3d(5%,-2%,0);}}
-/* —— 室内组动态层（2026-09-22） ——
-   咖啡馆：暖光下一层缓慢"呼吸"的热气 + 向上浮的暖浮尘（fsBreathe/fsMote 两个新关键帧，
-   书房与暖灯复用：前者换成台灯光柱 + 更慢的浮尘，后者是灯光呼吸 + 暖尘） */
-@keyframes fsBreathe{
-  0%,100%{opacity:.42; transform:scale(1);}
-  50%{opacity:.78; transform:scale(1.03);}
+/* —— 世界风光组动态层（2026-09-22） ——
+   雪山：细密的雪粒缓缓下落（瓦片平移一个周期、接缝天然无缝）+ 山脊上的一层冷光漂移；
+   湖泊：水面暖金波光的呼吸 + 两团柔光缓慢漂移（日落湖湾素材暗部大，动态层要克制）；
+   碧海：水面微光的两层呼吸与漂移；
+   草甸：两块云影以不同速度缓缓掠过草坡（复用 fsSway） */
+@keyframes fsSnow{from{background-position:0 -280px;} to{background-position:0 0;}}
+@keyframes fsShimmer{
+  0%,100%{opacity:.34;}
+  50%{opacity:.82;}
 }
-@keyframes fsMote{from{transform:translate3d(0,4%,0);} to{transform:translate3d(0,-7%,0);}}
-@keyframes fsLampGlow{
-  0%,100%{opacity:.5; transform:scale(1);}
-  46%{opacity:.92; transform:scale(1.045);}
-  62%{opacity:.72;}
-}
-.fs-scene[data-scene="cafe"] .fs-fx::before{
-  background:radial-gradient(60% 42% at 50% 78%, rgba(255,196,130,.20), transparent 70%);
-  animation:fsBreathe 11s ease-in-out infinite;
-}
-.fs-scene[data-scene="cafe"] .fs-fx::after{
+.fs-scene[data-scene="snow"] .fs-fx::before{
   background-image:
-    radial-gradient(1.5px 1.5px at 34% 68%, rgba(255,214,160,.55), transparent 62%),
-    radial-gradient(1.2px 1.2px at 66% 42%, rgba(255,200,140,.42), transparent 62%);
-  background-size:220px 220px, 170px 170px;
+    radial-gradient(1.4px 1.4px at 42px 58px, rgba(255,255,255,.85), transparent 68%),
+    radial-gradient(1.1px 1.1px at 138px 152px, rgba(240,248,255,.70), transparent 68%),
+    radial-gradient(1.6px 1.6px at 214px 104px, rgba(255,255,255,.78), transparent 68%),
+    radial-gradient(1.2px 1.2px at 96px 214px, rgba(236,246,255,.64), transparent 68%);
+  background-size:280px 280px;
   background-repeat:repeat;
-  opacity:.4; animation:fsMote 26s linear infinite;
+  opacity:.7; animation:fsSnow 26s linear infinite;
 }
-/* 书房：斜向的台灯光柱 + 比咖啡馆更慢更稀的浮尘（"静"是书房的性格） */
-.fs-scene[data-scene="study"] .fs-fx::before{
-  background:linear-gradient(196deg, rgba(255,240,200,.16), transparent 58%);
-  animation:fsBreathe 14s ease-in-out -4s infinite;
+.fs-scene[data-scene="snow"] .fs-fx::after{
+  background:linear-gradient(198deg, rgba(220,236,250,.18), transparent 55%);
+  animation:fsSway 58s ease-in-out infinite alternate;
 }
-.fs-scene[data-scene="study"] .fs-fx::after{
+.fs-scene[data-scene="lake"] .fs-fx::before{
+  background:linear-gradient(180deg, transparent 62%, rgba(255,208,142,.18) 76%, transparent 92%);
+  animation:fsShimmer 37s ease-in-out infinite alternate;
+}
+.fs-scene[data-scene="lake"] .fs-fx::after{
   background-image:
-    radial-gradient(1.3px 1.3px at 42% 60%, rgba(255,246,214,.50), transparent 62%),
-    radial-gradient(1.1px 1.1px at 58% 34%, rgba(250,240,200,.38), transparent 62%),
-    radial-gradient(1.5px 1.5px at 72% 72%, rgba(255,250,222,.34), transparent 62%);
-  background-size:190px 190px, 240px 240px, 300px 300px;
-  background-repeat:repeat;
-  opacity:.38; animation:fsMote 34s linear -9s infinite;
+    radial-gradient(42% 12% at 30% 80%, rgba(255,214,150,.22), transparent 70%),
+    radial-gradient(34% 10% at 72% 86%, rgba(255,200,130,.16), transparent 72%);
+  animation:fsSway 47s ease-in-out -12s infinite alternate-reverse;
 }
-/* 雨窗：玻璃上的雨幕（两层不同间距的极淡竖纹，靠 opacity 呼吸"活"着）
-   + 缓慢下滑的水珠。水珠用径向椭圆（宽 2px / 高 30~56px 的拖尾）铺进
-   240×300 的瓦片，动画平移整整一个瓦片高度 —— 循环点天然无缝。
-   注意别把雨幕做浓：两层竖纹都压到 .07~.10 的透明度，浓了就成"条纹帘子"（深海那次的教训） */
-.fs-scene[data-scene="rain"] .fs-fx::before{
+.fs-scene[data-scene="sea"] .fs-fx::before{
+  background:radial-gradient(50% 34% at 46% 74%, rgba(180,240,230,.22), transparent 72%);
+  animation:fsShimmer 33s ease-in-out infinite alternate;
+}
+.fs-scene[data-scene="sea"] .fs-fx::after{
   background-image:
-    repeating-linear-gradient(90deg, rgba(210,228,240,.10) 0 1px, transparent 1px 17px),
-    repeating-linear-gradient(90deg, rgba(198,218,232,.07) 0 1px, transparent 1px 29px);
-  animation:fsBreathe 9s ease-in-out infinite alternate;
+    radial-gradient(36% 8% at 26% 70%, rgba(210,250,244,.20), transparent 72%),
+    radial-gradient(30% 7% at 68% 80%, rgba(190,242,234,.16), transparent 74%);
+  animation:fsSway 52s ease-in-out -18s infinite alternate;
 }
-.fs-scene[data-scene="rain"] .fs-fx::after{
-  background-image:
-    radial-gradient(2px 42px at 60px 84px, rgba(214,232,244,.34), transparent 100%),
-    radial-gradient(1.6px 30px at 170px 212px, rgba(202,224,238,.26), transparent 100%),
-    radial-gradient(2.4px 56px at 118px 262px, rgba(220,236,248,.30), transparent 100%),
-    radial-gradient(1.4px 26px at 206px 128px, rgba(196,220,236,.22), transparent 100%);
-  background-size:240px 300px;
-  background-repeat:repeat;
-  animation:fsRainDrop 9s linear infinite;
+.fs-scene[data-scene="meadow"] .fs-fx::before{
+  background:radial-gradient(58% 30% at 34% 26%, rgba(255,245,210,.16), transparent 72%);
+  animation:fsSway 61s ease-in-out infinite alternate;
 }
-@keyframes fsRainDrop{from{background-position:0 -300px;} to{background-position:0 0;}}
-/* 暖灯：只有一盏灯的暗房间 —— 灯光缓慢呼吸（fsLampGlow 的不均匀节奏像真灯泡） + 暖尘 */
-.fs-scene[data-scene="lamp"] .fs-fx::before{
-  background:radial-gradient(46% 34% at 62% 34%, rgba(255,192,110,.26), transparent 72%);
-  animation:fsLampGlow 13s ease-in-out infinite;
-}
-.fs-scene[data-scene="lamp"] .fs-fx::after{
-  background-image:
-    radial-gradient(1.5px 1.5px at 52% 46%, rgba(255,224,168,.45), transparent 62%),
-    radial-gradient(1.2px 1.2px at 40% 64%, rgba(255,214,150,.34), transparent 62%);
-  background-size:260px 260px, 200px 200px;
-  background-repeat:repeat;
-  opacity:.34; animation:fsMote 30s linear -12s infinite;
+.fs-scene[data-scene="meadow"] .fs-fx::after{
+  background:radial-gradient(48% 24% at 68% 54%, rgba(120,140,90,.14), transparent 74%);
+  animation:fsSway 78s ease-in-out -26s infinite alternate-reverse;
 }
 /* 进度色温：专注越往后，场景的“特征光”越浓（值由 16-immersive.js 按番茄进度写 --fs-warmth）
    用单色而不是渐变——渐变不能插值，换场景时会硬跳 */
@@ -850,6 +829,10 @@ body.immersive-on #app, body.immersive-on #bottombar{opacity:0; pointer-events:n
 .fs-video.is-on{opacity:1;}
 /* 暗色主题下视频要压一档，否则白雾/篝火这类亮素材会顶穿夜雾的可读性 */
 html[data-theme="dark"] .fs-video{filter:brightness(.86) saturate(1.06) contrast(1.04);}
+/* 例外：雪山与碧海两支素材本身是明亮调（雪白/绿松石），全局压暗会把它们压成灰调、
+   失掉"风景"的呼吸感。这两支单独放宽到 .97，可读性交给深色 halo 兜底 */
+html[data-theme="dark"] #focus-stage.has-video[data-scene="snow"] .fs-video,
+html[data-theme="dark"] #focus-stage.has-video[data-scene="sea"] .fs-video{filter:brightness(.97) saturate(1.06) contrast(1.03);}
 /* 视频真正播起来时，把场景自带的动态层停掉（动画 pause 是真的省 GPU，不只是看不见） */
 #focus-stage.has-video .fs-glow,
 #focus-stage.has-video .fs-fx::before,
@@ -869,10 +852,10 @@ html[data-theme="dark"] .fs-video{filter:brightness(.86) saturate(1.06) contrast
 #focus-stage[data-scene="deep"]{--fs-tint:rgba(96,206,232,.9);}
 #focus-stage[data-scene="ember"]{--fs-tint:rgba(255,146,74,.9);}
 #focus-stage[data-scene="star"]{--fs-tint:rgba(172,146,232,.9);}
-#focus-stage[data-scene="cafe"]{--fs-tint:rgba(226,164,96,.9);}
-#focus-stage[data-scene="study"]{--fs-tint:rgba(208,186,110,.9);}
-#focus-stage[data-scene="rain"]{--fs-tint:rgba(146,182,216,.9);}
-#focus-stage[data-scene="lamp"]{--fs-tint:rgba(255,198,112,.9);}
+#focus-stage[data-scene="snow"]{--fs-tint:rgba(160,196,236,.9);}
+#focus-stage[data-scene="lake"]{--fs-tint:rgba(240,190,120,.9);}
+#focus-stage[data-scene="sea"]{--fs-tint:rgba(120,210,196,.9);}
+#focus-stage[data-scene="meadow"]{--fs-tint:rgba(200,224,140,.9);}
 .fs-scene[data-scene="mist"]{
   --fs-bg:linear-gradient(168deg, #f7f2e8 0%, #eaeaf1 46%, #dedcec 100%);
   --fs-glow-a:radial-gradient(circle, rgba(169,198,216,.50), transparent 62%);
@@ -893,28 +876,28 @@ html[data-theme="dark"] .fs-video{filter:brightness(.86) saturate(1.06) contrast
   --fs-glow-a:radial-gradient(circle, rgba(120,130,210,.34), transparent 62%);
   --fs-glow-b:radial-gradient(circle, rgba(180,150,220,.26), transparent 64%);
 }
-/* —— 室内组（2026-09-22 新增）：咖啡馆 / 书房 / 雨窗 / 暖灯 —— */
-.fs-scene[data-scene="cafe"]{
-  --fs-bg:linear-gradient(168deg, #f8f1e6 0%, #f1e3cf 46%, #e7d4ba 100%);
-  --fs-glow-a:radial-gradient(circle, rgba(219,168,110,.48), transparent 62%);
-  --fs-glow-b:radial-gradient(circle, rgba(168,124,88,.38), transparent 64%);
+/* —— 世界风光组（2026-09-22 第二次定稿）：雪山 / 湖泊 / 碧海 / 草甸 ——
+   中途曾做过一版「室内组」（咖啡馆/书房/雨窗/暖灯），用户评价「效果非常差」后
+   整体换成自然风光（素材口径：世界美景 + 电影感）。 */
+.fs-scene[data-scene="snow"]{
+  --fs-bg:linear-gradient(172deg, #eef4fa 0%, #dfe9f2 48%, #c9d7e4 100%);
+  --fs-glow-a:radial-gradient(circle, rgba(148,180,214,.44), transparent 62%);
+  --fs-glow-b:radial-gradient(circle, rgba(255,222,180,.28), transparent 64%);
 }
-.fs-scene[data-scene="study"]{
-  --fs-bg:linear-gradient(170deg, #f3f2e7 0%, #e6ead9 48%, #d6ddc6 100%);
-  --fs-glow-a:radial-gradient(circle, rgba(156,178,124,.44), transparent 62%);
-  --fs-glow-b:radial-gradient(circle, rgba(190,164,110,.34), transparent 64%);
+.fs-scene[data-scene="lake"]{
+  --fs-bg:linear-gradient(174deg, #f7f0e4 0%, #ecdcc8 46%, #d9c4a8 100%);
+  --fs-glow-a:radial-gradient(circle, rgba(238,180,110,.46), transparent 62%);
+  --fs-glow-b:radial-gradient(circle, rgba(140,118,104,.34), transparent 64%);
 }
-.fs-scene[data-scene="rain"]{
-  --fs-bg:linear-gradient(172deg, #ebeef2 0%, #dee5eb 48%, #cbd5de 100%);
-  --fs-glow-a:radial-gradient(circle, rgba(144,166,186,.46), transparent 62%);
-  --fs-glow-b:radial-gradient(circle, rgba(112,132,158,.38), transparent 64%);
+.fs-scene[data-scene="sea"]{
+  --fs-bg:linear-gradient(172deg, #eef8f6 0%, #d8ebe8 48%, #bcd8d6 100%);
+  --fs-glow-a:radial-gradient(circle, rgba(110,190,180,.44), transparent 62%);
+  --fs-glow-b:radial-gradient(circle, rgba(150,190,200,.34), transparent 64%);
 }
-/* 暖灯是「深夜房间里只有一盏灯」，底色刻意不跟主题走（同 star 的做法）：
-   两套主题下都是暗底浅字，主题差别只在灯光浓度 */
-.fs-scene[data-scene="lamp"]{
-  --fs-bg:linear-gradient(170deg, #201710 0%, #170f0a 52%, #0b0705 100%);
-  --fs-glow-a:radial-gradient(circle, rgba(255,178,96,.40), transparent 62%);
-  --fs-glow-b:radial-gradient(circle, rgba(150,96,56,.26), transparent 66%);
+.fs-scene[data-scene="meadow"]{
+  --fs-bg:linear-gradient(174deg, #f4f6ea 0%, #e4ebd4 48%, #ccd8bc 100%);
+  --fs-glow-a:radial-gradient(circle, rgba(168,190,120,.44), transparent 62%);
+  --fs-glow-b:radial-gradient(circle, rgba(198,210,178,.34), transparent 64%);
 }
 html[data-theme="dark"] .fs-scene[data-scene="mist"]{
   --fs-bg:linear-gradient(168deg, #20203a 0%, #1d2438 50%, #2a2242 100%);
@@ -926,25 +909,25 @@ html[data-theme="dark"] .fs-scene[data-scene="ember"]{
   --fs-glow-a:radial-gradient(circle, rgba(226,140,80,.32), transparent 62%);
   --fs-glow-b:radial-gradient(circle, rgba(190,86,60,.32), transparent 64%);
 }
-html[data-theme="dark"] .fs-scene[data-scene="cafe"]{
-  --fs-bg:linear-gradient(166deg, #251c15 0%, #2d2119 50%, #17100a 100%);
-  --fs-glow-a:radial-gradient(circle, rgba(226,160,96,.28), transparent 62%);
-  --fs-glow-b:radial-gradient(circle, rgba(160,110,72,.26), transparent 64%);
+html[data-theme="dark"] .fs-scene[data-scene="snow"]{
+  --fs-bg:linear-gradient(172deg, #141b24 0%, #1b2530 50%, #0e141b 100%);
+  --fs-glow-a:radial-gradient(circle, rgba(110,146,186,.30), transparent 62%);
+  --fs-glow-b:radial-gradient(circle, rgba(255,206,150,.20), transparent 64%);
 }
-html[data-theme="dark"] .fs-scene[data-scene="study"]{
-  --fs-bg:linear-gradient(170deg, #1a1e17 0%, #21261c 50%, #11150e 100%);
-  --fs-glow-a:radial-gradient(circle, rgba(140,164,104,.26), transparent 62%);
-  --fs-glow-b:radial-gradient(circle, rgba(200,164,96,.22), transparent 64%);
+html[data-theme="dark"] .fs-scene[data-scene="lake"]{
+  --fs-bg:linear-gradient(174deg, #1d1812 0%, #241d15 50%, #100c08 100%);
+  --fs-glow-a:radial-gradient(circle, rgba(226,166,96,.28), transparent 62%);
+  --fs-glow-b:radial-gradient(circle, rgba(120,100,88,.26), transparent 64%);
 }
-html[data-theme="dark"] .fs-scene[data-scene="rain"]{
-  --fs-bg:linear-gradient(172deg, #151b23 0%, #1c242f 50%, #0e1319 100%);
-  --fs-glow-a:radial-gradient(circle, rgba(96,132,168,.26), transparent 62%);
-  --fs-glow-b:radial-gradient(circle, rgba(70,100,140,.24), transparent 64%);
+html[data-theme="dark"] .fs-scene[data-scene="sea"]{
+  --fs-bg:linear-gradient(172deg, #101a1c 0%, #16242a 50%, #0a1214 100%);
+  --fs-glow-a:radial-gradient(circle, rgba(80,170,160,.28), transparent 62%);
+  --fs-glow-b:radial-gradient(circle, rgba(110,160,180,.24), transparent 64%);
 }
-html[data-theme="dark"] .fs-scene[data-scene="lamp"]{
-  --fs-bg:linear-gradient(170deg, #211811 0%, #191109 52%, #0a0604 100%);
-  --fs-glow-a:radial-gradient(circle, rgba(255,168,88,.34), transparent 62%);
-  --fs-glow-b:radial-gradient(circle, rgba(140,90,52,.24), transparent 66%);
+html[data-theme="dark"] .fs-scene[data-scene="meadow"]{
+  --fs-bg:linear-gradient(174deg, #161c12 0%, #1d2518 50%, #0e120b 100%);
+  --fs-glow-a:radial-gradient(circle, rgba(140,176,96,.26), transparent 62%);
+  --fs-glow-b:radial-gradient(circle, rgba(150,170,130,.22), transparent 64%);
 }
 .fs-glow{position:absolute; border-radius:50%; filter:blur(70px); opacity:.55;
   will-change:transform; pointer-events:none;
@@ -993,23 +976,24 @@ html[data-theme="dark"] .fs-glow{opacity:.42;}
   --fs-glass:rgba(255,255,255,.10); --fs-veil:rgba(6,8,20,.28); --fs-ring:#9aa8e0;
   --fs-halo:rgba(6,8,20,.58);
   --fs-btn:#eceefb; --fs-btn-ink:#141830;}
-/* 室内组（2026-09-22）：亮色主题下 咖啡馆/书房/雨窗 是浅底深字；暖灯自带暗底，直接浅字 */
-#focus-stage[data-scene="cafe"]{ --fs-ink:#4a3828; --fs-line:rgba(150,116,80,.22);
-  --fs-glass:rgba(255,250,242,.48); --fs-veil:rgba(74,48,24,.16); --fs-ring:#c08c5e;
-  --fs-halo:rgba(252,245,234,.46);
-  --fs-btn:#5a4232; --fs-btn-ink:#fdf6ee;}
-#focus-stage[data-scene="study"]{ --fs-ink:#39412e; --fs-line:rgba(122,136,96,.22);
-  --fs-glass:rgba(252,252,244,.48); --fs-veil:rgba(54,62,40,.15); --fs-ring:#8a9c6e;
-  --fs-halo:rgba(248,250,240,.62);
-  --fs-btn:#3f4a32; --fs-btn-ink:#fafcef;}
-#focus-stage[data-scene="rain"]{ --fs-ink:#39434f; --fs-line:rgba(122,142,162,.22);
-  --fs-glass:rgba(250,252,255,.46); --fs-veil:rgba(40,52,66,.18); --fs-ring:#7f95a8;
-  --fs-halo:rgba(240,246,252,.6);
-  --fs-btn:#3e4a56; --fs-btn-ink:#f7fafd;}
-#focus-stage[data-scene="lamp"]{ --fs-ink:#f8ead8; --fs-line:rgba(240,206,166,.22);
-  --fs-glass:rgba(255,244,228,.10); --fs-veil:rgba(18,11,6,.28); --fs-ring:#e2a860;
-  --fs-halo:rgba(10,6,3,.58);
-  --fs-btn:#f8ead8; --fs-btn-ink:#2a1a10;}
+/* 世界风光组（2026-09-22）：亮色主题下四景都是「浅底深字」（雪山/碧海/草甸的素材偏亮，
+   湖泊的日落剪影在视频态单独翻转成浅字，见下方 has-video 规则） */
+#focus-stage[data-scene="snow"]{ --fs-ink:#38475a; --fs-line:rgba(112,134,160,.24);
+  --fs-glass:rgba(252,254,255,.48); --fs-veil:rgba(58,74,94,.14); --fs-ring:#7e9cba;
+  --fs-halo:rgba(248,251,255,.62);
+  --fs-btn:#3c4c5e; --fs-btn-ink:#f6fafe;}
+#focus-stage[data-scene="lake"]{ --fs-ink:#4a3c2c; --fs-line:rgba(150,120,84,.22);
+  --fs-glass:rgba(255,250,242,.46); --fs-veil:rgba(74,54,28,.16); --fs-ring:#c09060;
+  --fs-halo:rgba(250,242,230,.60);
+  --fs-btn:#5a4530; --fs-btn-ink:#fdf7ee;}
+#focus-stage[data-scene="sea"]{ --fs-ink:#2f4a48; --fs-line:rgba(104,150,144,.24);
+  --fs-glass:rgba(248,254,252,.48); --fs-veil:rgba(40,70,66,.14); --fs-ring:#6aa8a0;
+  --fs-halo:rgba(244,252,250,.62);
+  --fs-btn:#33514d; --fs-btn-ink:#f2fbf9;}
+#focus-stage[data-scene="meadow"]{ --fs-ink:#3a4530; --fs-line:rgba(122,142,96,.24);
+  --fs-glass:rgba(252,254,246,.48); --fs-veil:rgba(58,68,42,.14); --fs-ring:#8aa468;
+  --fs-halo:rgba(248,252,238,.60);
+  --fs-btn:#414f36; --fs-btn-ink:#f8fcf0;}
 html[data-theme="dark"] #focus-stage[data-scene="mist"]{ --fs-ink:#ece7f4; --fs-line:rgba(206,206,246,.20);
   --fs-glass:rgba(40,40,68,.42); --fs-veil:rgba(12,12,26,.26); --fs-ring:#a9c6d8;
   --fs-halo:rgba(16,18,34,.58);
@@ -1018,47 +1002,32 @@ html[data-theme="dark"] #focus-stage[data-scene="ember"]{ --fs-ink:#f6e3d2; --fs
   --fs-glass:rgba(52,32,24,.42); --fs-veil:rgba(12,6,4,.30); --fs-ring:#e0a06a;
   --fs-halo:rgba(14,8,5,.58);
   --fs-btn:#f7e6d6; --fs-btn-ink:#2a1a12;}
-/* 书房与雨窗的实拍素材（烛光地图 / 雨窗焦外光斑）本身是暗调，与亮色主题的「浅底深字」极性相反：
-   视频亮起时整体翻转成浅色字 + 深色光晕（与篝火同一手法）。
-   这两条刻意不写主题前缀 —— 暗色主题的对应规则特异性更高（多一个 html 元素选择器），
-   不会被它们盖掉，刚好各自生效 */
-#focus-stage.has-video[data-scene="study"]{ --fs-ink:#f4ecd9; --fs-line:rgba(228,202,152,.22);
-  --fs-glass:rgba(42,30,16,.44); --fs-veil:rgba(14,8,4,.28); --fs-ring:#d8b478;
-  --fs-halo:rgba(16,10,4,.62);
+/* 湖泊的实拍素材（日落湖湾）是「大面积山体剪影 + 暖金天空」的强暗调，与亮色主题的「浅底深字」
+   极性相反：视频亮起时整体翻转成浅色字 + 深色光晕（与篝火同一手法）。
+   这条刻意不写主题前缀 —— 暗色主题的对应规则特异性更高（多一个 html 元素选择器），
+   不会被它盖掉，刚好各自生效 */
+#focus-stage.has-video[data-scene="lake"]{ --fs-ink:#f6ecdc; --fs-line:rgba(230,200,160,.22);
+  --fs-glass:rgba(40,28,16,.44); --fs-veil:rgba(12,8,4,.26); --fs-ring:#dcae72;
+  --fs-halo:rgba(10,6,3,.62);
   --fs-btn:#f6ecdc; --fs-btn-ink:#2a1e10;}
-#focus-stage.has-video[data-scene="rain"]{ --fs-ink:#e6eff4; --fs-line:rgba(196,216,230,.22);
-  --fs-glass:rgba(22,32,42,.44); --fs-veil:rgba(6,10,16,.26); --fs-ring:#8fb8cc;
-  --fs-halo:rgba(6,10,16,.62);
-  --fs-btn:#e9f1f6; --fs-btn-ink:#141e26;}
-html[data-theme="dark"] #focus-stage[data-scene="cafe"]{ --fs-ink:#f6e6d2; --fs-line:rgba(230,196,158,.20);
-  --fs-glass:rgba(48,34,24,.42); --fs-veil:rgba(14,8,4,.30); --fs-ring:#d8a068;
-  --fs-halo:rgba(12,7,4,.58);
-  --fs-btn:#f7e8d6; --fs-btn-ink:#2a1a10;}
-html[data-theme="dark"] #focus-stage[data-scene="study"]{ --fs-ink:#e6ecd8; --fs-line:rgba(190,204,160,.20);
-  --fs-glass:rgba(38,44,30,.42); --fs-veil:rgba(10,14,6,.30); --fs-ring:#a4b884;
-  --fs-halo:rgba(8,10,5,.58);
-  --fs-btn:#eaf0da; --fs-btn-ink:#1e2416;}
-html[data-theme="dark"] #focus-stage[data-scene="rain"]{ --fs-ink:#dfe8f0; --fs-line:rgba(180,200,220,.20);
-  --fs-glass:rgba(30,40,52,.42); --fs-veil:rgba(6,10,16,.30); --fs-ring:#8fa8bc;
-  --fs-halo:rgba(5,8,12,.58);
-  --fs-btn:#e8f0f6; --fs-btn-ink:#16202a;}
-html[data-theme="dark"] #focus-stage[data-scene="lamp"]{ --fs-ink:#f4e4cf; --fs-line:rgba(232,196,152,.20);
-  --fs-glass:rgba(46,32,22,.42); --fs-veil:rgba(10,6,3,.30); --fs-ring:#d8a058;
+html[data-theme="dark"] #focus-stage[data-scene="snow"]{ --fs-ink:#e4eef7; --fs-line:rgba(190,214,236,.20);
+  --fs-glass:rgba(28,40,52,.42); --fs-veil:rgba(6,10,16,.30); --fs-ring:#8fb2cc;
+  --fs-halo:rgba(10,14,20,.58);
+  --fs-btn:#e8f1f8; --fs-btn-ink:#16202a;}
+html[data-theme="dark"] #focus-stage[data-scene="lake"]{ --fs-ink:#f4e6d2; --fs-line:rgba(226,196,158,.20);
+  --fs-glass:rgba(46,32,20,.42); --fs-veil:rgba(10,6,3,.30); --fs-ring:#d8a468;
   --fs-halo:rgba(8,5,3,.58);
-  --fs-btn:#f6e6d2; --fs-btn-ink:#2a1a10;}
-/* 咖啡馆素材是「亮陶杯 + 暗背景」的中调静物，数字正好压在杯子的亮面上 ——
-   这是全站唯一「两种主题下都要深色字」的场景：暗色主题若按常规翻成浅字，
-   会直接糊进亮杯子里（实测暗色主题下浅字几乎读不出来）。
-   所以显式写亮/暗两条视频态规则，都保持深字 + 浅色光晕；
-   暗色主题下视频本身被压了一档亮度，光晕再补浓一点把数字区提亮 */
-html #focus-stage.has-video[data-scene="cafe"]{ --fs-ink:#3c2c1e; --fs-line:rgba(126,96,64,.28);
-  --fs-glass:rgba(255,250,242,.42); --fs-veil:rgba(74,48,24,.18); --fs-ring:#c08c5e;
-  --fs-halo:rgba(252,245,234,.56);
-  --fs-btn:#4a3626; --fs-btn-ink:#fdf6ee;}
-html[data-theme="dark"] #focus-stage.has-video[data-scene="cafe"]{ --fs-ink:#2e2116; --fs-line:rgba(120,92,62,.26);
-  --fs-glass:rgba(255,250,242,.40); --fs-veil:rgba(36,24,12,.20); --fs-ring:#d8a068;
-  --fs-halo:rgba(252,245,234,.66);
-  --fs-btn:#3f2e20; --fs-btn-ink:#fdf6ee;}
+  --fs-btn:#f6e8d8; --fs-btn-ink:#2a1a10;}
+html[data-theme="dark"] #focus-stage[data-scene="sea"]{ --fs-ink:#dff2ee; --fs-line:rgba(180,218,212,.20);
+  --fs-glass:rgba(24,42,42,.42); --fs-veil:rgba(5,12,12,.30); --fs-ring:#7ec0b4;
+  --fs-halo:rgba(6,12,12,.58);
+  --fs-btn:#e6f6f2; --fs-btn-ink:#122420;}
+html[data-theme="dark"] #focus-stage[data-scene="meadow"]{ --fs-ink:#e8f0da; --fs-line:rgba(190,210,160,.20);
+  --fs-glass:rgba(32,40,28,.42); --fs-veil:rgba(8,12,6,.30); --fs-ring:#a4c084;
+  --fs-halo:rgba(8,10,5,.58);
+  --fs-btn:#ecf4de; --fs-btn-ink:#1e2616;}
+/* （室内组时代的咖啡馆特殊规则已随场景一并移除：雪山/碧海/草甸的视频都是亮调或中调，
+   深色字直接可读；只有湖泊需要上面的翻转。） */
 
 /* ---------- 骨架 ---------- */
 .fs-body{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; gap:8px;
@@ -1151,10 +1120,10 @@ html[data-theme="dark"] #focus-stage.has-video[data-scene="cafe"]{ --fs-ink:#2e2
 .fs-pick-dot[data-scene="deep"]{background:linear-gradient(150deg, #0b2a3c, #4f9fc0);}
 .fs-pick-dot[data-scene="ember"]{background:linear-gradient(150deg, #3a2018, #ff9a4a);}
 .fs-pick-dot[data-scene="star"]{background:linear-gradient(150deg, #131a38, #8a86d8);}
-.fs-pick-dot[data-scene="cafe"]{background:linear-gradient(150deg, #f1e3cf, #c08c5e);}
-.fs-pick-dot[data-scene="study"]{background:linear-gradient(150deg, #e6ead9, #7e9464);}
-.fs-pick-dot[data-scene="rain"]{background:linear-gradient(150deg, #dee5eb, #7f95a8);}
-.fs-pick-dot[data-scene="lamp"]{background:linear-gradient(150deg, #1a120c, #ffb066);}
+.fs-pick-dot[data-scene="snow"]{background:linear-gradient(150deg, #eef4fa, #7e9cba);}
+.fs-pick-dot[data-scene="lake"]{background:linear-gradient(150deg, #f7e6cc, #c08a58);}
+.fs-pick-dot[data-scene="sea"]{background:linear-gradient(150deg, #dcf2ee, #4fa89a);}
+.fs-pick-dot[data-scene="meadow"]{background:linear-gradient(150deg, #e8f0d4, #8aa468);}
 @media (max-width:560px){
   .fs-picker-box{grid-template-columns:repeat(2, minmax(88px, 1fr)); gap:7px; padding:13px;}
   .fs-pick-dot{width:22px; height:22px;}
