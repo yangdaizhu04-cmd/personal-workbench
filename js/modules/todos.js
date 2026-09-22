@@ -234,6 +234,7 @@ function todoRow(t){
   WB.enableDrag(row);
   row.appendChild(el("button", {
     html: icon(t.done ? "check-circle" : "circle", 21),
+    "aria-label": t.done ? "标记未完成" : "标记完成",
     style: {color: t.done ? "var(--ok)" : "var(--accent)", display: "flex", flex: "none",
       transition: "transform var(--dur-tap) var(--ease-pop)"},
     onclick: e => checkTodo(t, e),

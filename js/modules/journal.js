@@ -98,10 +98,10 @@ WB.registerModule({
 
     /* 顶部：日期切换 */
     const bar = el("div", {class: "row", style: {marginBottom: "14px", flexWrap: "wrap", gap: "8px"}});
-    bar.appendChild(el("button", {class: "btn sm", html: icon("chev-left", 14),
+    bar.appendChild(el("button", {class: "btn sm", html: icon("chev-left", 14), "aria-label": "前一天",
       onclick: () => WB.router.go("journal", WB.addDaysStr(dateStr, -1))}));
     bar.appendChild(el("span", {class: "chip", text: WB.fmtDateCN(dateStr, true) + (dateStr === WB.bizDate() ? " · 今天" : "")}));
-    bar.appendChild(el("button", {class: "btn sm", html: icon("chev-right", 14),
+    bar.appendChild(el("button", {class: "btn sm", html: icon("chev-right", 14), "aria-label": "后一天",
       onclick: () => WB.router.go("journal", WB.addDaysStr(dateStr, 1))}));
     const dateIn = el("input", {type: "date", class: "input", value: dateStr, style: {width: "150px"}});
     dateIn.addEventListener("change", () => WB.router.go("journal", dateIn.value));

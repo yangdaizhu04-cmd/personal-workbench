@@ -34,7 +34,8 @@ html[data-theme="light"]{
   --card:#fdfaf3;
   --card-2:#f6f0e4;
   --card-border:rgba(166,146,112,.16);
-  --ink:#45403a; --ink-2:#7d756a; --ink-3:#b0a695;
+  /* 次要文字对比度（米白底 #f6f1e7）：--ink-2 由 4.1:1 提到 4.7:1、--ink-3 由 2.1:1 提到 3.4:1 —— 原 --ink-3 在日常光照下几乎发虚 */
+  --ink:#45403a; --ink-2:#726a5d; --ink-3:#8a8073;
   --accent:#7fa3bd; --accent-2:#a294c9; --accent-ink:#3e5a6e;
   --accent-soft:rgba(127,163,189,.15);
   --accent2-soft:rgba(162,148,201,.16);
@@ -55,7 +56,8 @@ html[data-theme="dark"]{
   --card:#2c2c49;
   --card-2:#262640;
   --card-border:rgba(150,150,200,.14);
-  --ink:#e9e5f4; --ink-2:#a9a2c6; --ink-3:#6e688e;
+  /* --ink-3 由 2.9:1 提到 4.4:1：夜雾下最弱一档的文字原本发灰难读 */
+  --ink:#e9e5f4; --ink-2:#a9a2c6; --ink-3:#8b84ae;
   --accent:#89b0d6; --accent-2:#b6a6ea; --accent-ink:#dfeaf4;
   --accent-soft:rgba(137,176,214,.18);
   --accent2-soft:rgba(182,166,234,.18);
@@ -101,6 +103,9 @@ a:hover{text-decoration:underline;}
 *{scrollbar-width:thin; scrollbar-color:rgba(150,135,105,.28) transparent;}
 
 .muted{color:var(--ink-2);} .faint{color:var(--ink-3);}
+/* 12.5px 的次要文字（时间 / 进度 / 日期·分类 / 完成于…）是日常读得最多的一类，
+   单独提到 --ink-2 保证对比度；纯装饰的 .faint 仍走最弱一档 */
+.small.faint{color:var(--ink-2);}
 .small{font-size:12.5px;} .big{font-size:19px;}
 .nowrap{white-space:nowrap;} .ellipsis{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .grow{flex:1;} .row{display:flex; align-items:center; gap:10px;}
@@ -467,6 +472,7 @@ body.scrim-open #sidebar{backdrop-filter:none; -webkit-backdrop-filter:none;}
   pointer-events:none;
 }
 .modal-head{display:flex; align-items:center; gap:10px; padding:16px 20px 12px;}
+.modal:focus{outline:none;}   /* tabindex=-1 的初始焦点兜底，不要外框 */
 .modal-head h3{font-size:16.5px; font-weight:600; flex:1;}
 .modal-body{padding:4px 20px 18px; overflow-y:auto;}
 .modal-foot{display:flex; justify-content:flex-end; gap:10px; padding:12px 20px 16px; border-top:1px solid var(--card-border);}

@@ -50,9 +50,11 @@ WB.registerModule({
     if(!ym || ymDay !== WB.bizDate()){ ym = WB.monthStr(new Date()); ymDay = WB.bizDate(); }
     const calCard = el("div", {class: "card"});
     const head = el("div", {class: "card-title"},
-      el("button", {class: "icon-btn", html: icon("chev-left", 16), onclick: () => { ym = shiftMonth(ym, -1); paintCal(); }}),
+      el("button", {class: "icon-btn", html: icon("chev-left", 16), "aria-label": "上一个月",
+        onclick: () => { ym = shiftMonth(ym, -1); paintCal(); }}),
       el("span", {class: "grow", style: {textAlign: "center"}, id: "mood-ym"}),
-      el("button", {class: "icon-btn", html: icon("chev-right", 16), onclick: () => { ym = shiftMonth(ym, 1); paintCal(); }}));
+      el("button", {class: "icon-btn", html: icon("chev-right", 16), "aria-label": "下一个月",
+        onclick: () => { ym = shiftMonth(ym, 1); paintCal(); }}));
     calCard.appendChild(head);
     const grid = el("div", {id: "mood-grid"});
     calCard.appendChild(grid);

@@ -44,16 +44,19 @@ function initShortcuts(){
       if(WB.commands && WB.commands.open) WB.commands.open();
       return;
     }
+    /* Esc 必须在 isTyping 之前处理：弹窗与命令面板都会自动把焦点放进输入框，
+       若先因"正在输入"而 return，输入状态下按 Esc 完全关不掉浮层 ——
+       而设置页的快捷键表里明确写着「Esc 关闭弹窗/面板」（踩坑 #064）。
+       优先级：浮层（含确认框）→ 沉浸专注 */
+    if(e.key === "Escape"){
+      if(WB.modalOpen && WB.modalOpen()){ e.preventDefault(); WB.closeTopModal(); return; }
+      if(WB.immersive && WB.immersive.isActive()){ e.preventDefault(); WB.immersive.exit(); return; }
+      return;
+    }
     if(isTyping(e)) return;
-    /* 沉浸专注：F/Esc 进退、空格暂停/继续（沉浸里空格不再是环境音开关）、
-       ←/→ 换场景、M 环境音开关、P 与空格同效。
-       层上若压着确认框（放弃计时），Esc 先关弹窗、再退沉浸 */
+    /* 沉浸专注：F 进退、空格暂停/继续（沉浸里空格不再是环境音开关）、
+       ←/→ 换场景、M 环境音开关、P 与空格同效 */
     if(WB.immersive && WB.immersive.isActive()){
-      if(WB.modalOpen && WB.modalOpen()){
-        if(e.key === "Escape") WB.closeTopModal();
-        return;
-      }
-      if(e.key === "Escape"){ e.preventDefault(); WB.immersive.exit(); return; }
       if(e.key === "f" || e.key === "F"){ e.preventDefault(); WB.immersive.exit(); return; }
       if(e.key === " "){ e.preventDefault(); WB.immersive.toggleRun(); return; }
       /* ←/→ 不防连发：按住快速翻场景是想要的 */
@@ -65,20 +68,17 @@ function initShortcuts(){
       if(e.key === "p" || e.key === "P"){ e.preventDefault(); WB.immersive.toggleRun(); return; }
       return;
     }
-    if(WB.modalOpen && WB.modalOpen()){ // 弹窗内只留 Esc
-      if(e.key === "Escape") WB.closeTopModal();
-      return;
-    }
+    if(WB.modalOpen && WB.modalOpen()) return;   // 浮层开着：除上面的 Esc 外不再接管任何键
     switch(e.key){
-      case "Escape":
-        if(WB.closeTopModal) WB.closeTopModal();
-        else if(WB.commands && WB.commands.close) WB.commands.close();
-        break;
       case "n": case "N": WB.router.go("notes"); if(WB.notes && WB.notes.quickAdd) WB.notes.quickAdd(); break;
       case "t": case "T": WB.router.go("todos"); if(WB.todos && WB.todos.quickAdd) WB.todos.quickAdd(); break;
       case "d": case "D": WB.theme.toggleTheme(); break;
       case "f": case "F": if(WB.immersive) WB.immersive.toggle(); break;
       case " ":
+        /* 焦点在按钮/链接上时，空格的本职是"激活这个元素"——让给浏览器。
+           以前一律 preventDefault 切环境音，键盘用户 Tab 到「保存」按空格毫无反应还弹出提示。
+           想让空格管环境音，先点一下页面空白处，让焦点离开按钮 */
+        if(/^(BUTTON|A|SUMMARY)$/.test((e.target && e.target.tagName) || "")) return;
         if(WB.pomodoro && WB.pomodoro.toggleSound){ e.preventDefault(); WB.pomodoro.toggleSound(); }
         break;
       /* M 与空格同义（全站环境音开关）；P = 番茄钟暂停/继续（沉浸外也管用）。

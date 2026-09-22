@@ -177,9 +177,11 @@ WB.registerModule({
     const state = {ym};
 
     const bar = el("div", {class: "row", style: {marginBottom: "14px", flexWrap: "wrap", gap: "8px"}});
-    bar.appendChild(el("button", {class: "btn sm", html: icon("chev-left", 14), onclick: () => { state.ym = shift(state.ym, -1); paint(); }}));
+    bar.appendChild(el("button", {class: "btn sm", html: icon("chev-left", 14), "aria-label": "上一个月",
+      onclick: () => { state.ym = shift(state.ym, -1); paint(); }}));
     bar.appendChild(el("span", {class: "chip", id: "led-ym"}));
-    bar.appendChild(el("button", {class: "btn sm", html: icon("chev-right", 14), onclick: () => { state.ym = shift(state.ym, 1); paint(); }}));
+    bar.appendChild(el("button", {class: "btn sm", html: icon("chev-right", 14), "aria-label": "下一个月",
+      onclick: () => { state.ym = shift(state.ym, 1); paint(); }}));
     bar.appendChild(el("span", {class: "grow"}));
     bar.appendChild(el("button", {class: "btn sm", html: icon("settings", 14) + "<span>预算/分类</span>", onclick: catManager}));
     bar.appendChild(el("button", {class: "btn primary sm", html: icon("plus", 14) + "<span>记一笔</span>", onclick: () => quickAdd()}));

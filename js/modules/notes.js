@@ -174,6 +174,7 @@ WB.registerModule({
         foot.appendChild(el("span", {class: "grow"}));
         foot.appendChild(el("span", {class: "small faint", text: new Date(n.createdAt).toLocaleDateString()}));
         foot.appendChild(el("button", {class: "icon-btn", html: icon("pin", 14),
+          "aria-label": n.pinned ? "取消置顶" : "置顶",
           style: {color: n.pinned ? "var(--accent)" : "var(--ink-3)"},
           onclick: e => { e.stopPropagation(); notes.update(n.id, {pinned: !n.pinned}); paint(); }}));
         card.appendChild(foot);

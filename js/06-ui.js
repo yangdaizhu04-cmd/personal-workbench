@@ -101,10 +101,22 @@ function undoToast(items){
 }
 
 /* ---------- 弹窗 ---------- */
+/* 焦点陷阱：Tab / Shift+Tab 在弹窗内循环。没有它，键盘用户 Tab 会跑到遮罩背后的
+   侧栏导航项上；日志这类没有 autofocus 的弹窗，要从文档开头 Tab 十几次才够得到「保存」 */
+function trapFocus(box, e){
+  const nodes = Array.from(box.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter(n => n.offsetWidth || n.offsetHeight || n === document.activeElement);
+  if(!nodes.length) return;
+  const first = nodes[0], last = nodes[nodes.length - 1], active = document.activeElement;
+  if(e.shiftKey){
+    if(active === first || !box.contains(active)){ e.preventDefault(); last.focus(); }
+  }else if(active === last || !box.contains(active)){ e.preventDefault(); first.focus(); }
+}
 function modal({title, icon: ic, content, actions, wide, onClose}){
   const root = WB.$("#modal-root");
   const body = el("div", {class: "modal-body"});
-  const box = el("div", {class: "modal" + (wide ? " wide" : ""), role: "dialog"});
+  const box = el("div", {class: "modal" + (wide ? " wide" : ""), role: "dialog", tabindex: "-1"});  // tabindex 供初始焦点兜底
   /* 关闭统一走 m.close：main.js 的 modal 栈包装只替换返回对象上的 close，
      × 按钮/遮罩若直调内部 close 会漏弹栈，modalOpen 恒真导致快捷键被拦（踩坑 #028） */
   const m = {el: box, body, close: null};
@@ -153,9 +165,13 @@ function modal({title, icon: ic, content, actions, wide, onClose}){
   if(typeof content === "string") body.innerHTML = content;
   else if(content) body.appendChild(content);
   scrim.addEventListener("mousedown", e => { if(e.target === scrim) m.close(); });
+  scrim.addEventListener("keydown", e => { if(e.key === "Tab") trapFocus(box, e); });
   root.appendChild(scrim);
   syncScrim();
   staggerIn(body);   // 多分区表单依次浮现；单项弹窗自动跳过（2.4）
+  /* 初始焦点兜底：模块自己 focus 输入框的（60ms）优先；没指定焦点的（如日志编辑器）
+     落在弹窗容器上，这样 Tab 从弹窗内开始，键盘也能走完整个表单 */
+  setTimeout(() => { if(!box.contains(document.activeElement)) box.focus(); }, 90);
   return m;
 }
 
