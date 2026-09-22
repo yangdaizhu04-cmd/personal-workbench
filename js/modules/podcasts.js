@@ -6,15 +6,27 @@ const { el, icon, esc } = WB;
 
 const daily = dateStr => WB.pickDaily(WB.content.PODCASTS, dateStr);
 const favKey = "podcastFavs";
+const XY_HOST = "https://www.xiaoyuzhoufm.com/";
 function dailyPick(dateStr){
   const p = daily(dateStr || WB.bizDate());
   return {name: p[1], intro: p[2]};
 }
 
+/* 小宇宙：网页版没有搜索页（/search?q= 已下线成 404「找不到了」），只有节目主页能直达 →
+   有第 4 列 ID 就开主页；没有则复制播客名，让用户去 App 里搜（比开一个空页面好）。 */
+function listenXY(p){
+  if(p[3]){
+    window.open(XY_HOST + "podcast/" + p[3], "_blank");
+    return;
+  }
+  WB.copyText(p[1]).then(() => WB.ui.toast("已复制「" + p[1] + "」，去小宇宙 App 里搜索收听"));
+}
+
 function jumpLinks(p){
   const row = el("div", {class: "row", style: {gap: "6px", flexWrap: "wrap"}});
   row.appendChild(el("button", {class: "btn sm primary", text: "小宇宙收听",
-    onclick: () => window.open("https://www.xiaoyuzhoufm.com/search?q=" + encodeURIComponent(p[1]), "_blank")}));
+    title: p[3] ? "打开小宇宙节目主页" : "小宇宙网页版没有搜索页，会复制节目名",
+    onclick: () => listenXY(p)}));
   row.appendChild(el("button", {class: "btn sm", text: "Apple Podcasts",
     onclick: () => window.open("https://podcasts.apple.com/search?term=" + encodeURIComponent(p[1]) + "&entity=podcast", "_blank")}));
   return row;
@@ -80,9 +92,9 @@ WB.registerModule({
               WB.store.set(favKey, arr);
               paint();
             }}),
-          el("button", {class: "btn sm", text: "收听", onclick: e => {
-            window.open("https://www.xiaoyuzhoufm.com/search?q=" + encodeURIComponent(x[1]), "_blank");
-          }})));
+          el("button", {class: "btn sm", text: "收听",
+            title: x[3] ? "打开小宇宙节目主页" : "小宇宙网页版没有搜索页，会复制节目名",
+            onclick: () => listenXY(x)})));
       });
       listCard.innerHTML = "";
       listCard.appendChild(el("div", {class: "card-title", html: icon("list", 18) + "<span>全部播客</span>"}));
