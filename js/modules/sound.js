@@ -599,7 +599,7 @@ function renderPanelInto(root){
   /* 主控 */
   const masterRow = el("div", {class: "row", style: {borderTop: "1px dashed var(--card-border)", marginTop: "10px", paddingTop: "10px"}},
     el("button", {class: "btn sm " + (anyPlaying() ? "primary" : ""),
-      text: anyPlaying() ? "⏸ 全部暂停（空格）" : "▶ 恢复上次组合",
+      text: anyPlaying() ? "⏸ 全部暂停（空格 / M）" : "▶ 恢复上次组合",
       onclick: () => toggleAll()}),
     el("span", {class: "small muted", style: {marginLeft: "4px"}}, "主音量"),
     el("input", {type: "range", min: 0, max: 1, step: .01, value: p.vol.master,

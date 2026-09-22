@@ -197,7 +197,10 @@ WB.registerModule({
       hotkeyRow("N", "新笔记"),
       hotkeyRow("T", "新任务"),
       hotkeyRow("空格", "声音面板 播放/暂停（番茄页）；沉浸专注里是 暂停/继续"),
+      hotkeyRow("M", "环境音开关（任何页面，含沉浸专注）"),
+      hotkeyRow("P", "番茄钟 暂停/继续（任何页面；待确认时推进到下一段）"),
       hotkeyRow("F", "进入 / 退出沉浸专注（要先开始一段专注）"),
+      hotkeyRow("← / →", "沉浸专注里 换上一个 / 下一个场景"),
       hotkeyRow("D", "切换深浅色"),
       hotkeyRow("Esc", "关闭弹窗/面板；沉浸专注里退出沉浸"),
     ]));

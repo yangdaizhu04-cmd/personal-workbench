@@ -93,7 +93,7 @@ function build(){
         '<div class="fs-brand"><span class="fs-dot"></span><span class="fs-scene-name"></span><span class="fs-bind"></span></div>' +
         '<div class="fs-tools">' +
           '<button class="fs-tool" data-act="scene" title="选择场景（12 套）">◐</button>' +
-          '<button class="fs-tool" data-act="sound" title="环境音开关（空格在沉浸里是暂停/继续）">♪</button>' +
+          '<button class="fs-tool" data-act="sound" title="环境音开关（M）">♪</button>' +
           '<button class="fs-tool" data-act="close" title="退出沉浸（Esc）">✕</button>' +
         '</div>' +
       '</header>' +
@@ -106,7 +106,7 @@ function build(){
       '<footer class="fs-bottom">' +
         '<div class="fs-meta"><span class="fs-clock"></span><span class="fs-today"></span></div>' +
         '<div class="fs-controls"></div>' +
-        '<div class="fs-hint">移动鼠标唤出控件 · Esc 退出</div>' +
+        '<div class="fs-hint">← → 换景 · M 静音 · 空格 暂停/继续 · Esc 退出</div>' +
       '</footer>' +
     '</div>' +
     '<div class="fs-note" hidden></div>' +
@@ -291,13 +291,34 @@ function closePicker(){
   clearTimeout(pickerTimer);
   pickerTimer = setTimeout(() => { if(parts && !pickerShown) parts.picker.hidden = true; }, 320);
 }
+/* 换景的唯一出口：记住偏好 + 在沉浸中就立即换（面板 / 番茄卡 / ⌘K 三处共用同一条路径） */
+function pick(id){
+  if(!SCENES[id]) return;
+  WB.theme.set("pomoImmersiveScene", id);
+  if(active) setScene(id, true);
+}
+/* ← / → = 上一个 / 下一个场景，按 SCENE_ORDER 首尾循环。
+   换景后把场景名浮一下：控件可能已自动隐藏，不提示就不知道换到了哪一支 */
+function step(dir){
+  const i = SCENE_ORDER.indexOf(lastScene);
+  if(i < 0) return;
+  const n = SCENE_ORDER.length;
+  const id = SCENE_ORDER[((i + (dir || 1)) % n + n) % n];
+  pick(id);
+  wake();
+  showNote(SCENES[id], 1400);
+}
+/* M = 环境音全开关（等同点右上角 ♪） */
+function toggleSound(){
+  if(WB.sound && WB.sound.toggle) WB.sound.toggle();
+  paintSoundBtn();
+}
 function onPickerClick(e){
   const b = e.target.closest("[data-pick]");
   if(b){
     const id = b.dataset.pick;
     if(SCENES[id]){
-      setScene(id, true);
-      WB.theme.set("pomoImmersiveScene", id);   // 在面板里选过就记住（与设置页同一个键）
+      pick(id);
       paintPicker();
       soundHint(id);
     }
@@ -454,7 +475,7 @@ function onToolClick(e){
   if(!b) return;
   const act = b.dataset.act;
   if(act === "close") exit();
-  else if(act === "sound"){ if(WB.sound && WB.sound.toggle) WB.sound.toggle(); paintSoundBtn(); wake(); }
+  else if(act === "sound"){ toggleSound(); wake(); }
   else if(act === "scene"){ pickerShown ? closePicker() : openPicker(); wake(); }
 }
 function onStageClick(e){
@@ -721,9 +742,11 @@ document.addEventListener("fullscreenchange", () => {
 
 WB.immersive = {
   enter, exit, toggle, toggleRun, finishPhase, abandon,
+  pick, step, toggleSound,
   isActive(){ return active; },
   scene: setScene,
   scenes: SCENES,
+  order: SCENE_ORDER,
   pickerOpen(){ return pickerShown; },
 };
 })();

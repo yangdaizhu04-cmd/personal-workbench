@@ -236,6 +236,31 @@ for(const target of targets){
   await page.evaluate(() => WB.immersive.scene("mist", true));   // 回到默认场景，别影响后续断言
   await sleep(600);
 
+  /* 5c. ← / → 键盘换景：切换 + 偏好落盘 + 场景名浮出 + 首尾回绕（CDP 真实按键） */
+  await page.evaluate(() => WB.immersive.pick("mist"));
+  await sleep(350);
+  await page.keyboard.press("ArrowRight");
+  await sleep(450);
+  const st1 = await page.evaluate(() => ({
+    scene: document.getElementById("focus-stage").dataset.scene,
+    saved: WB.theme.get("pomoImmersiveScene"),
+    note: document.querySelector("#focus-stage .fs-note").textContent,
+  }));
+  check(target.name, "→ 换下一个场景：切换生效 + 偏好落盘 + 场景名浮出",
+    st1.scene === "deep" && st1.saved === "deep" && st1.note === "深海", JSON.stringify(st1));
+  await page.keyboard.press("ArrowLeft");
+  await sleep(450);
+  check(target.name, "← 回退到上一个场景",
+    await page.evaluate(() => document.getElementById("focus-stage").dataset.scene) === "mist");
+  await page.evaluate(() => WB.immersive.pick("cloud"));          // 走到末位再按 →
+  await sleep(350);
+  await page.keyboard.press("ArrowRight");
+  await sleep(450);
+  check(target.name, "末位再按 → 首尾循环回绕到第一位",
+    await page.evaluate(() => document.getElementById("focus-stage").dataset.scene) === "mist");
+  await page.evaluate(() => WB.immersive.pick("mist"));
+  await sleep(500);
+
   /* 6. 空格 = 暂停/继续（CDP 真实按键） */
   await page.keyboard.press("Space");
   await sleep(300);
@@ -249,6 +274,26 @@ for(const target of targets){
   await page.keyboard.press("Space");
   await sleep(300);
   check(target.name, "空格继续", await page.evaluate(() => WB.pomodoro.state().running) === true);
+
+  /* 6b. M = 环境音全开关（沉浸里与右上角 ♪ 同一条路径，按钮状态同步） */
+  await page.keyboard.press("m");
+  await sleep(700);
+  const snd1 = await page.evaluate(() => ({
+    playing: WB.sound.anyPlaying(),
+    btnOff: document.querySelector('#focus-stage [data-act="sound"]').classList.contains("is-off"),
+  }));
+  check(target.name, "沉浸中按 M 开环境音，♪ 按钮同步点亮",
+    snd1.playing === true && snd1.btnOff === false, JSON.stringify(snd1));
+  await page.keyboard.press("m");
+  await sleep(700);
+  const snd2 = await page.evaluate(() => ({
+    playing: WB.sound.anyPlaying(),
+    btnOff: document.querySelector('#focus-stage [data-act="sound"]').classList.contains("is-off"),
+  }));
+  check(target.name, "再按 M 静音，♪ 按钮转灰",
+    snd2.playing === false && snd2.btnOff === true, JSON.stringify(snd2));
+  await page.evaluate(() => WB.store.set("soundPrefs", {}));    // 不留「开了雨声」给后续断言
+  await sleep(300);
 
   /* 7. 完成本段 → 待确认（此刻空格应推进到下一段，而不是把这段重新跑起来） */
   await page.evaluate(() => WB.immersive.finishPhase());
@@ -492,6 +537,69 @@ for(const target of targets){
     check(target.name, "单文件版 WB_SINGLE_FILE 生效且无 islands（纯 CSS 场景兜底）",
       wp.single && !wp.islands, JSON.stringify(wp));
   }
+
+  /* 17. 沉浸外的新入口：番茄卡场景条 / P 控计时 / M 控声音 / ⌘K 场景命令 */
+  /* 第 13 段为验证「自动进沉浸」把 pomoImmersiveAuto 开成 true 且没恢复 ——
+     这里必须先关掉再退干净，否则下面的 begin() 会自动进沉浸，P 就落到沉浸分支上 */
+  await page.evaluate(() => {
+    WB.theme.merge({pomoImmersiveAuto: false});
+    if(WB.immersive.isActive()) WB.immersive.exit();
+    WB.router.go("pomodoro");
+  });
+  await sleep(800);
+  check(target.name, "第 17 段前置：确实在沉浸外（否则下面测的是沉浸分支）",
+    await page.evaluate(() => !WB.immersive.isActive()));
+  const dots = await page.evaluate(() => {
+    const list = Array.from(document.querySelectorAll("#view .fs-pick-dot"));
+    return {n: list.length, mine: list.map(d => d.dataset.scene).join(","),
+      order: (WB.immersive.order || []).join(",")};
+  });
+  check(target.name, "番茄卡场景条：12 个色点、顺序与场景表一致",
+    dots.n === 12 && dots.mine === dots.order, JSON.stringify(dots));
+  await page.evaluate(() => document.querySelectorAll("#view .fs-pick-dot")[4].click());   // 第 5 个 = snow
+  await sleep(500);
+  check(target.name, "点色点 = 记住偏好（沉浸外不换景，下次进沉浸生效）",
+    await page.evaluate(() => WB.theme.get("pomoImmersiveScene")) === "snow");
+  await page.evaluate(() => { if(WB.pomodoro.state()) WB.pomodoro.stopAndClear(); WB.pomodoro.begin("focus", 25); });
+  await sleep(500);
+  await page.keyboard.press("p");
+  await sleep(500);
+  const pp = await page.evaluate(() => {
+    // 不能只看最后一条：同期可能混入「导出备份」这类定时提醒 toast
+    const ts = Array.from(document.querySelectorAll("#toast-root .toast"));
+    return {running: WB.pomodoro.state().running,
+      texts: ts.map(t => t.textContent).join(" | ").slice(0, 140)};
+  });
+  check(target.name, "沉浸外按 P 暂停计时 + 轻提示（已暂停 · 剩 mm:ss）",
+    pp.running === false && /已暂停 · 剩 \d{2}:\d{2}/.test(pp.texts), JSON.stringify(pp));
+  await page.keyboard.press("p");
+  await sleep(500);
+  check(target.name, "再按 P 继续", await page.evaluate(() => WB.pomodoro.state().running) === true);
+  await page.keyboard.press("m");
+  await sleep(700);
+  check(target.name, "沉浸外按 M 也能开环境音（与空格同义）",
+    await page.evaluate(() => WB.sound.anyPlaying()) === true);
+  await page.keyboard.press("m");
+  await sleep(700);
+  check(target.name, "再按 M 静音", await page.evaluate(() => WB.sound.anyPlaying()) === false);
+  await page.evaluate(() => WB.store.set("soundPrefs", {}));
+  await page.evaluate(() => WB.commands.open());
+  await sleep(500);
+  await page.evaluate(() => {          // 中文用派发 input 事件，别走 CDP 逐键（中文输入不稳）
+    const i = document.querySelector("#cmdk-root input");
+    i.value = "沙丘";
+    i.dispatchEvent(new Event("input", {bubbles: true}));
+  });
+  await sleep(500);
+  const cmdk = await page.evaluate(() => document.querySelector("#cmdk-root .cmdk-list").textContent);
+  check(target.name, "⌘K 搜「沙丘」出现「沉浸场景」命令",
+    cmdk.includes("沉浸场景") && cmdk.includes("场景 · 沙丘"), cmdk.slice(0, 60));
+  await page.keyboard.press("Enter");
+  await sleep(500);
+  check(target.name, "⌘K 执行后偏好落盘为沙丘",
+    await page.evaluate(() => WB.theme.get("pomoImmersiveScene")) === "dune");
+  await page.evaluate(() => { if(WB.pomodoro.state()) WB.pomodoro.stopAndClear(); });
+  await sleep(400);
 
   check(target.name, "全流程零控制台/页面错误", errors.length === 0, errors.slice(0, 3).join(" | "));
   await page.close();

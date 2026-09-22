@@ -102,6 +102,24 @@ function confirmNext(){
   begin(s.nextMode, minutes);
   WB.router.render();
 }
+/* P 键（任何页面通用）：暂停 / 继续 / 待确认时推进到下一段 —— 与沉浸里空格的语义一致。
+   沉浸外没有中央提示语，所以每次都给一条轻提示，否则在别的页面按下像没反应 */
+function toggleRun(){
+  const s = stateRaw();
+  if(!s){ WB.ui.toast("现在没有进行中的番茄", "warn"); return; }
+  if(s.needConfirm){
+    const rest = s.nextMode === "rest";
+    confirmNext();
+    WB.ui.toast(rest ? "☕ 开始休息" : "▶ 开始下一轮");
+  }else if(s.running){
+    pause();
+    WB.ui.toast("⏸ 已暂停 · 剩 " + fmtRemain(state().remainSec));
+  }else{
+    resume();
+    WB.ui.toast("▶ 继续 · 剩 " + fmtRemain(state().remainSec));
+  }
+  if(WB.router.nav() === "pomodoro") WB.router.render();
+}
 function stopAndClear(){
   setState(null); tickStop(); emitPhase();
   WB.bus.emit("pomo:finish", {mode: "stop", status: "stop"});
@@ -205,6 +223,33 @@ function bindPicker(){
   return box;
 }
 
+/* ---------- 场景快捷条（12 套沉浸场景） ----------
+   与沉浸层面板、设置页共用同一个偏好键 pomoImmersiveScene，且统一走沉浸层的 pick()：
+   正在沉浸中点击会立即换景，否则只记住、下次进沉浸生效 */
+function sceneRow(){
+  const imm = WB.immersive;
+  const cur = WB.theme.get("pomoImmersiveScene");
+  const order = (imm && imm.order) || [];
+  const wrap = el("div", {class: "row", style: {justifyContent: "center", alignItems: "center",
+    gap: "7px", marginTop: "14px", flexWrap: "wrap"}});
+  wrap.appendChild(el("span", {class: "small muted", style: {marginRight: "2px"}, text: "场景"}));
+  order.forEach(id => {
+    const on = id === cur;
+    wrap.appendChild(el("button", {
+      class: "fs-pick-dot", dataset: {scene: id}, title: imm.scenes[id],
+      style: {border: "0", padding: "0", cursor: "pointer", opacity: on ? "1" : ".68",
+        boxShadow: on ? "inset 0 0 0 1px rgba(255,255,255,.14), 0 0 0 2px var(--accent)"
+                      : "inset 0 0 0 1px rgba(255,255,255,.14)"},
+      onclick: () => {
+        if(imm && imm.pick) imm.pick(id);
+        else WB.theme.set("pomoImmersiveScene", id);
+        WB.router.render();
+      }}));
+  });
+  wrap.appendChild(el("span", {class: "small faint", text: (cur && imm && imm.scenes[cur]) || ""}));
+  return wrap;
+}
+
 /* ---------- 小花园（由 pomoLog 推导） ---------- */
 function gardenView(){
   const logs = pomoLog.all().slice(-28).reverse(); // 最近的在前
@@ -288,6 +333,7 @@ WB.registerModule({
           WB.router.render();
         }});
       timerCard.appendChild(startBtn);
+      timerCard.appendChild(sceneRow());   // 开始前也能挑景（沉浸层里同样能换，这里只是不用来回跳页）
     }else{
       /* 进行中 / 待确认 */
       const st = state();
@@ -338,6 +384,7 @@ WB.registerModule({
         btns.appendChild(el("button", {class: "btn ghost", text: "放弃", onclick: () => giveUp()}));
       }
       timerCard.appendChild(btns);
+      timerCard.appendChild(sceneRow());
       // 启动心跳（若在跑）
       if(st.running) tickStart();
     }
@@ -351,7 +398,7 @@ WB.registerModule({
       gardenView());
     grid.appendChild(garden);
     const soundCard = el("div", {class: "card"},
-      el("div", {class: "card-title", html: icon("music", 18) + "<span>声音面板</span><span class='card-sub'>七源混合 · 空格播放/暂停</span>"}));
+      el("div", {class: "card-title", html: icon("music", 18) + "<span>声音面板</span><span class='card-sub'>七源混合 · 空格 / M 播放·暂停</span>"}));
     if(WB.sound && WB.sound.renderPanel) WB.sound.renderPanel(soundCard);
     grid.appendChild(soundCard);
     view.appendChild(grid);
@@ -388,7 +435,7 @@ setTimeout(() => {
 
 /* finish / stopAndClear 原先没导出：沉浸层要「完成本段 / 先到这」两个动作，必须补上 */
 WB.pomodoro = {state, isFocusing, begin, pause, resume, giveUp, confirmNext, gardenStats,
-  finish, stopAndClear,
+  finish, stopAndClear, toggleRun,
   titleFlashing(){ return !!titleTimer; },
   toggleSound(){
     if(WB.sound && WB.sound.toggle) WB.sound.toggle();

@@ -90,6 +90,18 @@ function buildItems(q){
     }
   };
   focusItems();
+  // 沉浸场景（12 套）：只在有查询词时出现 —— 否则空面板会被 12 条场景命令刷屏。
+  // 与「窗景」组区分开：那是 ThreeUI 的窗景页，这里是番茄钟沉浸层的场景
+  if(WB.immersive && WB.immersive.pick){
+    const scenes = WB.immersive.scenes || {};
+    (WB.immersive.order || []).forEach(id => {
+      const name = scenes[id];
+      if(!name || !t || !name.includes(t)) return;
+      out.push({group: "沉浸场景", icon: "image", label: "场景 · " + name,
+        hint: WB.immersive.isActive() ? "立即切换" : "设为沉浸场景",
+        exec: () => WB.immersive.pick(id)});
+    });
+  }
   // 窗景（ThreeUI 场景页）
   if(WB.scenes){
     Object.entries(WB.scenes.SCENES).forEach(([key, s]) => {

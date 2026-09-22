@@ -45,7 +45,8 @@ function initShortcuts(){
       return;
     }
     if(isTyping(e)) return;
-    /* 沉浸专注：F/Esc 进退、空格暂停/继续（沉浸里空格不再是环境音开关）。
+    /* 沉浸专注：F/Esc 进退、空格暂停/继续（沉浸里空格不再是环境音开关）、
+       ←/→ 换场景、M 环境音开关、P 与空格同效。
        层上若压着确认框（放弃计时），Esc 先关弹窗、再退沉浸 */
     if(WB.immersive && WB.immersive.isActive()){
       if(WB.modalOpen && WB.modalOpen()){
@@ -55,6 +56,13 @@ function initShortcuts(){
       if(e.key === "Escape"){ e.preventDefault(); WB.immersive.exit(); return; }
       if(e.key === "f" || e.key === "F"){ e.preventDefault(); WB.immersive.exit(); return; }
       if(e.key === " "){ e.preventDefault(); WB.immersive.toggleRun(); return; }
+      /* ←/→ 不防连发：按住快速翻场景是想要的 */
+      if(e.key === "ArrowRight"){ e.preventDefault(); if(WB.immersive.step) WB.immersive.step(1); return; }
+      if(e.key === "ArrowLeft"){ e.preventDefault(); if(WB.immersive.step) WB.immersive.step(-1); return; }
+      /* M/P 必须防连发：按住不放会让声音与计时来回抖动 */
+      if(e.repeat) return;
+      if(e.key === "m" || e.key === "M"){ e.preventDefault(); if(WB.immersive.toggleSound) WB.immersive.toggleSound(); return; }
+      if(e.key === "p" || e.key === "P"){ e.preventDefault(); WB.immersive.toggleRun(); return; }
       return;
     }
     if(WB.modalOpen && WB.modalOpen()){ // 弹窗内只留 Esc
@@ -72,6 +80,14 @@ function initShortcuts(){
       case "f": case "F": if(WB.immersive) WB.immersive.toggle(); break;
       case " ":
         if(WB.pomodoro && WB.pomodoro.toggleSound){ e.preventDefault(); WB.pomodoro.toggleSound(); }
+        break;
+      /* M 与空格同义（全站环境音开关）；P = 番茄钟暂停/继续（沉浸外也管用）。
+         两者都要防连发，否则按住不放会来回抖动 */
+      case "m": case "M":
+        if(!e.repeat && WB.pomodoro && WB.pomodoro.toggleSound){ e.preventDefault(); WB.pomodoro.toggleSound(); }
+        break;
+      case "p": case "P":
+        if(!e.repeat && WB.pomodoro && WB.pomodoro.toggleRun){ e.preventDefault(); WB.pomodoro.toggleRun(); }
         break;
     }
   });
