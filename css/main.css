@@ -514,6 +514,9 @@ body.scrim-open #sidebar{backdrop-filter:none; -webkit-backdrop-filter:none;}
 .cmdk-item{display:flex; align-items:center; gap:11px; padding:9px 13px; border-radius:12px; cursor:pointer; font-size:14px;}
 .cmdk-item svg{width:17px; height:17px; color:var(--ink-3); flex:none;}
 .cmdk-item.sel{background:var(--accent-soft); color:var(--ink);}
+/* 说明行（info）：只是提示，不可点也不参与键盘选中 */
+.cmdk-item.is-info{opacity:.72; cursor:default; font-size:13px;}
+.cmdk-item.is-info.sel{background:none;}
 .cmdk-item .ci-hint{margin-left:auto; font-size:11.5px; color:var(--ink-3);}
 .cmdk-item b{font-weight:600;}
 .cmdk-item mark{background:var(--accent2-soft); color:var(--accent-2); border-radius:3px; padding:0 1px;}

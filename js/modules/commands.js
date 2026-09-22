@@ -109,14 +109,20 @@ function buildItems(q){
         exec: () => WB.scenes.open(key)});
     });
   }
+  /* 仪式：晨间 / 收工都能从这里唤起（以前只有开机自动弹一次，误关当天就没入口了）。
+     只在有查询词时出现，空面板不堆条目 */
+  if(t && WB.rituals){
+    [["晨间仪式", "sun", () => WB.rituals.startMorning()], ["收工仪式", "moon", () => WB.rituals.startOffwork()]]
+      .forEach(([name, ic, run]) => {
+        if(name.includes(t)) out.push({group: "仪式", icon: ic, label: name, hint: "打开", exec: run});
+      });
+  }
   if(!t){
     out.length = Math.min(out.length, 6);
-    out.push({group: "捕捉", icon: "plus", label: "输入文字回车 → 新待办（支持 明天/后天/周五/3月5日）", hint: "",
-      exec: () => {}});
-    out.push({group: "捕捉", icon: "edit", label: "以「记 」开头回车 → 新笔记（#标签自动归类）", hint: "",
-      exec: () => {}});
-    out.push({group: "捕捉", icon: "translate", label: "「翻译 xxx」→ 中英互译", hint: "",
-      exec: () => {}});
+    /* 这三条是说明文字，不是命令：标 info 后不可点、上下键会跳过（以前点下去只是把面板关掉，像点错了） */
+    out.push({group: "捕捉", icon: "plus", label: "输入文字回车 → 新待办（支持 明天/后天/周五/3月5日）", hint: "", info: true});
+    out.push({group: "捕捉", icon: "edit", label: "以「记 」开头回车 → 新笔记（#标签自动归类）", hint: "", info: true});
+    out.push({group: "捕捉", icon: "translate", label: "「翻译 xxx」→ 中英互译", hint: "", info: true});
     focusItems();     // 放在 out.length 截断之后，否则会被砍掉
     return out;
   }
@@ -139,15 +145,13 @@ function buildItems(q){
         label: "新待办：" + title + (parsed.date ? "（" + WB.relDayLabel(parsed.date) + "）" : ""),
         hint: "回车添加",
         exec: () => { WB.collection("todos").add({title, prio: "mid", date, done: false}); WB.ui.toast("已添加到 " + WB.relDayLabel(date)); WB.router.render(); }});
-      out.push({group: "捕捉", icon: "edit", label: "或存为笔记：" + t, hint: "Shift+回车",
-        note: content0(t),
+      out.push({group: "捕捉", icon: "edit", label: "或存为笔记：" + t, hint: "Shift+回车", alt: true,
         exec: () => { WB.collection("notes").add({content: t, tags: WB.md.extractTags(t)}); WB.ui.toast("已存入笔记"); }});
     }
   }
   // 搜索
   searchAll(t).forEach(r => out.push({group: "搜索", icon: r.icon, label: r.label, hint: r.hint, exec: r.go}));
   return out;
-  function content0(x){ return x; }
 }
 
 /* ---------- 翻译 ---------- */
@@ -189,13 +193,21 @@ function open(){
   const scrim = el("div", {class: "cmdk-scrim", onclick: close});
   input = el("input", {placeholder: "输入待办 / 记笔记 / 模块名 / 翻译 xxx / 搜索…"});
   input.addEventListener("input", WB.debounce(() => paint(), 120));
+  /* 上下键跳过「说明行」（info 项只是提示，不可选不可执行） */
+  const step = dir => {
+    for(let i = selIdx + dir; i >= 0 && i < items.length; i += dir){
+      if(!items[i].info){ selIdx = i; paintSel(); return; }
+    }
+  };
   input.addEventListener("keydown", e => {
-    if(e.key === "ArrowDown"){ e.preventDefault(); selIdx = Math.min(selIdx + 1, items.length - 1); paintSel(); }
-    else if(e.key === "ArrowUp"){ e.preventDefault(); selIdx = Math.max(selIdx - 1, 0); paintSel(); }
+    if(e.key === "ArrowDown"){ e.preventDefault(); step(1); }
+    else if(e.key === "ArrowUp"){ e.preventDefault(); step(-1); }
     else if(e.key === "Enter"){
       e.preventDefault();
-      const it = items[selIdx];
-      if(!it) return;
+      /* Shift+回车 = 执行列表里的「备选动作」（带 alt 标记的那条，目前是"存为笔记"）。
+         以前这条提示只是文案，回车根本不看 shiftKey，照提示按会多出一条待办 */
+      const it = e.shiftKey ? (items.find(x => x.alt) || items[selIdx]) : items[selIdx];
+      if(!it || it.info) return;
       if(it.translate !== undefined){ doTranslate(it.translate); close(); return; }
       if(it.exec){
         close();
@@ -249,15 +261,17 @@ function paint(){
       lastGroup = it.group;
       listEl.appendChild(el("div", {class: "cmdk-group", text: it.group}));
     }
-    const row = el("div", {class: "cmdk-item" + (i === selIdx ? " sel" : ""), dataset: {idx: i}},
+    const row = el("div", {class: "cmdk-item" + (i === selIdx ? " sel" : "") + (it.info ? " is-info" : ""), dataset: {idx: i}},
       el("span", {html: icon(it.icon, 17)}),
       el("span", {text: it.label}),
       it.hint ? el("span", {class: "ci-hint", text: it.hint}) : null);
-    row.addEventListener("click", () => {
-      if(it.translate !== undefined){ doTranslate(it.translate); close(); return; }
-      close(); it.exec && it.exec();
-    });
-    row.addEventListener("mousemove", () => { selIdx = i; paintSel(); });
+    if(!it.info){   // 说明行不参与点击与悬停选中
+      row.addEventListener("click", () => {
+        if(it.translate !== undefined){ doTranslate(it.translate); close(); return; }
+        close(); it.exec && it.exec();
+      });
+      row.addEventListener("mousemove", () => { selIdx = i; paintSel(); });
+    }
     listEl.appendChild(row);
   });
   if(!items.length) listEl.appendChild(el("div", {class: "cmdk-item", text: "没有匹配结果"}));

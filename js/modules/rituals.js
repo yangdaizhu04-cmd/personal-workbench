@@ -119,6 +119,17 @@ function startMorning(){
   body2.appendChild(input); body2.appendChild(list);
   steps.push({title: "今天最重要的三件事", icon: "target", content: body2});
 
+  /* 保存第 i 步的改动（「下一步」与「跳过」共用）：
+     以前只有「下一步」保存，点「跳过」越过第一步时，昨天待办的「今天做/放下」全都会丢 */
+  const saveStep = i => {
+    if(i === 0){
+      undone.forEach(t => {
+        if(decisions[t.id] === "today") WB.collection("todos").update(t.id, {date: WB.bizDate()});
+        else if(decisions[t.id] === "drop") WB.collection("todos").update(t.id, {done: true, doneAt: Date.now(), dropped: true});
+      });
+    }
+    if(i === 1) saveBigThree(today, items);
+  };
   /* 顺序播放 */
   let idx = 0;
   let m;
@@ -133,14 +144,7 @@ function startMorning(){
     if(idx > 0) foot.appendChild(el("button", {class: "btn", text: "上一步", onclick: () => { idx--; show(); }}));
     foot.appendChild(el("button", {class: "btn" + (isLast ? " primary" : ""), text: isLast ? "正式开工 ✦" : "下一步",
       onclick: () => {
-        // 保存本步
-        if(idx === 0){
-          undone.forEach(t => {
-            if(decisions[t.id] === "today") WB.collection("todos").update(t.id, {date: WB.bizDate()});
-            else if(decisions[t.id] === "drop") WB.collection("todos").update(t.id, {done: true, doneAt: Date.now(), dropped: true});
-          });
-        }
-        if(idx === 1) saveBigThree(today, items);
+        saveStep(idx);
         if(isLast){
           WB.store.set("morningDone:" + today, true);
           m.close();
@@ -151,7 +155,7 @@ function startMorning(){
       }}));
     if(!isLast){
       foot.appendChild(el("button", {class: "btn ghost", text: "跳过", onclick: () => {
-        if(idx === 1) saveBigThree(today, items);
+        saveStep(idx);
         idx = steps.length - 1; show();
       }}));
     }

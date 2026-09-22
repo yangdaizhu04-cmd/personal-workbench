@@ -52,6 +52,7 @@ WB.registerModule({
       rowNum("休息时长（分钟）", s.pomodoroRest, v => WB.theme.set("pomodoroRest", v), 1, 60),
       row("完成响铃", "合成铃声（无音频文件）", toggle(s.pomoSound, v => WB.theme.set("pomoSound", v))),
       row("全屏提示动画", "番茄结束时页面内温柔提示", toggle(s.pomoFlash, v => WB.theme.set("pomoFlash", v))),
+      row("待办到点提示", "没有系统通知权限时，页面内弹一条提醒", toggle(s.remindToast, v => WB.theme.set("remindToast", v))),
       row("标签页标题闪烁", "切到别的标签页也不会错过", toggle(s.pomoTitle, v => WB.theme.set("pomoTitle", v))),
       row("沉浸专注", "全屏专注层：细线环 + 巨型数字 + 场景底色 + 环境音联动（快捷键 F）",
         toggle(s.pomoImmersive, v => WB.theme.set("pomoImmersive", v))),

@@ -112,10 +112,26 @@ function checkReminders(){
       fired.add(t.id); changed = true;
       const when = ahead ? "还有 " + ahead + " 分钟" : "现在";
       const shown = WB.notify("⏰ 待办提醒", when + "：" + t.title, () => WB.router.go("todos"));
-      if(!shown && settings.pomoFlash !== false) WB.ui.toast("⏰ " + when + "：" + t.title, "warn");
+      /* 页内提示有独立开关：以前借用「全屏提示动画」(pomoFlash)，
+         关掉番茄动画的人会连带失去所有待办提醒，且界面上看不出为什么 */
+      if(!shown && settings.remindToast) WB.ui.toast("⏰ " + when + "：" + t.title, "warn");
     }
   }
   if(changed) WB.store.set(firedKey, Array.from(fired));
+}
+
+/* ---------- 跨业务日换日 ----------
+   业务日以凌晨 4 点为界（WB.bizDate）。开着过夜时没有任何定时器会重新渲染，
+   早上回来「今日」还停在昨天：待办不刷新、心情与三大件会写进昨天那一格 */
+let lastBizDay = null;
+function checkDayRollover(){
+  const d = WB.bizDate();
+  if(lastBizDay === null){ lastBizDay = d; return; }
+  if(d === lastBizDay) return;
+  if(WB.modalOpen && WB.modalOpen()) return;   // 有浮层开着先不打断，等下一轮
+  lastBizDay = d;
+  WB.router.render();
+  WB.ui.toast("新的一天开始了 ✦");
 }
 
 /* ---------- modal 栈（供 Esc 关闭） ---------- */
@@ -151,7 +167,7 @@ function boot(){
   initShortcuts();
   veilOut();
   setTimeout(() => animateCards(WB.$("#view")), 300);
-  setInterval(checkReminders, 30000);
+  setInterval(() => { checkReminders(); checkDayRollover(); }, 30000);
   setTimeout(checkReminders, 4000);
   WB.ensureNotifyPermission();
 
@@ -185,4 +201,5 @@ else boot();
 
 WB.gsapReady = gsapReady;
 WB.animateCards = animateCards;
+WB.checkDayRollover = checkDayRollover;
 })();

@@ -171,9 +171,11 @@ WB.registerModule({
       return el("div", {class: "card"},
         el("div", {class: "card-title", html: icon("target", 18) + "<span>今日三大件</span><span class='card-sub'>晨间仪式圈选</span>"}),
         el("div", {class: "small faint", style: {padding: "2px 0 12px"}, text: "最多 3 件。聚焦的事少了，完成的事才会多。"}),
-        el("div", {class: "center"},
+        el("div", {class: "center col", style: {gap: "8px"}},
           el("button", {class: "btn sm primary", text: "+ 圈出今日重点",
-            onclick: () => WB.rituals && WB.rituals.pickBigThree(dateStr)})));
+            onclick: () => WB.rituals && WB.rituals.pickBigThree(dateStr)}),
+          el("button", {class: "btn sm ghost", html: icon("sun", 14) + "<span>走一遍晨间仪式</span>",
+            onclick: () => WB.rituals && WB.rituals.startMorning()})));
     }
     items.forEach((it, i) => {
       list.appendChild(el("div", {class: "list-row"},
@@ -213,7 +215,7 @@ WB.registerModule({
         style: "cursor:pointer", onclick: () => WB.router.go("todos")}));
     }
     if(!todos.length){
-      box.appendChild(WB.ui.emptyState("check", "今天还没有安排", "按 T 或点击右下角快速添加"));
+      box.appendChild(WB.ui.emptyState("check", "今天还没有安排", "按 T 新建，或点下面的「添加待办」"));
     }else{
       const list = el("div", {class: "list"});
       todos.slice(0, 6).forEach(t => {
