@@ -233,7 +233,10 @@ function fxTick(){
   fxParts = fxParts.filter(p => p.t < p.life);
   for(const p of fxParts){
     p.t++; p.x += p.vx; p.y += p.vy; p.vy += p.g; p.rot += p.vr || 0;
-    const k = 1 - p.t / p.life;
+    /* life 是小数（34~52），最后一帧 p.t 会略超 life：k 若为负，
+       arc() 抛 IndexSizeError 会中断整个 tick —— rAF 不再续排，fxRunning 永久为 true，
+       彩带/星光从此再也不画（踩坑 #063）。夹到 0 即根治 */
+    const k = Math.max(0, 1 - p.t / p.life);
     fctx.globalAlpha = Math.max(0, k);
     fctx.fillStyle = p.color;
     if(p.star){

@@ -193,7 +193,10 @@ function boot(){
   }
   // 每日数据快照 + 备份提醒（放启动尾部，不抢首屏）
   if(WB.snapshots && WB.snapshots.maybeDaily) setTimeout(() => WB.snapshots.maybeDaily(), 2600);
-  WB.bus.on("route:changed", () => setTimeout(() => animateCards(WB.$("#view")), 60));
+  WB.bus.on("route:changed", (id, info) => {
+    if(info && info.samePage) return;   // 同页数据更新：别把整页卡片重放一遍
+    setTimeout(() => animateCards(WB.$("#view")), 60);
+  });
 }
 
 if(document.readyState === "loading") addEventListener("DOMContentLoaded", boot);

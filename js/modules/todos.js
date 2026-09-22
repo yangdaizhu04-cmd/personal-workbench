@@ -6,6 +6,8 @@ const { el, icon, esc } = WB;
 const todos = WB.collection("todos");
 const lists = WB.collection("todoLists");
 const PRIO = {high: {label: "高", cls: "prio-high"}, mid: {label: "中", cls: "prio-mid"}, low: {label: "低", cls: "prio-low"}};
+/* 拖拽排序值：手动排过的项按 order 走，没排过的排到最后（不影响它原本的优先级顺序） */
+const ordOf = t => (typeof t.order === "number" ? t.order : 1e6);
 let viewState = {filter: "today", mode: "list", listId: ""};
 
 /* ---------- 业务工具 ---------- */
@@ -462,7 +464,11 @@ function listViewWith(content, prefiltered){
     const card = el("div", {class: "card", style: {marginBottom: "14px"}},
       el("div", {class: "card-title", html: icon(g.includes("过期") ? "bell" : "check-circle", 18) + "<span>" + esc(g) + "</span><span class='card-sub'>" + arr.length + " 项</span>"}));
     const list = el("div", {class: "list"});
-    arr.sort((a, b) => ({high: 0, mid: 1, low: 2})[a.prio || "mid"] - ({high: 0, mid: 1, low: 2})[b.prio || "mid"] || (a.time || "99").localeCompare(b.time || "99"));
+    /* 手动拖拽过的项按 order 排在最前，其余仍按优先级 + 时刻。
+       以前拖拽写回的 order 从没被读过 —— 拖完看着生效，一勾选就弹回原序 */
+    arr.sort((a, b) => ordOf(a) - ordOf(b)
+      || ({high: 0, mid: 1, low: 2})[a.prio || "mid"] - ({high: 0, mid: 1, low: 2})[b.prio || "mid"]
+      || (a.time || "99").localeCompare(b.time || "99"));
     arr.forEach(t => list.appendChild(todoRow(t)));
     card.appendChild(list);
     WB.ui.draggable(list, {onReorder: ids => ids.forEach((id, i) => todos.update(id, {order: i}))});

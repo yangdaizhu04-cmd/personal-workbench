@@ -6,6 +6,9 @@ const { el, icon } = WB;
 const moods = WB.collection("moods");
 const FACES = [["😞", "很糟"], ["🙁", "不太好"], ["😐", "一般"], ["🙂", "不错"], ["😄", "很好"]];
 const LEVEL_COLORS = ["#c97b6e", "#d49a6e", "#c9bd6f", "#8fbf9f", "#7fa3d1"];
+/* 正在看哪个月：放模块级，点历史格子/记一笔引发的重渲染不再跳回本月；跨天进来才回到本月 */
+let ym = "";
+let ymDay = "";
 
 WB.registerModule({
   id: "mood",
@@ -44,8 +47,7 @@ WB.registerModule({
     view.appendChild(card);
 
     /* 月历视图 */
-    const now = new Date();
-    let ym = WB.monthStr(now);
+    if(!ym || ymDay !== WB.bizDate()){ ym = WB.monthStr(new Date()); ymDay = WB.bizDate(); }
     const calCard = el("div", {class: "card"});
     const head = el("div", {class: "card-title"},
       el("button", {class: "icon-btn", html: icon("chev-left", 16), onclick: () => { ym = shiftMonth(ym, -1); paintCal(); }}),

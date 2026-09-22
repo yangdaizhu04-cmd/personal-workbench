@@ -9,7 +9,8 @@ const listeners = {};
 WB.bus = {
   on(evt, fn){ (listeners[evt] = listeners[evt] || []).push(fn); return () => WB.bus.off(evt, fn); },
   off(evt, fn){ const l = listeners[evt]; if(l) listeners[evt] = l.filter(f => f !== fn); },
-  emit(evt, data){ (listeners[evt] || []).forEach(fn => { try{ fn(data); }catch(e){ console.error("[bus]", evt, e); } }); },
+  /* 透传全部参数：只写 fn(data) 时，emit(evt, a, b) 的第二参会被静默丢掉（踩坑 #062） */
+  emit(evt, ...args){ (listeners[evt] || []).forEach(fn => { try{ fn(...args); }catch(e){ console.error("[bus]", evt, e); } }); },
 };
 
 /* ---- KV ---- */

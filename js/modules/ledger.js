@@ -5,6 +5,9 @@ const WB = (window.WB = window.WB || {});
 const { el, icon, esc } = WB;
 const ledger = WB.collection("ledger");
 const cats = WB.collection("ledgerCats");
+/* 正在看哪个月：放模块级，删一笔/记一笔引发的重渲染不再跳回本月；跨天进来才回到本月 */
+let ym = "";
+let ymDay = "";
 const DEFAULT_CATS = [
   {name: "餐饮", kind: "out", icon: "plate", color: "#dd9a84"},
   {name: "交通", kind: "out", icon: "external", color: "#7fa3bd"},
@@ -170,7 +173,7 @@ WB.registerModule({
 
   render(view){
     ensureCats();
-    let ym = WB.monthStr(new Date());
+    if(!ym || ymDay !== WB.bizDate()){ ym = WB.monthStr(new Date()); ymDay = WB.bizDate(); }
     const state = {ym};
 
     const bar = el("div", {class: "row", style: {marginBottom: "14px", flexWrap: "wrap", gap: "8px"}});
@@ -192,7 +195,8 @@ WB.registerModule({
       return WB.monthStr(new Date(y, m - 1 + n, 1));
     }
     function paint(){
-      const ym = state.ym;
+      ym = state.ym;              // 同步到模块级：删一笔/记一笔重渲染后仍停在用户翻到的那一月
+      ymDay = WB.bizDate();
       bar.querySelector("#led-ym").textContent = ym.replace("-", " 年 ") + " 月";
       const arr = ledger.all().filter(l => monthOf(l.date) === ym).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
       const out = arr.filter(l => l.type === "out").reduce((s, l) => s + l.amount, 0);

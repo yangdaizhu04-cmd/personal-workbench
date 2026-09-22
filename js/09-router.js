@@ -15,6 +15,8 @@ const groups = [
   {id: "bottom",  label: "",    items: ["trash", "settings"]},
 ];
 const current = {id: "today"};
+/* 上次渲染的路由键（id|param）：用来区分「切页」与「同一页的数据更新」 */
+let lastKey = null;
 
 function register(mod){
   routes[mod.id] = mod;
@@ -42,6 +44,13 @@ function render(){
 
   // 视图
   const view = WB.$("#view");
+  /* 同一页（同 id 同参数）的重渲染都是「页内数据更新」——勾一条待办、打一次卡、
+     删一笔账、撤销删除。这类渲染必须保持滚动位置，也不能重放入场动画：
+     以前一律 scrollTop=0 + 重放错峰，勾长列表第 15 条就会被弹回顶部。
+     切页（含 journal 换日期这类同 id 不同参数）才归零 + 播动画 */
+  const key = mod.id + "|" + param;
+  const samePage = lastKey === key;
+  const keepScroll = samePage ? view.scrollTop : 0;
   view.innerHTML = "";
   const inner = el("div", {class: "view-inner"});
   view.appendChild(inner);
@@ -65,7 +74,7 @@ function render(){
   // 转场动画：冷却闸门只锁「动画」，不锁渲染本身。
   // 若把 lock 卡在 render 入口，快速切页要么丢渲染（hash 与视图不一致）、要么内容延迟出现；
   // 锁在动画上则在冷却期内直接以终态呈现，既不掉内容也不叠帧（2.1）
-  if(WB.ui.lock("route", 400)){
+  if(!samePage && WB.ui.lock("route", 400)){
     if(WB.gsapReady && WB.gsapReady() && !WB.ui.motionOff()){
       gsap.fromTo(inner, {opacity: 0, y: 10}, {opacity: 1, y: 0, duration: .38, ease: "power2.out", clearProps: "all"});
     }else{
@@ -75,8 +84,10 @@ function render(){
     // main.js 的 animateCards 负责（有 .card 走 GSAP，没有才走 CSS 错峰），
     // 两处同时上会让同一批节点的 opacity/transform 被两套动画争抢。
   }
-  view.scrollTop = 0;
-  WB.bus.emit("route:changed", mod.id);
+  view.scrollTop = keepScroll;
+  lastKey = key;
+  // 第二参告诉订阅者这是不是「同页更新」：main.js 据此跳过整页卡片入场动画
+  WB.bus.emit("route:changed", mod.id, {samePage});
 }
 
 function go(id, param){
