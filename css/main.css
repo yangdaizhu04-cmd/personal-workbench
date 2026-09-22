@@ -857,13 +857,9 @@ html[data-theme="dark"] .fs-glow{opacity:.42;}
   --fs-glass:rgba(255,251,244,.48); --fs-veil:rgba(70,40,18,.16); --fs-ring:#d08a5e;
   --fs-halo:rgba(20,10,6,.6);
   --fs-btn:#5a3a2a; --fs-btn-ink:#fdf6ef;}
-/* 篝火的实拍素材是「黑底 + 满屏亮火」，明暗与它的 CSS 场景（奶油底深字）相反：
-   视频亮起时翻转整套配色极性 —— 浅色字 + 深色光晕，火才有冲击力、数字才读得清 */
-#focus-stage.has-video[data-scene="ember"]{ --fs-ink:#fdf3e7; --fs-line:rgba(244,206,166,.26);
-  --fs-glass:rgba(30,16,8,.46); --fs-ring:#f0b27a;
-  --fs-btn:#fdf3e7; --fs-btn-ink:#2a160c;}
-/* 篝火的实拍素材（黑底火带/暗木柴）明暗与它的 CSS 场景（奶油底深字）相反：
-   视频亮起时翻转整套配色极性 —— 浅色字 + 深色光晕，火才有冲击力、数字才读得清 */
+/* 篝火的实拍素材（2026-09-22 起为室内壁炉暖光 + 暗砖墙）明暗与它的 CSS 场景（奶油底深字）相反：
+   视频亮起时翻转整套配色极性 —— 浅色字 + 深色光晕，火才有冲击力、数字才读得清
+   （同一选择器曾有两组重复定义，2026-09-22 换素材时合并为一组） */
 #focus-stage.has-video[data-scene="ember"]{ --fs-ink:#f8ece1; --fs-line:rgba(238,214,190,.24);
   --fs-glass:rgba(48,30,22,.44); --fs-ring:#f0b27a;
   --fs-btn:#f8ece1; --fs-btn-ink:#2a1a12;}
