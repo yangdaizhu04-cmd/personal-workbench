@@ -26,9 +26,8 @@ function skillModal(existing){
     title: isNew ? "新建技能卡" : "编辑技能", icon: "zap", content: body,
     actions: [
       ...(isNew ? [] : [{label: "删除", danger: true, onClick: () => {
-        WB.ui.confirmBox("删除技能「" + esc(s.name) + "」？", {danger: true, okLabel: "删除"}).then(ok => {
-          if(ok){ skills.remove(s.id); m.close(); WB.router.render(); }
-        });
+        // 删完给撤销条兜底（回收站 30 天），不再拦一次确认
+        skills.remove(s.id); m.close(); WB.router.render();
         return true;
       }}]),
       {label: "保存", primary: true, onClick: () => {

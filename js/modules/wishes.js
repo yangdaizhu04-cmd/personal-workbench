@@ -15,9 +15,8 @@ function wishModal(existing, year){
     title: isNew ? "新的愿望" : "编辑愿望", icon: "star", content: body,
     actions: [
       ...(isNew ? [] : [{label: "删除", danger: true, onClick: () => {
-        WB.ui.confirmBox("删除这条愿望？", {danger: true, okLabel: "删除"}).then(ok => {
-          if(ok){ wishes.remove(w.id); m.close(); WB.router.render(); }
-        });
+        // 删完给撤销条兜底（回收站 30 天），不再拦一次确认
+        wishes.remove(w.id); m.close(); WB.router.render();
         return true;
       }}]),
       {label: "保存", primary: true, onClick: () => {

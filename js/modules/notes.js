@@ -10,9 +10,18 @@ let keyword = "";
 function noteModal(existing){
   const isNew = !existing;
   const n = Object.assign({content: "", tags: []}, existing || {});
+  /* 草稿：点遮罩/×/Esc 关掉时不丢内容，下次打开自动带出（与日志编辑器同一套做法） */
+  const draftKey = "draft:note:" + (isNew ? "new" : n.id);
+  const draft = WB.store.get(draftKey, null);
+  const hasDraft = typeof draft === "string" && !!draft.trim();
   const body = el("div");
+  if(hasDraft){
+    body.appendChild(el("div", {class: "row small faint", style: {marginBottom: "10px", gap: "6px"}},
+      el("span", {html: icon("undo", 14), style: {display: "flex"}}),
+      el("span", {text: "已恢复上次没写完的内容，保存后自动清掉"})));
+  }
   const ta = el("textarea", {class: "input", placeholder: "想到什么写什么…\n支持 Markdown 与 #标签\n（Ctrl+Enter 保存）", style: {minHeight: "180px"}});
-  ta.value = n.content;
+  ta.value = hasDraft ? draft : n.content;
   const tagHint = el("div", {class: "row small muted", style: {marginTop: "6px", flexWrap: "wrap"}});
 
   /* 语音速记 */
@@ -74,13 +83,13 @@ function noteModal(existing){
   body.appendChild(el("div", {class: "row", style: {marginTop: "10px", justifyContent: "space-between"}},
     recBtn, tagHint));
 
+  let saved = false;
   const m = WB.ui.modal({
     title: isNew ? "随手记" : "编辑笔记", icon: "edit", content: body, wide: true,
     actions: [
       ...(isNew ? [] : [{label: "删除", danger: true, onClick: () => {
-        WB.ui.confirmBox("删除这条笔记？", {danger: true, okLabel: "删除"}).then(ok => {
-          if(ok){ notes.remove(n.id); m.close(); WB.router.render(); }
-        });
+        // 删完给撤销条兜底（回收站 30 天），不再拦一次确认
+        saved = true; WB.store.del(draftKey); notes.remove(n.id); m.close(); WB.router.render();
         return true;
       }}]),
       {label: "保存", primary: true, onClick: () => {
@@ -88,10 +97,18 @@ function noteModal(existing){
         if(!content){ ta.focus(); return; }
         if(isNew) notes.add({content, tags: WB.md.extractTags(content)});
         else notes.update(n.id, {content, tags: WB.md.extractTags(content)});
+        saved = true;
+        WB.store.del(draftKey);
         m.close(); WB.router.render();
         if(WB.badgeCheck) WB.badgeCheck();
       }},
     ],
+    onClose: () => {
+      if(saved) return;
+      const cur = ta.value;
+      if(cur.trim() && cur !== n.content) WB.store.set(draftKey, cur);
+      else WB.store.del(draftKey);   // 清空后关掉 = 主动放弃草稿
+    },
   });
   setTimeout(() => ta.focus(), 60);
 }

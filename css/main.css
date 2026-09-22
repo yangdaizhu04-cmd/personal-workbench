@@ -483,6 +483,15 @@ body.scrim-open #sidebar{backdrop-filter:none; -webkit-backdrop-filter:none;}
 }
 .toast svg{width:16px; height:16px; color:var(--accent);}
 .toast.leaving{animation:toastOut .3s var(--ease-std) both;}
+/* 可撤销吐司：只有它需要接收点击（#toast-root 本身是 pointer-events:none，普通吐司保持穿透） */
+.toast.has-act{pointer-events:auto;}
+.toast-act{
+  border:0; background:transparent; color:var(--accent); font:inherit; font-weight:600;
+  padding:3px 10px; margin-left:2px; border-radius:9px; cursor:pointer;
+  transition:background var(--dur-tap) var(--ease-std);
+}
+.toast-act:hover{background:var(--accent-soft);}
+.toast-act:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
 @keyframes toastIn{from{opacity:0; transform:translateY(14px) scale(.95);} to{opacity:1; transform:none;}}
 @keyframes toastOut{to{opacity:0; transform:translateY(8px) scale(.96);}}
 

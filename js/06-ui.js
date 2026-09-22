@@ -56,17 +56,48 @@ function syncScrim(){
     !!document.querySelector(".modal-scrim, .cmdk-scrim, .sheet-scrim"));
 }
 
-/* ---------- 吐司 ---------- */
-function toast(msg, type){
+/* ---------- 吐司 ----------
+   第三参 action = {label, onClick} 时变成「可撤销提示」：停留更久、可点、悬停时暂停倒计时。
+   只有这种吐司开 pointer-events（见 .toast.has-act），普通吐司仍整条穿透不挡点击 */
+const TOAST_TTL = {plain: 2400, act: 6000, hover: 1600};
+function toast(msg, type, action){
   const root = WB.$("#toast-root");
   const ic = type === "warn" ? "moon" : type === "sad" ? "heart" : "check-circle";
-  const t = el("div", {class: "toast", html: icon(ic, 16) + "<span></span>"});
+  const t = el("div", {class: "toast" + (action ? " has-act" : ""), html: icon(ic, 16) + "<span></span>"});
   t.querySelector("span").textContent = msg;
-  root.appendChild(t);
-  setTimeout(() => {
+  let timer = null;
+  const dismiss = () => {
+    if(!t.isConnected) return;
+    clearTimeout(timer);
     t.classList.add("leaving");
     setTimeout(() => t.remove(), 320);
-  }, 2400);
+  };
+  let ttl = action ? TOAST_TTL.act : TOAST_TTL.plain;
+  const arm = () => { clearTimeout(timer); timer = setTimeout(dismiss, ttl); };
+  if(action){
+    const btn = el("button", {class: "toast-act", type: "button", text: action.label});
+    btn.addEventListener("click", () => { dismiss(); action.onClick(); });
+    t.appendChild(btn);
+    t.addEventListener("mouseenter", () => clearTimeout(timer));   // 正在看/准备点，先别收走
+    t.addEventListener("mouseleave", () => { ttl = TOAST_TTL.hover; arm(); });
+  }
+  root.appendChild(t);
+  arm();
+  return t;
+}
+
+/* 可撤销提示：items 为刚进回收站的条目（由 02-store.js 的 toTrash 统一调用） */
+function undoToast(items){
+  if(!items || !items.length) return;
+  const n = items.length;
+  toast(n > 1 ? "已移入回收站（" + n + " 件）" : "已移入回收站", null, {
+    label: "撤销",
+    onClick: () => {
+      WB.restoreTrash(items);
+      WB.ui.toast("已还原");
+      if(WB.router && WB.router.render) WB.router.render();
+    },
+  });
 }
 
 /* ---------- 弹窗 ---------- */
@@ -370,7 +401,7 @@ function countUp(node, to, {dur = 0.9, suffix = ""} = {}){
 }
 
 Object.assign(WB.ui = {}, {
-  toast, modal, confirmBox, emptyState, confetti, starBurst, celebrate,
+  toast, undoToast, modal, confirmBox, emptyState, confetti, starBurst, celebrate,
   ring, draggable, enableDrag, skeleton, chime, countUp, getCtx, motionOff,
   lock, swapIcon, staggerIn, syncScrim,
 });

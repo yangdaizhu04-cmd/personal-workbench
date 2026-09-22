@@ -57,9 +57,8 @@ function itemModal(existing){
     title: isNew ? "新的倒数日" : "编辑", icon: "hourglass", content: body,
     actions: [
       ...(isNew ? [] : [{label: "删除", danger: true, onClick: () => {
-        WB.ui.confirmBox("删除「" + esc(c.name) + "」？", {danger: true, okLabel: "删除"}).then(ok => {
-          if(ok){ countdowns.remove(c.id); m.close(); WB.router.render(); }
-        });
+        // 删完给撤销条兜底（回收站 30 天），不再拦一次确认
+        countdowns.remove(c.id); m.close(); WB.router.render();
         return true;
       }}]),
       {label: "保存", primary: true, onClick: () => {

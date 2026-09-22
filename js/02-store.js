@@ -32,6 +32,11 @@ const store = {
     return v == null ? def : v;
   },
   set(key, val){ rawSet(key, val); WB.bus.emit("kv:" + key, val); },
+  /* 真正删掉一个键（草稿这类"用完即弃"的数据用，避免导出时带上空壳） */
+  del(key){
+    try{ localStorage.removeItem(PREFIX + key); }catch(e){}
+    WB.bus.emit("kv:" + key, null);
+  },
   /* 全量导出 / 导入（不含 netcache） */
   exportAll(){
     const out = {};
@@ -79,6 +84,20 @@ function toTrash(moduleName, records){
     id: WB.uid(), module: moduleName, data: r, deletedAt: now, expiresAt: now + TRASH_TTL,
   }));
   store.set("trash", items.concat(list));
+  /* 删除即给「撤销」出口：全站所有走回收站的删除都在这里统一弹可撤销提示，
+     调用方不必各自实现（模块名 == 集合名，restoreTrash 直接放回原集合）。
+     清空回收站 / 彻底删除 / 覆盖导入不走这里，仍保留确认框（不可逆操作） */
+  if(WB.ui && WB.ui.undoToast) WB.ui.undoToast(items);
+  return items;
+}
+/* 从回收站取回若干条：按原 id 放回所属集合（回收站页的「恢复」也走这里） */
+function restoreTrash(items){
+  const ids = new Set((items || []).map(i => i.id));
+  (items || []).forEach(it => {
+    try{ WB.collection(it.module).add(Object.assign({}, it.data)); }
+    catch(e){ console.error("[store] restore failed", it.module, e); }
+  });
+  store.set("trash", store.get("trash", []).filter(x => !ids.has(x.id)));
 }
 function purgeExpiredTrash(){
   const list = store.get("trash", []);
@@ -137,4 +156,5 @@ function collection(name, opts){
 WB.store = store;
 WB.collection = collection;
 WB.toTrash = toTrash;
+WB.restoreTrash = restoreTrash;
 })();

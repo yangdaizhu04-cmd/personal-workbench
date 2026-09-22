@@ -17,9 +17,8 @@ function goalModal(existing, month){
     title: isNew ? "新月度目标" : "编辑目标", icon: "trend-up", content: body,
     actions: [
       ...(isNew ? [] : [{label: "删除", danger: true, onClick: () => {
-        WB.ui.confirmBox("删除目标「" + esc(g.title) + "」？", {danger: true, okLabel: "删除"}).then(ok => {
-          if(ok){ goals.remove(g.id); m.close(); WB.router.render(); }
-        });
+        // 删完给撤销条兜底（回收站 30 天），不再拦一次确认
+        goals.remove(g.id); m.close(); WB.router.render();
         return true;
       }}]),
       {label: "保存", primary: true, onClick: () => {

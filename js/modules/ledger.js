@@ -252,9 +252,9 @@ WB.registerModule({
             el("div", {class: "small faint", text: l.date + " · " + (c ? c.name : "未分类")})),
           el("b", {style: {color: l.type === "out" ? "var(--ink)" : "var(--ok)"},
             text: (l.type === "out" ? "-" : "+") + "¥" + l.amount.toFixed(2).replace(/\.00$/, "")}),
-          el("button", {class: "icon-btn", html: icon("trash", 14), onclick: async () => {
-            const ok = await WB.ui.confirmBox("删除这笔账？（可回收站恢复）", {danger: true, okLabel: "删除"});
-            if(ok){ ledger.remove(l.id); WB.router.render(); }
+          el("button", {class: "icon-btn", html: icon("trash", 14), title: "删除", onclick: () => {
+            ledger.remove(l.id);     // 撤销条由 02-store.js 的 toTrash 统一弹
+            WB.router.render();
           }})));
       });
       listCard.appendChild(list);

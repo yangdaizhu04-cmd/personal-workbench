@@ -337,6 +337,27 @@ WB.registerModule({
         el("span", {class: "chip plain", text: key, style: {minWidth: "86px", justifyContent: "center"}}),
         el("span", {class: "small muted", text: desc}));
     }
+    /* 导入方式三选一：合并 / 覆盖 / 取消。
+       此前是 confirmBox 二选一，而「再想想」、Esc、点遮罩、点 × 都会 resolve(false)，
+       被 !overwrite 分支当成「覆盖」——随手关掉对话框就会清空本地全部数据（不可撤销） */
+    function askImportMode(){
+      return new Promise(resolve => {
+        let done = false;
+        const pick = v => { if(done) return true; done = true; resolve(v); m.close(); return true; };
+        const m = WB.ui.modal({
+          title: "导入备份", icon: "upload",
+          content: '<p style="line-height:1.8">这份备份要怎么并进本机？<br>'
+            + "<b>合并</b>：备份里的数据并入本地，已存在的记录跳过。<br>"
+            + "<b>覆盖</b>：用备份替换本机全部数据（会先自动拍一张快照兜底）。</p>",
+          actions: [
+            {label: "取消", onClick: () => pick(null)},
+            {label: "覆盖导入", danger: true, onClick: () => pick("overwrite")},
+            {label: "合并导入", primary: true, onClick: () => pick("merge")},
+          ],
+          onClose: () => { if(!done){ done = true; resolve(null); } },   // 关掉 = 取消，绝不动数据
+        });
+      });
+    }
     function importBtn(){
       const file = el("input", {type: "file", accept: ".json", style: {display: "none"}});
       file.addEventListener("change", async () => {
@@ -345,15 +366,14 @@ WB.registerModule({
           const text = await f.text();
           const data = JSON.parse(text);
           if(!data || typeof data !== "object" || !data.settings) throw new Error("不是有效的备份文件");
-          const overwrite = await WB.ui.confirmBox(
-            "选择导入方式：<br><b>合并</b>：云端/备份的数据并入本地，重复记录去重。<br><b>覆盖</b>：清空本地后完全使用备份。",
-            {title: "导入备份", okLabel: "合并导入"});
-          if(!overwrite){
-            WB.store.importAll(data, {merge: false}); // 覆盖
-          }else{
-            WB.store.importAll(data, {merge: true});
+          const mode = await askImportMode();
+          if(!mode) return;                       // 取消：什么都不做（原来这里会走覆盖）
+          if(mode === "overwrite" && WB.snapshots){
+            // 覆盖不可逆，先留一张「导入前」快照（快照页可一键回退）
+            try{ await WB.snapshots.take("导入前"); }catch(e){ console.error("[settings] snapshot", e); }
           }
-          WB.ui.toast("导入完成，正在刷新…");
+          WB.store.importAll(data, {merge: mode === "merge"});
+          WB.ui.toast(mode === "merge" ? "已合并导入，正在刷新…" : "已覆盖导入，正在刷新…");
           setTimeout(() => location.reload(), 900);
         }catch(err){
           WB.ui.toast("导入失败：" + err.message, "warn");

@@ -18,9 +18,8 @@ function linkModal(existing){
     title: isNew ? "收藏网址" : "编辑网址", icon: "link", content: body,
     actions: [
       ...(isNew ? [] : [{label: "删除", danger: true, onClick: () => {
-        WB.ui.confirmBox("删除「" + esc(l.name) + "」？", {danger: true, okLabel: "删除"}).then(ok => {
-          if(ok){ links.remove(l.id); m.close(); WB.router.render(); }
-        });
+        // 删完给撤销条兜底（回收站 30 天），不再拦一次确认
+        links.remove(l.id); m.close(); WB.router.render();
         return true;
       }}]),
       {label: "保存", primary: true, onClick: () => {
@@ -49,9 +48,8 @@ function textModal(existing){
     title: isNew ? "常用文本" : "编辑文本", icon: "feather", content: body,
     actions: [
       ...(isNew ? [] : [{label: "删除", danger: true, onClick: () => {
-        WB.ui.confirmBox("删除「" + esc(t.title) + "」？", {danger: true, okLabel: "删除"}).then(ok => {
-          if(ok){ texts.remove(t.id); m.close(); WB.router.render(); }
-        });
+        // 删完给撤销条兜底（回收站 30 天），不再拦一次确认
+        texts.remove(t.id); m.close(); WB.router.render();
         return true;
       }}]),
       {label: "保存", primary: true, onClick: () => {

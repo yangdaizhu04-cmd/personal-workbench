@@ -87,9 +87,7 @@ WB.registerModule({
 function restore(t){
   const def = MODULE_MAP[t.module];
   if(!def){ WB.ui.toast("该条目无法恢复", "warn"); return; }
-  const coll = WB.collection(def.coll);
-  coll.add(Object.assign({}, t.data)); // 保留原 id，维持外键关系
-  WB.store.set("trash", WB.store.get("trash", []).filter(x => x.id !== t.id));
+  WB.restoreTrash([t]);   // 与撤销条共用同一份恢复逻辑（保留原 id，维持外键关系）
   WB.ui.toast("已恢复到「" + def.name + "」");
   WB.router.render();
 }

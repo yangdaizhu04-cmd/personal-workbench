@@ -16,10 +16,20 @@ function saveDate(dateStr, patch){
 
 function editor(dateStr){
   const j = ofDate(dateStr) || {};
+  /* 草稿：未保存就关掉（点遮罩 / × / Esc）时静默存下，下次打开自动带出。
+     长表单靠"打开即恢复"兜底，比"你要放弃吗"的拦截弹窗更温柔，也不会打断手速 */
+  const draftKey = "draft:journal:" + dateStr;
+  const draft = WB.store.get(draftKey, null);
+  const val = k => (draft && draft[k] != null) ? draft[k] : (j[k] || "");
   const body = el("div");
+  if(draft){
+    body.appendChild(el("div", {class: "row small faint", style: {marginBottom: "10px", gap: "6px"}},
+      el("span", {html: icon("undo", 14), style: {display: "flex"}}),
+      el("span", {text: "已恢复上次没写完的内容，保存后自动清掉"})));
+  }
   const mk = (label, key, ph, ta) => {
     const input = ta ? el("textarea", {class: "input", placeholder: ph, style: {minHeight: ta}}) : el("input", {class: "input", placeholder: ph});
-    input.value = j[key] || "";
+    input.value = val(key);
     body.appendChild(el("div", {class: "field"}, el("label", {text: label}), input));
     return input;
   };
@@ -29,7 +39,7 @@ function editor(dateStr){
   const free = mk("自由书写", "free", "支持 Markdown：**加粗**、- 列表、> 引用、[ ] 勾选框、#标签…", "140px");
   const q = WB.data.questionOf(dateStr);
   const answer = el("textarea", {class: "input", placeholder: "想答就写几句，年底会生成问答集锦", style: {minHeight: "70px"}});
-  answer.value = j.answer || "";
+  answer.value = val("answer");
   body.appendChild(el("div", {class: "card", style: {background: "var(--card-2)", boxShadow: "none", marginBottom: "14px", padding: "12px 14px"}},
     el("div", {class: "row small", html: icon("quote", 15) + "<span style='color:var(--accent)'>今日一问</span>"}),
     el("div", {style: {marginTop: "4px", fontWeight: "600"}, text: q}),
@@ -50,6 +60,7 @@ function editor(dateStr){
   body.appendChild(el("div", {class: "row", style: {justifyContent: "flex-end", marginBottom: "8px"}}, togglePreview));
   body.appendChild(preview);
 
+  let saved = false;
   WB.ui.modal({
     title: "日志 · " + WB.fmtDateCN(dateStr, true), icon: "book", content: body, wide: true,
     actions: [{label: "保存", primary: true, onClick: () => {
@@ -59,9 +70,19 @@ function editor(dateStr){
         tags: [...new Set(WB.md.extractTags((free.value || "") + " " + (done.value || "")))],
         question: q,
       });
+      saved = true;
+      WB.store.del(draftKey);
       WB.ui.toast("日志已保存");
       WB.router.render();
     }}],
+    onClose: () => {
+      if(saved) return;                       // 已保存：草稿已在保存时清掉
+      const cur = {done: done.value, problems: prob.value, plan: plan.value, free: free.value, answer: answer.value};
+      const hasText = Object.keys(cur).some(k => (cur[k] || "").trim());
+      const changed = Object.keys(cur).some(k => (cur[k] || "") !== (j[k] || ""));
+      if(hasText && changed) WB.store.set(draftKey, cur);
+      else if(draft) WB.store.del(draftKey);  // 清空后关掉 = 主动放弃草稿
+    },
   });
 }
 

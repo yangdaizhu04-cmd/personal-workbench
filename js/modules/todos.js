@@ -158,13 +158,9 @@ function todoModal(existing, presets){
     title: isNew ? "新任务" : "编辑任务", icon: "check-circle", content: body,
     actions: [
       ...(isNew ? [] : [{label: "删除", danger: true, onClick: () => {
-        WB.ui.confirmBox("删除这条任务？（可从回收站恢复）", {danger: true, okLabel: "删除"}).then(ok => {
-          if(ok){
-            if(t.repeatOf){ todos.remove(t.id); }
-            else todos.remove(t.id);
-            m.close(); WB.router.render();
-          }
-        });
+        // 删完给撤销条兜底（回收站 30 天），不再拦一次确认
+        todos.remove(t.id);
+        m.close(); WB.router.render();
         return true; // 不自动关
       }}]),
       {label: "保存", primary: true, onClick: () => {
@@ -261,15 +257,10 @@ function todoRow(t){
     row.appendChild(el("button", {class: "small faint", text: subDone + "/" + subTotal,
       onclick: () => subtaskModal(t), style: {flex: "none"}}));
   }
-  row.appendChild(el("button", {class: "icon-btn", html: icon("trash", 15),
-    onclick: async () => {
-      const ok = await WB.ui.confirmBox("删除「" + esc(t.title) + "」？（可在回收站恢复）", {danger: true, okLabel: "删除"});
-      if(ok){
-        todos.remove(t.id);
-        if(t.repeatOf === undefined && t.repeat && t.repeat.type !== "none"){} // 模板删除即停重复
-        WB.ui.toast("已放入回收站");
-        WB.router.render();
-      }
+  row.appendChild(el("button", {class: "icon-btn", html: icon("trash", 15), title: "删除",
+    onclick: () => {
+      todos.remove(t.id);        // 「已移入回收站 · 撤销」由 02-store.js 的 toTrash 统一弹
+      WB.router.render();
     }}));
   return row;
 }
@@ -447,10 +438,10 @@ function listViewWith(content, prefiltered){
     const card = el("div", {class: "card"},
       el("div", {class: "card-title", html: icon("archive", 18) + "<span>已完成（折叠区）</span>"}),
       el("button", {class: "btn sm", style: {marginBottom: "8px"}, text: "一键清理（进回收站）",
-        onclick: async () => {
-          const ids = show.map(t => t.id);
-          const ok = await WB.ui.confirmBox(`清理 ${ids.length} 条已完成任务？`, {okLabel: "清理"});
-          if(ok){ todos.removeMany(ids); WB.router.render(); }
+        onclick: () => {
+          // 按钮文案已写明去向，删完由撤销条兜底（一次可整批还原）
+          todos.removeMany(show.map(t => t.id));
+          WB.router.render();
         }}));
     const list = el("div", {class: "list"});
     show.slice(0, 60).forEach(t => list.appendChild(todoRow(t)));
