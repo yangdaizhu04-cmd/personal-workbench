@@ -206,7 +206,7 @@ for(const target of targets){
   check(target.name, "淡出结束后旧槽位被移除",
     await page.evaluate(() => document.querySelectorAll("#focus-stage .fs-scene").length) === 1);
 
-  /* 5b. 场景选择面板（8 场景：点「◐」弹出网格直接选；Esc 优先关面板）
+  /* 5b. 场景选择面板（12 场景：点「◐」弹出网格直接选；Esc 优先关面板）
      上一段已把场景切到 deep，面板里当前项应是 deep */
   await page.evaluate(() => document.querySelector('#focus-stage [data-act="scene"]').click());
   await sleep(400);
@@ -216,8 +216,8 @@ for(const target of targets){
     on: document.querySelector("#focus-stage .fs-pick.on") ? document.querySelector("#focus-stage .fs-pick.on").dataset.pick : "",
     visible: !document.querySelector("#focus-stage .fs-picker").hidden,
   }));
-  check(target.name, "场景面板：8 项、当前场景高亮、可见",
-    pk.open && pk.count === 8 && pk.on === "deep" && pk.visible, JSON.stringify(pk));
+  check(target.name, "场景面板：12 项、当前场景高亮、可见",
+    pk.open && pk.count === 12 && pk.on === "deep" && pk.visible, JSON.stringify(pk));
   await page.keyboard.press("Escape");
   await sleep(350);
   const escp = await page.evaluate(() => ({open: WB.immersive.pickerOpen(), active: WB.immersive.isActive()}));
@@ -401,15 +401,17 @@ for(const target of targets){
   check(target.name, "no-motion：不加载视频背景（只留 CSS 场景）", m2.vsrc === null, String(m2.vsrc));
   await page.evaluate(() => WB.theme.set("motion", true));
 
-  /* 15. 截图：桌面 1440×900（八套场景）+ 移动 400×800 + 双主题 */
+  /* 15. 截图：桌面 1440×900（十二套场景）+ 移动 400×800 + 双主题 */
   await page.mouse.move(700, 500);          // 唤出控件，控件也要入镜
   await sleep(200);
   if(target.name === "folder"){
     await page.setViewport({width: 1440, height: 900});
     await sleep(400);
     const FX = {mist: "fsMist", deep: "fsSway", ember: "fsFlicker", star: "fsTwinkle",
-      snow: "fsSnow", lake: "fsShimmer", sea: "fsShimmer", meadow: "fsSway"};
-    for(const sc of ["mist", "deep", "ember", "star", "snow", "lake", "sea", "meadow"]){
+      snow: "fsSnow", lake: "fsShimmer", sea: "fsShimmer", meadow: "fsSway",
+      dune: "fsSand", glade: "fsDapple", fall: "fsSpray", cloud: "fsRoll"};
+    for(const sc of ["mist", "deep", "ember", "star", "snow", "lake", "sea", "meadow",
+      "dune", "glade", "fall", "cloud"]){
       await page.evaluate(s => WB.immersive.scene(s, true), sc);
       await page.mouse.move(700, 500);
       await sleep(900);

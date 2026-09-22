@@ -15,10 +15,25 @@ const WB = (window.WB = window.WB || {});
 
 /* 场景表（id → 中文名）。id 同时也是 CSS 的 data-scene 与视频文件名 vendor/video/{id}.mp4；
    2026-09-22 由 4 场景扩到 8 场景：后四席定为「世界自然风光」（雪山/湖泊/碧海/草甸）。
-   中途曾试过室内组（咖啡馆/书房/雨窗/暖灯），用户评价「效果非常差」后整体换成风光。 */
+   中途曾试过室内组（咖啡馆/书房/雨窗/暖灯），用户评价「效果非常差」后整体换成风光。
+   2026-09-23 由 8 扩到 12（风光 B 组：沙丘/林间/飞瀑/云海），口径延续「世界自然风光 + 电影感」；
+   原定的「秋色枫林」在 Mixkit 整批 Restricted（素材页 copyrightNotice 与 403 双双命中），
+   换成「云海之上」承接（选材与授权核验见 vendor/video/README.md）。 */
 const SCENES = {mist: "晨雾", deep: "深海", ember: "篝火", star: "星野",
-  snow: "雪山", lake: "湖泊", sea: "碧海", meadow: "草甸"};
-const SCENE_ORDER = ["mist", "deep", "ember", "star", "snow", "lake", "sea", "meadow"];
+  snow: "雪山", lake: "湖泊", sea: "碧海", meadow: "草甸",
+  dune: "沙丘", glade: "林间", fall: "飞瀑", cloud: "云海"};
+const SCENE_ORDER = ["mist", "deep", "ember", "star", "snow", "lake", "sea", "meadow",
+  "dune", "glade", "fall", "cloud"];
+/* 场景 → 推荐环境音（键与 sound.js 的 SRC_META 一致）。
+   只做「提示」不做自动化：切场景时如果还没开任何声音，提一句就好 ——
+   用户手动调过的声音组合不能被场景切换悄悄改掉 */
+const SOUND_HINT = {
+  mist: ["pad", "晨间氛围"], deep: ["white", "白噪"], ember: ["fire", "篝火"],
+  star: ["lofi", "Lo-Fi 心流"], snow: ["piano", "钢琴"], lake: ["waves", "海浪"],
+  sea: ["waves", "海浪"], meadow: ["piano", "钢琴"],
+  dune: ["lofi", "Lo-Fi 心流"], glade: ["pad", "晨间氛围"],
+  fall: ["waves", "海浪"], cloud: ["white", "白噪"],
+};
 const HIDE_MOUSE = 3200, HIDE_TOUCH = 4600;
 const BREATH_MS = 19000;      // 4-7-8：吸 4s / 屏 7s / 呼 8s，与 CSS 的 breathe-478 严格同步
 const DUCK_LEVEL = .55;       // 专注中环境音压到 55%
@@ -77,7 +92,7 @@ function build(){
       '<header class="fs-top">' +
         '<div class="fs-brand"><span class="fs-dot"></span><span class="fs-scene-name"></span><span class="fs-bind"></span></div>' +
         '<div class="fs-tools">' +
-          '<button class="fs-tool" data-act="scene" title="选择场景（8 套）">◐</button>' +
+          '<button class="fs-tool" data-act="scene" title="选择场景（12 套）">◐</button>' +
           '<button class="fs-tool" data-act="sound" title="环境音开关（空格在沉浸里是暂停/继续）">♪</button>' +
           '<button class="fs-tool" data-act="close" title="退出沉浸（Esc）">✕</button>' +
         '</div>' +
@@ -95,7 +110,7 @@ function build(){
       '</footer>' +
     '</div>' +
     '<div class="fs-note" hidden></div>' +
-    /* 场景选择面板（8 场景后点「◐」直接选，不再循环切换）：网格按钮 + 每个场景一个色点，
+    /* 场景选择面板（12 场景：点「◐」直接选，不再循环切换）：网格按钮 + 每个场景一个色点，
        点遮罩空白处或 Esc 关闭 */
     '<div class="fs-picker" hidden>' +
       '<div class="fs-picker-box" role="listbox" aria-label="选择场景">' +
@@ -238,7 +253,20 @@ function setScene(id, fade){
   setText(parts.sceneName, SCENES[id]);
   if(active) videoShow(id);       // 换场景同步换片（播放中会被 is-on 淡出，露出 CSS 场景再淡入新的）
 }
-/* ---------- 场景选择面板（8 场景：点「◐」弹出网格直接选） ---------- */
+/* 场景 → 推荐环境音：只在用户主动换场景时提一句，同一场景每次沉浸只说一次，
+   且已经有声音在播时不打扰 —— 绝不动用户的播放状态 */
+let hintShown = null;
+function soundHint(id){
+  const h = SOUND_HINT[id];
+  if(!h || !WB.sound || !WB.ui || !WB.ui.toast) return;
+  if(WB.sound.anyPlaying && WB.sound.anyPlaying()) return;
+  if(!hintShown) hintShown = {};
+  if(hintShown[id]) return;
+  hintShown[id] = true;
+  WB.ui.toast(SCENES[id] + "配「" + h[1] + "」更好听 ♪（声音面板里选）");
+}
+
+/* ---------- 场景选择面板（12 场景：点「◐」弹出网格直接选） ---------- */
 let pickerShown = false, pickerTimer = null;
 function paintPicker(){
   if(!parts) return;
@@ -271,6 +299,7 @@ function onPickerClick(e){
       setScene(id, true);
       WB.theme.set("pomoImmersiveScene", id);   // 在面板里选过就记住（与设置页同一个键）
       paintPicker();
+      soundHint(id);
     }
     closePicker();
     wake();
@@ -582,6 +611,7 @@ function enter(opts){
   if(!s){ WB.ui.toast("先开始一段专注，再进沉浸", "warn"); return; }
   active = true;
   gen++;
+  hintShown = null;                    // 每次进入沉浸，场景推荐提示可以再提一次
   build();
   const my = gen;
   /* 主题/场景/尺寸先落地，避免第一帧闪错配色 */

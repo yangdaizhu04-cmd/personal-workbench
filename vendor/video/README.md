@@ -1,9 +1,9 @@
 # vendor/video —— 沉浸专注层的循环视频背景
 
-八支短片只在**沉浸专注层**里播放（`js/16-immersive.js`）：进入沉浸才加载、退出即停并释放；单文件版与 `html.no-motion` 一律不加载，回落 CSS 场景。
+十二支短片只在**沉浸专注层**里播放（`js/16-immersive.js`）：进入沉浸才加载、退出即停并释放；单文件版与 `html.no-motion` 一律不加载，回落 CSS 场景。
 
-全部 **1920×1080 / 24fps / 无音轨 / 正向无缝循环**，合计 **25.02 MB**。
-版本沿革：v1 是 720p + 波折循环（被评"不真实且不高清"）→ v2/v3 重选素材与循环方式 → v4 换篝火/星野 → v5 由 4 场景扩到 8 场景（先做了一版**室内组**：咖啡馆/书房/雨窗/暖灯）→ **v6（2026-09-22 当晚）室内组被评价「效果非常差」，整体换成「世界自然风光」**：雪山（阿尔卑斯）/ 湖泊 / 碧海 / 草甸。
+全部 **1920×1080 / 24fps / 无音轨 / 正向无缝循环**，合计 **38.68 MB**。
+版本沿革：v1 是 720p + 波折循环（被评"不真实且不高清"）→ v2/v3 重选素材与循环方式 → v4 换篝火/星野 → v5 由 4 场景扩到 8 场景（先做了一版**室内组**：咖啡馆/书房/雨窗/暖灯）→ **v6（2026-09-22 当晚）室内组被评价「效果非常差」，整体换成「世界自然风光」**：雪山（阿尔卑斯）/ 湖泊 / 碧海 / 草甸 → **v7（2026-09-23）8 场景扩到 12（风光 B 组）**：沙丘 / 林间 / 飞瀑 / 云海，口径延续"世界自然风光 + 电影感"。新增 13.66 MB，单支 0.87~7.23 MB。
 
 ## 清单与来源
 
@@ -17,6 +17,19 @@
 | `lake.mp4`（湖泊·8s·0.98MB） | 4998 · Landscape of a large lake during sunset from the air（日落湖湾航拍，山体剪影+暖金天空） | /landscape-of-a-large-lake-during-sunset-from-the-air-4998/ | `assets.mixkit.co/videos/4998/4998-1080.mp4` |
 | `sea.mp4`（碧海·8s·2.16MB） | 5008 · Turquoise blue water bay from above（喀斯特山峰+绿松石水面） | /turquoise-blue-water-bay-from-above-5008/ | `assets.mixkit.co/videos/5008/5008-1080.mp4` |
 | `meadow.mp4`（草甸·8.5s·6.82MB） | 21577 · Landscape of a large open field on a sunny afternoon（草原+远山+乌云压境） | /landscape-of-a-large-open-field-on-a-sunny-afternoon-21577/ | `assets.mixkit.co/videos/21577/21577-1080.mp4` |
+| `dune.mp4`（沙丘·8s·0.87MB） | 4149 · Dunes in the Sahara desert（撒哈拉沙丘延时，大阴影掠过沙脊） | /dunes-in-the-sahara-desert-4149/ | `assets.mixkit.co/videos/4149/4149-1080.mp4` |
+| `glade.mp4`（林间·8s·7.23MB） | 529 · Forest stream in the sunlight（林间溪流，阳光洒在树冠间） | /forest-stream-in-the-sunlight-529/ | `assets.mixkit.co/videos/529/529-1080.mp4` |
+| `fall.mp4`（飞瀑·8s·4.20MB） | 50566 · Beautiful tropical waterfall illuminated by the sun（绿崖白瀑 + 水雾） | /beautiful-tropical-waterfall-illuminated-by-the-sun-falls-on-a-50566/ | `assets.mixkit.co/videos/50566/50566-1080.mp4` |
+| `cloud.mp4`（云海·9s·1.36MB） | 4695 · Clouds covering the mountains（云海之上，黄昏霞光） | /clouds-covering-the-mountains-4695/ | `assets.mixkit.co/videos/4695/4695-1080.mp4` |
+
+### v7 风光 B 组的选材实录（2026-09-23）
+
+**用户的定稿口径**：仍是「世界自然风光 + 电影感」，从用户给的五个方向（沙丘 / 森林晨光 / 瀑布溪流 / 云海 / 秋色枫林）里挑四支。
+
+- **「秋色枫林」整批不可用**：`autumn` 分类页翻遍后，四支候选（14911 秋林阳光 / 17746 秋林与山 / 25127 秋日森林 / 9940 秋日蓝湖森林）的素材页 `copyrightNotice` **全部是 `Mixkit Restricted License`** —— 该分类在当前库位下几乎整批受限，不是个别素材问题。原定五选四因此变成「沙丘 / 林间 / 飞瀑 / 云海」，秋色由「云海之上」承接（详见踩坑 #054）。
+- **缩略图先行筛查（本轮新增的省时流程，建议后续沿用）**：分类页 HTML 正则抓出候选链接 → 按 `-thumb-720-0.jpg` 批量下小图 → `ffmpeg tile` 拼成一张对照图目视筛 → 只对入围的抓素材页核授权。一轮能筛 20 支，避免"下完 100MB 才发现画面不合口径"。
+- **注意 10 万号段（新库 ActiveStorage）的素材**：缩略图与直链都可能返回 403 / 111 字节（如 100195、101507），**别当成 Restricted** —— 先按踩坑 #052 回素材页核直链格式。
+- **被否的候选**（留档避免重复试）：25542（岩壁瀑布，画面平淡）、28341（云林航拍，缩略图即坏图/全黑）、52012（沙漠平原，构图平）、4048（沙漠延时，云影杂乱）、10993（绿松石溪流，**Restricted**）、45315（苔藓绿瀑布，**Restricted**）、14911 / 17746 / 25127 / 9940（秋色组，**Restricted**）。
 
 ### v6 风光组的选材实录（含素材库现状）
 
@@ -32,7 +45,7 @@
 
 ## 授权（Mixkit Stock Video **Free** License）
 
-- 八支素材页的结构化元数据均为：`"copyrightNotice":"Free"`、`"isAccessibleForFree":true`、`"license":"https://mixkit.co/license/#videoFree"`，且**未命中 `Restricted` 档**。
+- 十二支素材页的结构化元数据均为：`"copyrightNotice":"Free"`、`"isAccessibleForFree":true`、`"license":"https://mixkit.co/license/#videoFree"`，且**未命中 `Restricted` 档**。
 - 完整条款：https://mixkit.co/license/#videoFree （正文由前端渲染，静态抓取不到，请以浏览器打开为准）。
 - **它不是 CC0**：可免费商用、免署名，但**不得把素材本身当作素材库再分发/转售**。本目录是「项目自带资源」，属正常使用。
 - **Restricted 档的识别（踩坑 #051）**：① 素材页 `"copyrightNotice":"Mixkit Restricted License"`；② 其 1080 直链返回 **111 字节 XML `AccessDenied`** —— 与「连接被重置」的**限流**是两种失败：限流要等，AccessDenied 等多久都没用。
@@ -55,6 +68,8 @@ ffmpeg -y -ss {start} -t {T+0.6} -i {1080原片} -filter_complex "\
 - **正向无缝循环**（不用波折）：`xfade` 把结尾 F 秒与开头 F 秒交叉溶解，循环点两侧画面连续、无倒放感。
 - **时域降噪按素材定**：夜景/火焰 `hqdn3d=2:2:4:4`~`4:4:8:8`；明亮风景/浅景深静物 `1.2:1.2:2:2` 即可。
 - **运动素材 × 溶解循环的取舍（v6 新坑）**：`meadow` 的近景树叶在风里持续摆动，溶解期必然出现"半透明重影"（按 -ss 换起点无解，因为风一直在吹）。解法是**把溶解加长到 3.5s**——重影摊薄成"风的流动"；实测动态播放比静帧观感自然得多（静帧看四联图会放大这个问题）。选运动素材时优先"主体运动缓慢"的画面（云、水、雾），近景树叶/人物衣物是高风险主体。
+- **v7 四支实际参数**：`dune`（4149，11.4s/30fps，`-ss 0.3`）→ T=8/F=2.5/`1.2`/CRF 24 → 0.87MB（大面积平滑渐变，压缩率极高）；`glade`（529，36.3s/23.976fps，`-ss 18`）→ T=8/F=**2**/`2:2:4:4`/CRF **28** → 7.23MB（树叶最密，CRF 25 时曾飙到 16.9MB，靠强降噪 + 提 CRF 压回 7.23）；`fall`（50566，15.3s/23.976fps，`-ss 1`）→ T=8/F=3.5/`1.2`/CRF 25 → 4.20MB（水雾细节多）；`cloud`（4695，21.96s/25fps，`-ss 2`）→ T=9/F=3/`1.2`/CRF 24 → 1.36MB（天空渐变，CRF 压到 24 防色带）。
+- **循环点连续性怎么量（v7 新增）**：成片的尾帧 = 原片 `start+F` 处那一帧，循环时与首帧（原片 `start`）相接 —— 连续性只取决于**原片在 F 秒内变了多少**，用 `PSNR(帧(start+F), 帧(start))` 量化。现有八支在 15.4~29.8 dB，新支对齐即可；**F 越小循环点越连续，但溶解越硬**，两者一起权衡（详见踩坑 #055）。
 - **v6 四支实际参数**：`snow`（4283，14.4s/30fps，`-ss 0.5`）→ T=8/F=2.5/`hqdn3d=1.2`/CRF 24 → 2.36MB；`lake`（4998，20s，`-ss 1`）→ T=8/F=2.5/`2:2:4:4`/CRF 25 → 0.98MB（剪影画压缩率高）；`sea`（5008，15.1s，`-ss 0.8`）→ T=8/F=2.5/`1.2`/CRF 25 → 2.16MB；`meadow`（21577，15s，`-ss 2.5`）→ T=8.5/F=**3.5**/`1.2`/CRF 25 → 6.82MB（细节最密）。
 
 其余：下载必须带 `Referer: https://mixkit.co/` + 浏览器 UA；**该站对同一 IP 有突发限流**（连续几百 MB 后全部连接重置，等几分钟恢复；单支之间隔 20~25 秒、`--limit-rate` 限速更稳）。
@@ -70,6 +85,8 @@ ffmpeg -y -ss {start} -t {T+0.6} -i {1080原片} -filter_complex "\
 |---|---|---|
 | mist / deep / star | 各自原配色 | 不翻转 |
 | **snow / sea / meadow** | 深色字（素材亮调或中调，深字直接可读） | 不翻转；halo 取浅色（把数字区提亮托住深字） |
+| **dune / fall / cloud**（v7） | 深色字（金沙、白瀑水帘、亮云层都在画面中央，深字直接可读） | 不翻转；halo 取浅色 |
 | **lake** | 深色字 → **视频态翻转成浅字**（日落剪影是大面积暗调） | `#focus-stage.has-video[data-scene="lake"]`，不带主题前缀、暗色主题的特异性更高不会盖它 |
+| **glade**（v7） | 深色字 → **视频态翻转成浅字**（幽绿森林 + 溪流倒影整体暗调） | 同 lake 的手法：`#focus-stage.has-video[data-scene="glade"]`，同样不带主题前缀 |
 - **暗色主题的亮度例外**：全局 `html[data-theme="dark"] .fs-video{filter:brightness(.86)}` 会把**雪山/碧海**这两支明亮素材压成灰调、失掉风景的呼吸感，已给它们单独放宽到 `.97`（可读性由深色 halo 兜底）。
-- **`snow` 的特征动画（雪粒）在 `.fs-fx::before`**、冷光漂移在 `::after`——测试脚本约定"特征动画取 `::before` 的 animationName"，加新场景时注意分层。
+- **特征动画一律放在 `.fs-fx::before`**（冷光/云影一类放 `::after`）——测试脚本约定"特征动画取 `::before` 的 animationName"，加新场景时注意分层。现有对应：`mist`→`fsMist`、`deep`→`fsSway`、`ember`→`fsFlicker`、`star`→`fsTwinkle`、`snow`→`fsSnow`、`lake`/`sea`→`fsShimmer`、`meadow`→`fsSway`、**`dune`→`fsSand`、`glade`→`fsDapple`、`fall`→`fsSpray`、`cloud`→`fsRoll`**（v7 新增；`fall` 的 `::after` 复用 `fsSnow` 做"溅起的水花"）。
