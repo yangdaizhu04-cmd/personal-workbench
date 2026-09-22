@@ -57,14 +57,15 @@ WB.registerModule({
         toggle(s.pomoImmersive, v => WB.theme.set("pomoImmersive", v))),
       row("开始专注时自动进入", "默认手动：点计时卡「沉浸」或按 F 进入",
         toggle(s.pomoImmersiveAuto, v => WB.theme.set("pomoImmersiveAuto", v))),
-      row("沉浸场景", "四套配色；开着动态壁纸时透出壁纸，只铺一层压暗面",
-        seg([["mist", "晨雾"], ["deep", "深海"], ["ember", "篝火"], ["star", "星野"]],
-          s.pomoImmersiveScene, v => WB.theme.set("pomoImmersiveScene", v))),
+      row("沉浸场景", "八套配色（自然四景 + 室内四景）；开着动态壁纸时透出壁纸，只铺一层压暗面",
+        seg([["mist", "晨雾"], ["deep", "深海"], ["ember", "篝火"], ["star", "星野"],
+          ["cafe", "咖啡馆"], ["study", "书房"], ["rain", "雨窗"], ["lamp", "暖灯"]],
+          s.pomoImmersiveScene, v => WB.theme.set("pomoImmersiveScene", v), "grid-4")),
       row("进入时真全屏", "请求浏览器全屏；被拒也能用，只是不占满屏幕",
         toggle(s.pomoImmersiveFull, v => WB.theme.set("pomoImmersiveFull", v))),
       row("引导", "开始前 3-2-1 准备、休息时 4-7-8 呼吸引导、静止 3 秒自动隐藏控件",
         toggle(s.pomoImmersiveGuide, v => WB.theme.set("pomoImmersiveGuide", v))),
-      row("视频背景", "四支 720p 循环短片（共 4.5MB，仅沉浸时加载、退出即释放）；单文件版与「静音动效」下自动改用纯 CSS 场景",
+      row("视频背景", "八支 1080p 循环短片（共 18.2MB，仅沉浸时加载、退出即释放）；单文件版与「静音动效」下自动改用纯 CSS 场景",
         toggle(s.pomoImmersiveVideo, v => WB.theme.set("pomoImmersiveVideo", v))),
       row("专注时压低环境音", "专注运行中把环境音降到约 55%，休息与结束后恢复",
         toggle(s.pomoSoundDuck, v => WB.theme.set("pomoSoundDuck", v))),
@@ -240,8 +241,8 @@ WB.registerModule({
       lab.appendChild(el("span", {class: "thumb"}));
       return lab;
     }
-    function seg(items, cur, onSet){
-      const box = el("div", {class: "seg"});
+    function seg(items, cur, onSet, cls){
+      const box = el("div", {class: "seg" + (cls ? " " + cls : "")});
       items.forEach(([v, label]) => {
         box.appendChild(el("button", {
           class: v === cur ? "on" : "", text: label,

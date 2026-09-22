@@ -206,6 +206,36 @@ for(const target of targets){
   check(target.name, "淡出结束后旧槽位被移除",
     await page.evaluate(() => document.querySelectorAll("#focus-stage .fs-scene").length) === 1);
 
+  /* 5b. 场景选择面板（8 场景：点「◐」弹出网格直接选；Esc 优先关面板）
+     上一段已把场景切到 deep，面板里当前项应是 deep */
+  await page.evaluate(() => document.querySelector('#focus-stage [data-act="scene"]').click());
+  await sleep(400);
+  const pk = await page.evaluate(() => ({
+    open: WB.immersive.pickerOpen(),
+    count: document.querySelectorAll("#focus-stage .fs-pick").length,
+    on: document.querySelector("#focus-stage .fs-pick.on") ? document.querySelector("#focus-stage .fs-pick.on").dataset.pick : "",
+    visible: !document.querySelector("#focus-stage .fs-picker").hidden,
+  }));
+  check(target.name, "场景面板：8 项、当前场景高亮、可见",
+    pk.open && pk.count === 8 && pk.on === "deep" && pk.visible, JSON.stringify(pk));
+  await page.keyboard.press("Escape");
+  await sleep(350);
+  const escp = await page.evaluate(() => ({open: WB.immersive.pickerOpen(), active: WB.immersive.isActive()}));
+  check(target.name, "面板开着时 Esc 只关面板、不退出沉浸", !escp.open && escp.active, JSON.stringify(escp));
+  await page.evaluate(() => document.querySelector('#focus-stage [data-act="scene"]').click());
+  await sleep(350);
+  await page.evaluate(() => document.querySelector('#focus-stage .fs-pick[data-pick="rain"]').click());
+  await sleep(450);
+  const pk2 = await page.evaluate(() => ({
+    scene: document.getElementById("focus-stage").dataset.scene,
+    open: WB.immersive.pickerOpen(),
+    saved: WB.theme.get("pomoImmersiveScene"),
+  }));
+  check(target.name, "面板里选场景：切换生效、记住偏好、面板自动关闭",
+    pk2.scene === "rain" && !pk2.open && pk2.saved === "rain", JSON.stringify(pk2));
+  await page.evaluate(() => WB.immersive.scene("mist", true));   // 回到默认场景，别影响后续断言
+  await sleep(600);
+
   /* 6. 空格 = 暂停/继续（CDP 真实按键） */
   await page.keyboard.press("Space");
   await sleep(300);
@@ -371,14 +401,15 @@ for(const target of targets){
   check(target.name, "no-motion：不加载视频背景（只留 CSS 场景）", m2.vsrc === null, String(m2.vsrc));
   await page.evaluate(() => WB.theme.set("motion", true));
 
-  /* 15. 截图：桌面 1440×900（四套场景）+ 移动 400×800 + 双主题 */
+  /* 15. 截图：桌面 1440×900（八套场景）+ 移动 400×800 + 双主题 */
   await page.mouse.move(700, 500);          // 唤出控件，控件也要入镜
   await sleep(200);
   if(target.name === "folder"){
     await page.setViewport({width: 1440, height: 900});
     await sleep(400);
-    const FX = {mist: "fsMist", deep: "fsSway", ember: "fsFlicker", star: "fsTwinkle"};
-    for(const sc of ["mist", "deep", "ember", "star"]){
+    const FX = {mist: "fsMist", deep: "fsSway", ember: "fsFlicker", star: "fsTwinkle",
+      cafe: "fsBreathe", study: "fsBreathe", rain: "fsBreathe", lamp: "fsLampGlow"};
+    for(const sc of ["mist", "deep", "ember", "star", "cafe", "study", "rain", "lamp"]){
       await page.evaluate(s => WB.immersive.scene(s, true), sc);
       await page.mouse.move(700, 500);
       await sleep(900);

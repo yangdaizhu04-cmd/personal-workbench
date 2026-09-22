@@ -13,8 +13,11 @@
 "use strict";
 const WB = (window.WB = window.WB || {});
 
-const SCENES = {mist: "晨雾", deep: "深海", ember: "篝火", star: "星野"};
-const SCENE_ORDER = ["mist", "deep", "ember", "star"];
+/* 场景表（id → 中文名）。id 同时也是 CSS 的 data-scene 与视频文件名 vendor/video/{id}.mp4；
+   2026-09-22 由 4 场景扩到 8 场景：新增室内组（咖啡馆/书房/雨窗/暖灯），切换由「循环」改为「选择面板」 */
+const SCENES = {mist: "晨雾", deep: "深海", ember: "篝火", star: "星野",
+  cafe: "咖啡馆", study: "书房", rain: "雨窗", lamp: "暖灯"};
+const SCENE_ORDER = ["mist", "deep", "ember", "star", "cafe", "study", "rain", "lamp"];
 const HIDE_MOUSE = 3200, HIDE_TOUCH = 4600;
 const BREATH_MS = 19000;      // 4-7-8：吸 4s / 屏 7s / 呼 8s，与 CSS 的 breathe-478 严格同步
 const DUCK_LEVEL = .55;       // 专注中环境音压到 55%
@@ -73,7 +76,7 @@ function build(){
       '<header class="fs-top">' +
         '<div class="fs-brand"><span class="fs-dot"></span><span class="fs-scene-name"></span><span class="fs-bind"></span></div>' +
         '<div class="fs-tools">' +
-          '<button class="fs-tool" data-act="scene" title="换个场景">◐</button>' +
+          '<button class="fs-tool" data-act="scene" title="选择场景（8 套）">◐</button>' +
           '<button class="fs-tool" data-act="sound" title="环境音开关（空格在沉浸里是暂停/继续）">♪</button>' +
           '<button class="fs-tool" data-act="close" title="退出沉浸（Esc）">✕</button>' +
         '</div>' +
@@ -91,6 +94,15 @@ function build(){
       '</footer>' +
     '</div>' +
     '<div class="fs-note" hidden></div>' +
+    /* 场景选择面板（8 场景后点「◐」直接选，不再循环切换）：网格按钮 + 每个场景一个色点，
+       点遮罩空白处或 Esc 关闭 */
+    '<div class="fs-picker" hidden>' +
+      '<div class="fs-picker-box" role="listbox" aria-label="选择场景">' +
+        SCENE_ORDER.map(id => '<button class="fs-pick" data-pick="' + id + '" role="option" aria-selected="false">' +
+          '<span class="fs-pick-dot" data-scene="' + id + '"></span>' +
+          '<span class="fs-pick-name">' + SCENES[id] + '</span></button>').join("") +
+      '</div>' +
+    '</div>' +
     '<div class="fs-prep" hidden><div class="fs-prep-num"></div><div class="fs-prep-text">收拢注意力，我们开始了</div></div>';
   document.body.appendChild(stage);
 
@@ -101,13 +113,24 @@ function build(){
     controls: q(".fs-controls"), clock: q(".fs-clock"), today: q(".fs-today"),
     sceneName: q(".fs-scene-name"), bind: q(".fs-bind"),
     note: q(".fs-note"), prep: q(".fs-prep"), prepNum: q(".fs-prep-num"),
-    video: q(".fs-video"),
+    video: q(".fs-video"), picker: q(".fs-picker"),
   };
   parts.controls.addEventListener("click", onControlClick);
   q(".fs-tools").addEventListener("click", onToolClick);
+  parts.picker.addEventListener("click", onPickerClick);
   stage.addEventListener("click", onStageClick);
   stage.addEventListener("mousemove", () => wake(HIDE_MOUSE));
   stage.addEventListener("touchstart", () => wake(HIDE_TOUCH), {passive: true});
+  /* 面板开着时 Esc 先关面板、不退出沉浸：capture 阶段拦截并阻断冒泡，
+     不让 main.js 的全局 Esc（退出沉浸）收到 */
+  addEventListener("keydown", e => {
+    if(e.key === "Escape" && pickerShown){
+      e.preventDefault();
+      e.stopPropagation();
+      closePicker();
+      wake();
+    }
+  }, true);
   addEventListener("resize", onResize);
 }
 
@@ -214,9 +237,45 @@ function setScene(id, fade){
   setText(parts.sceneName, SCENES[id]);
   if(active) videoShow(id);       // 换场景同步换片（播放中会被 is-on 淡出，露出 CSS 场景再淡入新的）
 }
-function nextScene(){
-  const i = SCENE_ORDER.indexOf(lastScene);
-  return SCENE_ORDER[(i + 1) % SCENE_ORDER.length];
+/* ---------- 场景选择面板（8 场景：点「◐」弹出网格直接选） ---------- */
+let pickerShown = false, pickerTimer = null;
+function paintPicker(){
+  if(!parts) return;
+  parts.picker.querySelectorAll(".fs-pick").forEach(b => {
+    const on = b.dataset.pick === lastScene;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-selected", on ? "true" : "false");
+  });
+}
+function openPicker(){
+  if(!parts || pickerShown) return;
+  pickerShown = true;
+  clearTimeout(pickerTimer);
+  paintPicker();
+  parts.picker.hidden = false;
+  requestAnimationFrame(() => { if(pickerShown) parts.picker.classList.add("is-on"); });
+}
+function closePicker(){
+  if(!parts || !pickerShown) return;
+  pickerShown = false;
+  parts.picker.classList.remove("is-on");
+  clearTimeout(pickerTimer);
+  pickerTimer = setTimeout(() => { if(parts && !pickerShown) parts.picker.hidden = true; }, 320);
+}
+function onPickerClick(e){
+  const b = e.target.closest("[data-pick]");
+  if(b){
+    const id = b.dataset.pick;
+    if(SCENES[id]){
+      setScene(id, true);
+      WB.theme.set("pomoImmersiveScene", id);   // 在面板里选过就记住（与设置页同一个键）
+      paintPicker();
+    }
+    closePicker();
+    wake();
+    return;
+  }
+  if(!e.target.closest(".fs-picker-box")) closePicker();   // 点遮罩空白处关闭
 }
 
 /* ---------- UI 隐藏：静止自动隐藏 + 点击背景切换 ---------- */
@@ -366,7 +425,7 @@ function onToolClick(e){
   const act = b.dataset.act;
   if(act === "close") exit();
   else if(act === "sound"){ if(WB.sound && WB.sound.toggle) WB.sound.toggle(); paintSoundBtn(); wake(); }
-  else if(act === "scene"){ setScene(nextScene(), true); wake(); }
+  else if(act === "scene"){ pickerShown ? closePicker() : openPicker(); wake(); }
 }
 function onStageClick(e){
   if(e.target.closest(".fs-tools, .fs-controls")) return;
@@ -571,6 +630,7 @@ function exit(){
     parts.note.hidden = true;
     parts.ringwrap.classList.remove("is-breathing");
   }
+  closePicker();                     // 面板若开着，退出时一起收掉（不留「下次进入时闪现」）
   videoUnload();                     // 退出即停并释放视频（不留解码器与缓冲）
   document.body.classList.remove("immersive-on");
   setTimeout(() => { if(my === gen) document.body.classList.remove("immersive-fade"); }, 760);
@@ -633,5 +693,6 @@ WB.immersive = {
   isActive(){ return active; },
   scene: setScene,
   scenes: SCENES,
+  pickerOpen(){ return pickerShown; },
 };
 })();
