@@ -8,7 +8,10 @@ const lists = WB.collection("todoLists");
 const PRIO = {high: {label: "高", cls: "prio-high"}, mid: {label: "中", cls: "prio-mid"}, low: {label: "低", cls: "prio-low"}};
 /* 拖拽排序值：手动排过的项按 order 走，没排过的排到最后（不影响它原本的优先级顺序） */
 const ordOf = t => (typeof t.order === "number" ? t.order : 1e6);
-let viewState = {filter: "today", mode: "list", listId: ""};
+const viewState = {filter: "today", mode: "list", listId: "", q: "", bulk: false, sel: new Set(), showAllDone: false};
+/* 由 render 注入的"只重绘列表"函数：搜索框输入时用它刷新列表，
+   不能走 WB.router.render()（那会重建整行、输入框失焦，打一个字就断） */
+let repaintList = null;
 
 /* ---------- 业务工具 ---------- */
 function allLists(){ return lists.all(); }
@@ -83,8 +86,10 @@ function checkTodo(t, ev){
 /* ---------- 添加/编辑弹窗 ---------- */
 function todoModal(existing, presets){
   const isNew = !existing;
+  /* 新建时沿用上次用过的清单与提前量：天天记在同一个清单里的人，不必每次重选两下 */
+  const last = WB.theme.get("todoLast") || {};
   const t = Object.assign({
-    title: "", prio: "mid", date: WB.bizDate(), listId: "", time: "", remindAhead: "0",
+    title: "", prio: "mid", date: WB.bizDate(), listId: last.listId || "", time: "", remindAhead: last.remindAhead || "0",
     repeat: {type: "none", days: []}, subtasks: [], important: false, urgent: false, note: "",
   }, existing || {}, presets || {});
   if(t.prio === "high"){ t.important = true; t.urgent = true; }
@@ -181,11 +186,21 @@ function todoModal(existing, presets){
         };
         if(isNew) todos.add(patch);
         else todos.update(t.id, patch);
+        // 记住这次的选择，供下次新建时默认沿用
+        WB.theme.set("todoLast", {listId: patch.listId || "", remindAhead: patch.remindAhead || "0"});
         m.close(); WB.router.render();
       }},
     ],
   });
   setTimeout(() => title.focus(), 60);
+}
+
+/* 多选：切换一条的选中态，顺手更新操作条计数，再只重绘列表（不整页重建，连点不闪） */
+let selCountNode = null;
+function togglePick(id){
+  if(viewState.sel.has(id)) viewState.sel.delete(id); else viewState.sel.add(id);
+  if(selCountNode) selCountNode.textContent = "已选 " + viewState.sel.size + " 项";
+  if(repaintList) repaintList();
 }
 
 /* 清单管理 */
@@ -230,17 +245,28 @@ function todoRow(t){
   const l = listOf(t.listId);
   const subDone = (t.subtasks || []).filter(s => s.done).length;
   const subTotal = (t.subtasks || []).length;
-  const row = el("div", {class: "list-row", dataset: {dragId: t.id}});
-  WB.enableDrag(row);
-  row.appendChild(el("button", {
-    html: icon(t.done ? "check-circle" : "circle", 21),
-    "aria-label": t.done ? "标记未完成" : "标记完成",
-    style: {color: t.done ? "var(--ok)" : "var(--accent)", display: "flex", flex: "none",
-      transition: "transform var(--dur-tap) var(--ease-pop)"},
-    onclick: e => checkTodo(t, e),
-  }));
+  const picked = viewState.bulk && viewState.sel.has(t.id);
+  const row = el("div", {class: "list-row" + (picked ? " picked" : ""), dataset: {dragId: t.id}});
+  if(viewState.bulk){
+    /* 多选模式：这一行不参与拖拽，首列换成选择框 */
+    row.appendChild(el("button", {
+      class: "icon-btn", html: icon(picked ? "check-circle" : "circle", 20),
+      "aria-label": picked ? "取消选择" : "选择这条",
+      style: {color: picked ? "var(--accent)" : "var(--ink-3)", flex: "none"},
+      onclick: () => togglePick(t.id),
+    }));
+  }else{
+    WB.enableDrag(row);
+    row.appendChild(el("button", {
+      html: icon(t.done ? "check-circle" : "circle", 21),
+      "aria-label": t.done ? "标记未完成" : "标记完成",
+      style: {color: t.done ? "var(--ok)" : "var(--accent)", display: "flex", flex: "none",
+        transition: "transform var(--dur-tap) var(--ease-pop)"},
+      onclick: e => checkTodo(t, e),
+    }));
+  }
   const mid = el("div", {class: "grow", style: {minWidth: 0, cursor: "pointer"},
-    onclick: () => todoModal(t)});
+    onclick: () => { viewState.bulk ? togglePick(t.id) : todoModal(t); }});   // 多选时整行都是热区
   const titleRow = el("div", {class: "row", style: {gap: "7px"}});
   if(!t.done) titleRow.appendChild(el("span", {class: "prio-dot " + PRIO[t.prio || "mid"].cls}));
   titleRow.appendChild(el("span", {
@@ -406,18 +432,57 @@ WB.registerModule({
       bar.appendChild(chips);
     }
     bar.appendChild(el("span", {class: "grow"}));
+    /* 搜索：输入时只重绘列表（repaintList），不整页重建 —— 否则每敲一个字输入框都被换掉、焦点丢失 */
+    const search = el("input", {class: "input", placeholder: "搜索待办…", style: {flex: "1 1 170px", minWidth: "140px"}});
+    search.value = viewState.q;
+    search.addEventListener("input", WB.debounce(() => { viewState.q = search.value.trim(); if(repaintList) repaintList(); }, 200));
+    bar.appendChild(search);
+    bar.appendChild(el("button", {class: "btn sm" + (viewState.bulk ? " primary" : ""),
+      text: viewState.bulk ? "退出多选" : "多选",
+      onclick: () => { viewState.bulk = !viewState.bulk; viewState.sel.clear(); WB.router.render(); }}));
     bar.appendChild(el("button", {class: "btn primary sm", html: icon("plus", 14) + "<span>新任务（T）</span>",
       onclick: () => todoModal(null)}));
     view.appendChild(bar);
 
+    /* 批量操作条：只在多选模式出现。删除走回收站，撤销条一次可整批还原 */
+    if(viewState.bulk){
+      const ops = el("div", {class: "row", style: {marginBottom: "12px", flexWrap: "wrap", gap: "8px"}});
+      selCountNode = el("span", {class: "small muted", text: "已选 " + viewState.sel.size + " 项"});
+      ops.appendChild(selCountNode);
+      const withPicked = fn => () => {
+        const ids = Array.from(viewState.sel);
+        if(!ids.length){ WB.ui.toast("先点几条吧", "warn"); return; }
+        fn(ids);
+        viewState.sel.clear();
+        WB.router.render();
+      };
+      ops.appendChild(el("button", {class: "btn sm", text: "标记完成", onclick: withPicked(ids => {
+        ids.forEach(id => todos.update(id, {done: true, doneAt: Date.now()}));
+      })}));
+      ops.appendChild(el("button", {class: "btn sm", text: "改到明天", onclick: withPicked(ids => {
+        ids.forEach(id => todos.update(id, {date: WB.addDaysStr(WB.bizDate(), 1)}));
+      })}));
+      ops.appendChild(el("button", {class: "btn sm danger", text: "删除", onclick: withPicked(ids => {
+        todos.removeMany(ids);
+      })}));
+      view.appendChild(ops);
+    }
+
     const content = el("div");
     view.appendChild(content);
-    if(viewState.mode === "quad") quadrantView(content);
-    else{
+    const paint = () => {
+      content.innerHTML = "";
+      if(viewState.mode === "quad"){ quadrantView(content); return; }
       let arr = todos.all();
       if(viewState.listId) arr = arr.filter(t => t.listId === viewState.listId);
+      if(viewState.q){
+        const k = viewState.q.toLowerCase();
+        arr = arr.filter(t => (t.title || "").toLowerCase().includes(k) || (t.note || "").toLowerCase().includes(k));
+      }
       listViewWith(content, arr);
-    }
+    };
+    repaintList = paint;
+    paint();
   },
 
   quickAdd(preset){
@@ -447,7 +512,17 @@ function listViewWith(content, prefiltered){
           WB.router.render();
         }}));
     const list = el("div", {class: "list"});
-    show.slice(0, 60).forEach(t => list.appendChild(todoRow(t)));
+    /* 以前硬切 60 条且不说一声：完成超过 60 件后，更早的记录在界面上凭空消失（数据还在） */
+    const LIMIT = 60;
+    (viewState.showAllDone ? show : show.slice(0, LIMIT)).forEach(t => list.appendChild(todoRow(t)));
+    if(show.length > LIMIT){
+      list.appendChild(el("div", {class: "row", style: {padding: "10px 6px", gap: "10px"}},
+        el("span", {class: "small faint",
+          text: viewState.showAllDone ? "共 " + show.length + " 条" : "仅显示最近 " + LIMIT + " 条（共 " + show.length + " 条）"}),
+        el("span", {class: "grow"}),
+        el("button", {class: "btn sm ghost", text: viewState.showAllDone ? "只看最近 " + LIMIT + " 条" : "查看全部",
+          onclick: () => { viewState.showAllDone = !viewState.showAllDone; if(repaintList) repaintList(); }})));
+    }
     card.appendChild(list);
     content.appendChild(card);
     return;

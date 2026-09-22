@@ -177,6 +177,12 @@ a:hover{text-decoration:underline;}
   background:linear-gradient(100deg, var(--card-2) 40%, var(--card) 50%, var(--card-2) 60%);
   background-size:200% 100%; animation:skShine 1.4s linear infinite;
 }
+/* 行内骨架条：给"等网络"的那块位置先撑个形，避免卡片空着（用户分不清在加载还是坏了） */
+.sk{
+  display:inline-block; vertical-align:middle; border-radius:8px;
+  background:linear-gradient(100deg, var(--card-2) 40%, var(--card) 50%, var(--card-2) 60%);
+  background-size:200% 100%; animation:skShine 1.4s linear infinite;
+}
 
 /* 拖拽重排 FLIP 位移动画（由 06-ui.js 的 draggable 临时挂载）
    用 body 后代选择器提高特异性，压过 .list-row / .card 自带的 transform 过渡；
@@ -414,6 +420,7 @@ textarea.input{resize:vertical; min-height:90px; line-height:1.7;}
   transition:background var(--dur), opacity var(--dur), transform var(--dur);}
 .list-row:last-child{border-bottom:none;}
 .list-row.dragging{opacity:.4;}
+.list-row.picked{background:var(--accent-soft); border-radius:12px;}
 .list-row.drop-target{box-shadow:inset 0 2px 0 var(--accent);}
 
 /* 空状态 */

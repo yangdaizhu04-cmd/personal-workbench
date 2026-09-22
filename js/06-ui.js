@@ -384,6 +384,10 @@ function skeleton(rows = 3){
   for(let i = 0; i < rows; i++) box.appendChild(el("div", {class: "card skeleton"}));
   return box;
 }
+/* 行内骨架条：等网络的那一块先铺几条，数据到了调用方自己 innerHTML="" 清掉 */
+function skLine(width = "100%", height = 12, radius = "8px"){
+  return el("span", {class: "sk", style: {width, height, borderRadius: radius}});
+}
 
 /* ---------- 确认音（WebAudio 合成铃声） ---------- */
 let audioCtx = null;
@@ -421,7 +425,7 @@ function countUp(node, to, {dur = 0.9, suffix = ""} = {}){
 
 Object.assign(WB.ui = {}, {
   toast, undoToast, modal, confirmBox, emptyState, confetti, starBurst, celebrate,
-  ring, draggable, enableDrag, skeleton, chime, countUp, getCtx, motionOff,
+  ring, draggable, enableDrag, skeleton, skLine, chime, countUp, getCtx, motionOff,
   lock, swapIcon, staggerIn, syncScrim,
 });
 WB.draggable = draggable;

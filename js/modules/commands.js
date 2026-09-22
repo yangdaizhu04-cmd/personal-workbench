@@ -14,10 +14,12 @@ function parseDateWords(text){
     const m = clean.match(re);
     if(m){ const r = fn(m); if(r){ date = r; clean = clean.replace(re, "").trim(); } }
   };
-  rep(/^\s*(大后天)/, () => WB.dateStr(new Date(today.getTime() + 3 * 86400000)));
-  rep(/^\s*(后天)/, () => WB.dateStr(new Date(today.getTime() + 2 * 86400000)));
-  rep(/^\s*(明天)/, () => WB.dateStr(new Date(today.getTime() + 86400000)));
-  rep(/^\s*(今天)/, () => WB.bizDate());
+  /* 允许出现在句中，但要求前面是空格或开头：「交周报 明天 15:00」能识别，
+     而「整理明天的会议纪要」不会误伤（"明天"前没有分隔） */
+  rep(/(?:^|\s)(大后天)/, () => WB.dateStr(new Date(today.getTime() + 3 * 86400000)));
+  rep(/(?:^|\s)(后天)/, () => WB.dateStr(new Date(today.getTime() + 2 * 86400000)));
+  rep(/(?:^|\s)(明天)/, () => WB.dateStr(new Date(today.getTime() + 86400000)));
+  rep(/(?:^|\s)(今天)/, () => WB.bizDate());
   rep(/\s*(下周|下周|下周)([一二三四五六日天])/, m => {
     const want = cnNum.indexOf(m[2]);
     const cur = today.getDay();
@@ -39,7 +41,14 @@ function parseDateWords(text){
     if(d < new Date(today.getFullYear(), today.getMonth(), today.getDate())) d = new Date(y + 1, +m[1] - 1, +m[2]);
     return WB.dateStr(d);
   });
-  return {date, clean};
+  /* 时刻：15:00 / 15点30 / 9点（前面要有空白或位于开头，避免误伤标题里的数字） */
+  let time = "";
+  const tm = clean.match(/(?:^|\s)([01]?\d|2[0-3])[:：点](\d{1,2})?分?/);
+  if(tm){
+    time = String(Number(tm[1])).padStart(2, "0") + ":" + (tm[2] ? String(Number(tm[2])).padStart(2, "0") : "00");
+    clean = clean.replace(tm[0], " ").trim();
+  }
+  return {date, clean, time};
 }
 
 /* ---------- 数据收集 ---------- */
@@ -120,7 +129,7 @@ function buildItems(q){
   if(!t){
     out.length = Math.min(out.length, 6);
     /* 这三条是说明文字，不是命令：标 info 后不可点、上下键会跳过（以前点下去只是把面板关掉，像点错了） */
-    out.push({group: "捕捉", icon: "plus", label: "输入文字回车 → 新待办（支持 明天/后天/周五/3月5日）", hint: "", info: true});
+    out.push({group: "捕捉", icon: "plus", label: "输入文字回车 → 新待办（支持 明天/周五/3月5日/15:00）", hint: "", info: true});
     out.push({group: "捕捉", icon: "edit", label: "以「记 」开头回车 → 新笔记（#标签自动归类）", hint: "", info: true});
     out.push({group: "捕捉", icon: "translate", label: "「翻译 xxx」→ 中英互译", hint: "", info: true});
     focusItems();     // 放在 out.length 截断之后，否则会被砍掉
@@ -141,10 +150,17 @@ function buildItems(q){
       const parsed = parseDateWords(t);
       const title = parsed.clean || t;
       const date = parsed.date || WB.bizDate();
+      /* 日期与时刻一起写进待办：「明天 15:00 交周报」一句话成型，
+         以前只能先建成"明天"的待办、再打开弹窗补时刻 */
+      const when = (parsed.date ? WB.relDayLabel(parsed.date) : "") + (parsed.time ? (parsed.date ? " " : "今天 ") + parsed.time : "");
       out.push({group: "捕捉", icon: "check-circle",
-        label: "新待办：" + title + (parsed.date ? "（" + WB.relDayLabel(parsed.date) + "）" : ""),
+        label: "新待办：" + title + (when ? "（" + when + "）" : ""),
         hint: "回车添加",
-        exec: () => { WB.collection("todos").add({title, prio: "mid", date, done: false}); WB.ui.toast("已添加到 " + WB.relDayLabel(date)); WB.router.render(); }});
+        exec: () => {
+          WB.collection("todos").add({title, prio: "mid", date, time: parsed.time || "", done: false});
+          WB.ui.toast("已添加到 " + WB.relDayLabel(date) + (parsed.time ? " " + parsed.time : ""));
+          WB.router.render();
+        }});
       out.push({group: "捕捉", icon: "edit", label: "或存为笔记：" + t, hint: "Shift+回车", alt: true,
         exec: () => { WB.collection("notes").add({content: t, tags: WB.md.extractTags(t)}); WB.ui.toast("已存入笔记"); }});
     }

@@ -145,7 +145,9 @@ WB.registerModule({
 
     const right = el("div", {class: "grow", id: "weather-mini",
       style: {textAlign: "right", fontSize: "13px", color: "var(--ink-2)"}});
-    right.innerHTML = '<span class="faint">天气</span> 加载中…';
+    /* 骨架条代替"加载中…"：慢网下也有形状，数据到了 renderMini 会清空重填 */
+    right.appendChild(el("div", {class: "row", style: {justifyContent: "flex-end", gap: "8px"}},
+      WB.ui.skLine("22px", "22px", "50%"), WB.ui.skLine("96px", "14px")));
     if(WB.weather && WB.weather.renderMini) WB.weather.renderMini(right);
 
     return el("div", {class: "card hoverable"},
@@ -421,6 +423,10 @@ WB.registerModule({
       el("div", {class: "card-title", html: icon("wallet", 18) + "<span>汇率速览</span>"}));
     const body = el("div", {class: "row", style: {flexWrap: "wrap", gap: "6px"}});
     card.appendChild(body);
+    // 先用骨架条占位（慢网时卡片不至于空着），paint 会整体清空重填
+    if(WB.rates && WB.rates.get){
+      [0, 1, 2].forEach(() => body.appendChild(WB.ui.skLine("62px", "26px", "999px")));
+    }
     const paint = (data, cached) => {
       body.innerHTML = "";
       const list = WB.theme.get("currencies") || ["USD", "EUR", "JPY", "HKD"];

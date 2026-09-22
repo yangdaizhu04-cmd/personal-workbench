@@ -14,6 +14,7 @@ const DEFAULTS = {
   pomodoroFocus: 25, pomodoroRest: 5,
   pomoSound: true, pomoFlash: true, pomoTitle: true,
   remindToast: true,             // 待办到点：无系统通知权限时在页面内弹提示（独立于番茄「全屏提示动画」开关）
+  todoLast: {},                  // 上次新建待办用的清单与提前量（下次默认沿用）
   /* 沉浸专注层（js/16-immersive.js）：默认手动进入，快捷键 F 或计时卡「沉浸」 */
   pomoImmersive: true,           // 总开关
   pomoImmersiveAuto: false,      // 开始专注时自动进入
