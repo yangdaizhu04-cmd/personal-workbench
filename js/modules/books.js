@@ -4,6 +4,12 @@
 const WB = (window.WB = window.WB || {});
 const { el, icon, esc } = WB;
 
+/* 豆瓣搜索入口用**老版服务端渲染**页（cat=1001 读书分类）。
+   新版 search.douban.com/book/subject_search 是纯前端 SPA，实测两种失败形态：
+   ① 资源被拦（jQuery/main.js 拿不到 → "正在搜索…" 永远转圈）；② 稍多几次就返回「搜索访问太频繁」。
+   老版把「相关书籍」直接渲染在 HTML 里，脚本挂掉也照样能看结果（见踩坑 #058）。 */
+const DOUBAN_SEARCH = "https://www.douban.com/search?cat=1001&q=";
+
 function dailyPick(dateStr){
   const all = WB.content.BOOK_THEMES.flatMap(t => t.books.map(b => ({theme: t.name, title: b[0], author: b[1], line: b[2]})));
   return WB.pickDaily(all, dateStr || WB.bizDate());
@@ -30,7 +36,7 @@ WB.registerModule({
         el("div", {class: "small", style: {marginTop: "6px", lineHeight: 1.9}, text: "「" + b.line + "」"}))));
     const actions = el("div", {class: "row", style: {gap: "8px", flexWrap: "wrap", marginTop: "10px"}});
     actions.appendChild(el("button", {class: "btn sm primary", text: "豆瓣搜索",
-      onclick: () => window.open("https://search.douban.com/book/subject_search?search_text=" + encodeURIComponent(b.title), "_blank")}));
+      onclick: () => window.open(DOUBAN_SEARCH + encodeURIComponent(b.title), "_blank")}));
     actions.appendChild(el("button", {class: "btn sm", text: "微信读书",
       onclick: () => window.open("https://weread.qq.com/web/search/books?keyword=" + encodeURIComponent(b.title), "_blank")}));
     actions.appendChild(el("button", {class: "btn sm", text: "📥 收进书影剧馆",
