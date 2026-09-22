@@ -40,6 +40,7 @@ WB.registerModule({
   sub: () => "数据完全本地 · 只为看见自己",
 
   render(view){
+    if(!WB.ui.whenLib(() => typeof echarts !== "undefined", view)) return;   // 图表库还在后台加载
     disposeCharts();
     const D = defs();
     const days = [];

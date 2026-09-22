@@ -7,6 +7,21 @@ const WB = (window.WB = window.WB || {});
 const { el, esc, icon, $$ } = WB;
 const motionOff = () => document.documentElement.classList.contains("no-motion");
 
+/* ---------- 软键盘让位 ----------
+   移动端弹窗贴底，键盘弹出会盖住正在输入的字段。把「布局视口 − 可视视口」的差值写进 --kb，
+   由 CSS 垫在弹窗遮罩底部，弹窗随之抬起；只影响浮层，不动页面本身布局 */
+(function watchKeyboard(){
+  const vv = window.visualViewport;
+  if(!vv) return;
+  const sync = () => {
+    const gap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty("--kb", (gap > 80 ? gap : 0) + "px");
+  };
+  vv.addEventListener("resize", sync);
+  vv.addEventListener("scroll", sync);
+  sync();
+})();
+
 /* ---------- 冷却闸门（交互互斥） ----------
    ms 必须 ≥ 对应 CSS 动画时长，否则动画会叠加；返回 false = 冷却中，调用方直接忽略本次操作 */
 const locks = new Map();
@@ -389,6 +404,18 @@ function skLine(width = "100%", height = 12, radius = "8px"){
   return el("span", {class: "sk", style: {width, height, borderRadius: radius}});
 }
 
+/* ---------- 大库就绪守卫 ----------
+   ECharts（约 1MB）已从首屏挪到启动脚本之后加载。页面真要画图而库还没就绪时，
+   先占位并轮询，库到位后自动重渲染 —— 不让用户看到一张空卡片或一句报错 */
+function whenLib(ready, view){
+  if(ready()) return true;
+  view.appendChild(el("div", {class: "card"},
+    emptyState("trend-up", "图表库加载中…", "正在后台加载，马上就好")));
+  const t = setInterval(() => { if(ready()){ clearInterval(t); WB.router.render(); } }, 200);
+  setTimeout(() => clearInterval(t), 10000);
+  return false;
+}
+
 /* ---------- 确认音（WebAudio 合成铃声） ---------- */
 let audioCtx = null;
 function getCtx(){
@@ -425,7 +452,7 @@ function countUp(node, to, {dur = 0.9, suffix = ""} = {}){
 
 Object.assign(WB.ui = {}, {
   toast, undoToast, modal, confirmBox, emptyState, confetti, starBurst, celebrate,
-  ring, draggable, enableDrag, skeleton, skLine, chime, countUp, getCtx, motionOff,
+  ring, draggable, enableDrag, skeleton, skLine, whenLib, chime, countUp, getCtx, motionOff,
   lock, swapIcon, staggerIn, syncScrim,
 });
 WB.draggable = draggable;

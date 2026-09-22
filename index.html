@@ -98,7 +98,6 @@
 <div id="cmdk-root" hidden></div>
 
 <!-- ===== vendor ===== -->
-<script src="vendor/echarts.min.js"></script>
 <script src="vendor/gsap.min.js"></script>
 <script src="vendor/solarlunar.min.js"></script>
 <script src="vendor/qrcode.js"></script>
@@ -155,5 +154,8 @@
 <script src="vendor/threeui/islands/core.js"></script>
 <!-- ===== boot ===== -->
 <script src="js/main.js"></script>
+<!-- 图表库（约 1MB）放最后：不再阻塞首屏启动与入场动画。
+     统计/健康页若碰上它还没就绪，会先占位并在库就绪后自动重渲染 -->
+<script src="vendor/echarts.min.js"></script>
 </body>
 </html>

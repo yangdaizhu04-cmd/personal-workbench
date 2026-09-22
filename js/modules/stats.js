@@ -125,6 +125,7 @@ WB.registerModule({
   sub: () => "数据会说话",
 
   render(view){
+    if(!WB.ui.whenLib(() => typeof echarts !== "undefined", view)) return;   // 图表库还在后台加载
     disposeCharts();
     let range = 30;
 

@@ -6,13 +6,20 @@ const { el, icon, esc } = WB;
 const habits = WB.collection("habits");
 const logs = WB.collection("habitLogs");
 
+/* 渲染期打卡记录快照：logOf 原本每次调用都全量 JSON.parse 一遍 habitLogs，
+   而近两周热区要跑 14×8 次、每个习惯的连续天数还要再循环若干次 → 打卡一多就卡一下。
+   快照在渲染开始时重建，写入后立刻失效 */
+let logsSnap = null;
+function logsAll(){ return logsSnap || (logsSnap = logs.all()); }
+function invalidateLogs(){ logsSnap = null; }
 function logOf(habitId, date){
-  return logs.all().find(l => l.habitId === habitId && l.date === date) || null;
+  return logsAll().find(l => l.habitId === habitId && l.date === date) || null;
 }
 function setLog(habitId, date, count){
   const ex = logOf(habitId, date);
   if(ex) logs.update(ex.id, {count});
   else logs.add({habitId, date, count});
+  invalidateLogs();
 }
 function isDone(h, log){
   if(!log) return false;
@@ -31,13 +38,13 @@ function streakOf(habitId){
   return n;
 }
 function totalOf(habitId){
-  return logs.all().filter(l => l.habitId === habitId).reduce((s, l) => s + (l.count || 0), 0);
+  return logsAll().filter(l => l.habitId === habitId).reduce((s, l) => s + (l.count || 0), 0);
 }
 
 /* 今日第一次打卡更隆重 */
 function firstToday(){
   const today = WB.bizDate();
-  return !WB.store.get("habitLogs", []).some(l => l.date === today && l.count > 0);
+  return !logsAll().some(l => l.date === today && l.count > 0);
 }
 function habitModal(existing){
   const isNew = !existing;
@@ -135,6 +142,7 @@ WB.registerModule({
   },
 
   render(view){
+    invalidateLogs();   // 每次整页渲染前重建打卡快照（外部改了记录也能拿到最新）
     const dateStr = WB.bizDate();
     const hs = habits.all().filter(h => !h.archived);
 
