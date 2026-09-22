@@ -1,6 +1,7 @@
-/* modules/sound.js —— 声音面板：CC0 真实录音(本地 URL 加载) / 合成白噪 / 生成式专注音乐 / 本地音乐(IndexedDB) / 我的音频库
-   雨声/篝火优先加载 vendor/audio 下的 CC0 录音（文件 URL 加载、不内嵌；断网/file 缺失时自动回落 WebAudio 合成），
-   其余音源为实时合成，断网可用；多路混合、独立音量 */
+/* modules/sound.js —— 声音面板：真实录音(本地 URL 加载) / 合成兜底 / 本地音乐(IndexedDB) / 我的音频库
+   七路音源：雨声/海浪/篝火/钢琴/白噪/晨间氛围/Lo-Fi。前四路 2026-09-22 换入 pixel-town 项目的
+   Pixabay 录音（Content License：免费商用、免署名），后三路仍为 CC0（OpenGameArt）；
+   文件 URL 加载、不内嵌，断网/文件缺失时自动回落 WebAudio 合成；多路混合、独立音量 */
 (function(){
 "use strict";
 const WB = (window.WB = window.WB || {});
@@ -31,7 +32,7 @@ function ensureMaster(){
 /* ---------- 偏好 ---------- */
 const DEF = {
   active: {},                    // {rain:true, white:false, fire:false, piano:false, pad:false, lofi:false, local:false, url:false}
-  vol: {rain:.5, white:.4, fire:.5, piano:.5, pad:.45, lofi:.5, local:.8, url:.8, master:.9},
+  vol: {rain:.5, waves:.45, white:.4, fire:.5, piano:.5, pad:.45, lofi:.5, local:.8, url:.8, master:.9},
   localMode: "order", urlId: "",
 };
 function prefs(){ return Object.assign({}, DEF, WB.store.get("soundPrefs", {})); }
@@ -97,11 +98,24 @@ const makers = {
     }, 160);
     return {stop(){ try{ n.src.stop(); }catch(e){} clearInterval(timer); }};
   },
+  waves(c, out){ // 海浪：布朗噪低通打底 + LFO 缓慢起伏模拟浪涌 + 高频浪花
+    const n = loopNoise(c, {brown: true, filterType: "lowpass", freq: 650});
+    const g = c.createGain(); g.gain.value = .7;
+    n.node.connect(g).connect(out);
+    const lfo = c.createOscillator(); lfo.frequency.value = .09; // 约 11s 一轮浪涌
+    const lg = c.createGain(); lg.gain.value = .3;
+    lfo.connect(lg).connect(g.gain); lfo.start();
+    const foam = loopNoise(c, {brown: false, filterType: "highpass", freq: 2500});
+    const fg = c.createGain(); fg.gain.value = .05;
+    foam.node.connect(fg).connect(out);
+    return {stop(){ try{ n.src.stop(); foam.src.stop(); lfo.stop(); }catch(e){} }};
+  },
 };
 
-/* ---------- 真实录音音源（CC0，来源与处理见 vendor/audio/README.md；文件 URL 加载，不内嵌） ---------- */
+/* ---------- 真实录音音源（来源与处理见 vendor/audio/README.md；文件 URL 加载，不内嵌） ---------- */
 const REAL_SRC = {
   rain: "vendor/audio/rain.ogg",
+  waves: "vendor/audio/waves.ogg",
   fire: "vendor/audio/fire.ogg",
   white: "vendor/audio/white.ogg",
   piano: "vendor/audio/piano.ogg",
@@ -459,8 +473,8 @@ let panelRoot = null;
 function refreshPanel(){ if(panelRoot) renderPanelInto(panelRoot); }
 
 const SRC_META = [
-  ["rain", "雨声", "rain"], ["white", "白噪", "wind"], ["fire", "篝火", "flame"],
-  ["piano", "雨夜钢琴", "music"], ["pad", "晨间氛围", "sun"], ["lofi", "Lo-Fi 心流", "sparkle"],
+  ["rain", "雨声", "rain"], ["waves", "海浪", "droplet"], ["white", "白噪", "wind"], ["fire", "篝火", "flame"],
+  ["piano", "钢琴", "music"], ["pad", "晨间氛围", "sun"], ["lofi", "Lo-Fi 心流", "sparkle"],
 ];
 function renderPanelInto(root){
   panelRoot = root;
@@ -479,7 +493,7 @@ function renderPanelInto(root){
         class: "chip clickable" + (on ? "" : " plain"),
         html: (loading ? '<span class="wb-mini-spin"></span>' : icon(ic, 14)) + "<span>" + showLabel + "</span>",
         style: on ? {background: "var(--accent-soft)"} : {},
-        title: isReal ? (st === "synth" ? "录音文件缺失，当前为合成音源" : "CC0 真实录音 · 本地文件无缝循环（vendor/audio）") : "",
+        title: isReal ? (st === "synth" ? "录音文件缺失，当前为合成音源" : "真实录音 · 本地文件无缝循环（vendor/audio）") : "",
         onclick: () => {
           const st = prefs();
           if(st.active[key]){ st.active[key] = false; stopSource(key); }

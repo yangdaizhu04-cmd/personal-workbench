@@ -90,7 +90,7 @@ if(process.argv.includes("--cloud")){
   // SW 预缓存清单自动生成：静态 shell + islands 核心包；场景页/书架走运行时缓存（首次打开后离线可用）
   const shell = ["./", "./index.html", "./manifest.webmanifest",
     "./css/main.css", "./vendor/font/lxgw-wenkai-subset.woff2",
-    "./vendor/audio/rain.ogg", "./vendor/audio/fire.ogg",
+    "./vendor/audio/rain.ogg", "./vendor/audio/waves.ogg", "./vendor/audio/fire.ogg",
     "./vendor/audio/white.ogg", "./vendor/audio/piano.ogg",
     "./vendor/audio/pad.ogg", "./vendor/audio/lofi.ogg",
     "./vendor/threeui/islands/core.js"];

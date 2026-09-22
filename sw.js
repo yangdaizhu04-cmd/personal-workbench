@@ -1,12 +1,13 @@
 /* Service Worker —— 云端版专用（本地 file:// 双击版自动跳过注册）
    策略：静态资源 cache-first + 后台更新；API 请求不缓存 */
-const CACHE = "wb-cache-v2";
+const CACHE = "wb-cache-v3";
 const SHELL = [
   "./",
   "./index.html",
   "./css/main.css",
   "./manifest.webmanifest",
-  "./vendor/audio/rain.ogg",   // CC0 录音预缓存（六源合计约 8MB，保证离线可用）
+  "./vendor/audio/rain.ogg",   // 录音预缓存（七源合计约 6MB，保证离线可用）
+  "./vendor/audio/waves.ogg",
   "./vendor/audio/fire.ogg",
   "./vendor/audio/white.ogg",
   "./vendor/audio/piano.ogg",

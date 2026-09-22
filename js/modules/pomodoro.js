@@ -351,7 +351,7 @@ WB.registerModule({
       gardenView());
     grid.appendChild(garden);
     const soundCard = el("div", {class: "card"},
-      el("div", {class: "card-title", html: icon("music", 18) + "<span>声音面板</span><span class='card-sub'>四源混合 · 空格播放/暂停</span>"}));
+      el("div", {class: "card-title", html: icon("music", 18) + "<span>声音面板</span><span class='card-sub'>七源混合 · 空格播放/暂停</span>"}));
     if(WB.sound && WB.sound.renderPanel) WB.sound.renderPanel(soundCard);
     grid.appendChild(soundCard);
     view.appendChild(grid);
