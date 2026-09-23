@@ -11,7 +11,8 @@ node_modules/
 .vscode/
 .idea/
 
-# 扩展构建产物
+# 构建产物
 extension/dist/
-*.crx
+desktop/dist/
 desktop/src-tauri/target/
+*.crx

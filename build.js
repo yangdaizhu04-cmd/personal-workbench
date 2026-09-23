@@ -103,3 +103,14 @@ if(process.argv.includes("--cloud")){
   fs.cpSync("vendor/audio", path.join(dir, "vendor", "audio"), {recursive: true});
   console.log("✅ 云端产物已写入 cloud/hosting/（index.html + manifest + sw.js + 音源，预缓存 %d 项）", shell.length);
 }
+
+/* Tauri 桌面版：完整文件夹拷贝（含场景视频/窗景页/3D 书架），与网页文件夹版功能 100% 一致 */
+if(process.argv.includes("--tauri")){
+  const dir = safePath("desktop/dist");
+  fs.rmSync(dir, {recursive: true, force: true});
+  fs.mkdirSync(dir, {recursive: true});
+  fs.copyFileSync("index.html", path.join(dir, "index.html"));
+  fs.copyFileSync("manifest.webmanifest", path.join(dir, "manifest.webmanifest"));
+  for(const d of ["css", "js", "vendor"]) fs.cpSync(d, path.join(dir, d), {recursive: true});
+  console.log("✅ Tauri 完整目录产物已写入 desktop/dist/（与文件夹版同一份资源）");
+}
