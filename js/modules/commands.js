@@ -142,6 +142,11 @@ function buildItems(q){
         if(name.includes(t)) out.push({group: "仪式", icon: ic, label: name, hint: "打开", exec: run});
       });
   }
+  // 晨雾年报（Wrapped 式年度回顾）
+  if(t && WB.yearReview && "晨雾年报回顾annual".includes(t)){
+    out.push({group: "年报", icon: "sparkle", label: "晨雾年报", hint: "打开",
+      exec: () => WB.yearReview.open()});
+  }
   if(!t){
     out.length = Math.min(out.length, 6);
     /* 这三条是说明文字，不是命令：标 info 后不可点、上下键会跳过（以前点下去只是把面板关掉，像点错了） */

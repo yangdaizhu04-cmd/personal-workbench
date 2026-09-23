@@ -424,6 +424,13 @@ WB.registerModule({
       wrap.appendChild(btn);
     }
 
+    /* ===== 年报入口：12 月浮现（平时走 ⌘K「晨雾年报」） ===== */
+    if(new Date().getMonth() === 11 && WB.yearReview){
+      wrap.appendChild(el("button", {class: "btn sm ghost", style: {margin: "2px auto", display: "flex"},
+        html: icon("sparkle", 14) + "<span>看看 " + dateStr.slice(0, 4) + " 的晨雾年报</span>",
+        onclick: () => WB.yearReview.open()}));
+    }
+
     view.appendChild(wrap);
   },
 
