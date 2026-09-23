@@ -1,8 +1,94 @@
-/* modules/settings.js —— 设置：主题/动效/番茄/提醒/数据管理/快捷键/关于 */
+/* modules/settings.js —— 设置：主题/动效/番茄/提醒/数据管理/WebDAV/快捷键/关于 */
 (function(){
 "use strict";
 const WB = (window.WB = window.WB || {});
 const { el, icon } = WB;
+
+/* ---- WebDAV 同步引擎（浏览器直连，Basic 认证；目录不存在时先 MKCOL 再重试一次） ---- */
+const WBDAV_FILE = "personal-workbench-backup.json";
+function wdBase(){
+  const c = WB.store.get("webdav", {});
+  let u = (c.url || "").trim();
+  if(!u) return null;
+  if(!/^https?:\/\//i.test(u)) u = "https://" + u;
+  return {base: u.endsWith("/") ? u : u + "/", c};
+}
+function wdHeaders(c){
+  return {"Authorization": "Basic " + btoa(unescape(encodeURIComponent(c.user + ":" + c.pass)))};
+}
+async function wdPut(base, c, body){
+  const opts = {method: "PUT", headers: Object.assign({"Content-Type": "application/json"}, wdHeaders(c)), body};
+  let res = await fetch(base.base + WBDAV_FILE, opts);
+  if((res.status === 404 || res.status === 409) && !base._mkcol){
+    base._mkcol = true;
+    await fetch(base.base, {method: "MKCOL", headers: wdHeaders(c)}).catch(() => {});
+    res = await fetch(base.base + WBDAV_FILE, opts);
+  }
+  return res;
+}
+/* 快照口径：剔除 webdav* 自身键；哈希只算数据体（__meta.exportedAt 每次都变，参与即永远"有变化"） */
+function webdavData(){
+  const data = WB.store.exportAll();
+  Object.keys(data).forEach(k => { if(k.startsWith("webdav")) delete data[k]; });
+  return data;
+}
+function webdavSnapshot(){
+  const data = webdavData();
+  return JSON.stringify(Object.assign(data, {__meta: {app: "个人工作台", version: 1, exportedAt: new Date().toISOString()}}), null, 2);
+}
+function webdavDataHash(){
+  return webdavHash(JSON.stringify(webdavData()));
+}
+WB.webdav = {
+  async upload(){
+    const base = wdBase();
+    if(!base) return {ok: false, err: "先填服务器目录"};
+    if(!base.c.user || !base.c.pass) return {ok: false, err: "先填账号与应用密码"};
+    try{
+      const body = webdavSnapshot();
+      const res = await wdPut(base, base.c, body);
+      if(!res.ok) return {ok: false, err: "HTTP " + res.status + (res.status === 0 ? "（跨域被拦截或网络不通）" : "")};
+      WB.store.set("webdavLastHash", webdavDataHash());
+      WB.store.set("webdavLastPush", Date.now());
+      return {ok: true, kb: Math.round(body.length / 1024)};
+    }catch(e){ return {ok: false, err: e.message + "（跨域被拦截或网络不通）"}; }
+  },
+  async pull(){
+    const base = wdBase();
+    if(!base) return {ok: false, err: "先填服务器目录"};
+    try{
+      const res = await fetch(base.base + WBDAV_FILE, {headers: wdHeaders(base.c)});
+      if(!res.ok) return {ok: false, err: "HTTP " + res.status + "（没有备份或目录不对）"};
+      const data = JSON.parse(await res.text());
+      if(!data || typeof data !== "object" || !data.settings) return {ok: false, err: "文件不是本应用的备份"};
+      return {ok: true, data};
+    }catch(e){ return {ok: false, err: e.message + "（跨域被拦截或网络不通）"}; }
+  },
+  hashNow(){ return webdavDataHash(); },   // 调试/探针用：当前数据体哈希
+  /* 每天首次打开且数据有变化时静默上传一次（30s 后执行，避开启动竞争） */
+  async autoCheck(){
+    const c = WB.store.get("webdav", {});
+    if(!c.auto || !c.url) return;
+    const today = WB.bizDate();
+    if(WB.store.get("webdavAuto:" + today, false)) return;
+    const body = webdavSnapshot();
+    if(webdavDataHash() === WB.store.get("webdavLastHash", "")) return;
+    const base = wdBase();
+    const res = await wdPut(base, c, body);
+    if(res.ok){
+      WB.store.set("webdavAuto:" + today, true);
+      WB.store.set("webdavLastHash", webdavDataHash());
+      WB.ui.toast("已自动备份到 WebDAV ✦");
+    }
+  },
+};
+function webdavHash(str){   // djb2：够用来判断"数据变没变"
+  let h = 5381;
+  for(let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  return String(h);
+}
+setTimeout(() => { WB.webdav.autoCheck().catch(e => console.error("[webdav]", e)); }, 30000);
+
 
 WB.registerModule({
   id: "settings",
@@ -254,6 +340,53 @@ WB.registerModule({
       cloudCard.appendChild(el("div", {class: "small faint", text: "云端版可用：自动双向同步 + 每日快照 + 手动备份。本地双击版请用 JSON 导出备份。"}));
     }
     wrap.appendChild(cloudCard);
+
+    /* --- WebDAV 同步（坚果云/Nextcloud/群晖…填自己的账号） --- */
+    const wcfg = WB.store.get("webdav", {url: "", user: "", pass: "", auto: false});
+    const wField = (label, key, type) => {
+      const input = el("input", {class: "input", type: type || "text", value: wcfg[key] || "",
+        placeholder: key === "url" ? "https://dav.jianguoyun.com/dav/myfolder/" : "", style: {maxWidth: "320px"}});
+      input.addEventListener("change", () => {
+        const b = WB.store.get("webdav", {url: "", user: "", pass: ""});
+        b[key] = input.value.trim();
+        WB.store.set("webdav", b);
+        WB.ui.toast("已保存（仅存本机）");
+      });
+      return row(label, "", input);
+    };
+    wrap.appendChild(sectionCard("cloud", "WebDAV 同步", [
+      el("div", {class: "small muted", style: {marginBottom: "8px"},
+        text: "填一个 WebDAV 目录地址（坚果云：dav.jianguoyun.com/dav/你的文件夹/，密码用「应用密码」）。凭据只存本机，浏览器直连你填的服务器。注意：部分服务（如坚果云）不开放浏览器跨域，若始终失败请换 Nextcloud / InfiniCLOUD 等支持 CORS 的服务。"}),
+      wField("服务器目录", "url"),
+      wField("账号", "user"),
+      wField("应用密码", "pass", "password"),
+      row("上传备份", "全量数据打包为 JSON 上传到该目录（同名覆盖）",
+        el("button", {class: "btn sm", html: icon("upload", 15) + "<span>上传</span>",
+          onclick: async () => {
+            const r = await WB.webdav.upload();
+            if(r.ok) WB.ui.toast("已上传备份（" + (r.kb || "?") + " KB）");
+            else WB.ui.toast("上传失败：" + r.err, "warn");
+          }})),
+      row("拉取恢复", "从该目录读回备份，合并或覆盖（覆盖前自动拍快照）",
+        el("button", {class: "btn sm", html: icon("download", 15) + "<span>拉取</span>",
+          onclick: async () => {
+            const r = await WB.webdav.pull();
+            if(!r.ok){ WB.ui.toast("拉取失败：" + r.err, "warn"); return; }
+            const mode = await askImportMode();
+            if(!mode) return;
+            if(mode === "overwrite" && WB.snapshots){ try{ await WB.snapshots.take("拉取覆盖前"); }catch(e){} }
+            WB.store.importAll(r.data, {merge: mode === "merge"});
+            WB.ui.toast("已" + (mode === "merge" ? "合并" : "覆盖") + "导入，正在刷新…");
+            setTimeout(() => location.reload(), 900);
+          }})),
+      row("自动上传", "数据有变化时，每天首次打开静默上传一次",
+        toggle(WB.store.get("webdav", {}).auto, v => {
+          const b = WB.store.get("webdav", {});
+          b.auto = v;
+          WB.store.set("webdav", b);
+          WB.ui.toast(v ? "已开启：改了东西就会自动备份到 WebDAV" : "已关闭自动上传");
+        })),
+    ]));
 
     /* --- 通知 --- */
     wrap.appendChild(sectionCard("bell", "系统通知", [
