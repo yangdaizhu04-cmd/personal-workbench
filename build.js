@@ -99,5 +99,7 @@ if(process.argv.includes("--cloud")){
     "const SHELL = [\n" + shell.map(s => '  "' + s + '",').join("\n") + "\n];"
   );
   fs.writeFileSync(path.join(dir, "sw.js"), sw);
-  console.log("✅ 云端产物已写入 cloud/hosting/（index.html + manifest + sw.js，预缓存 %d 项）", shell.length);
+  /* 音源文件：sound.js 按相对路径 vendor/audio/*.ogg 取数，SW 预缓存清单也引用它们——hosting 里必须真有 */
+  fs.cpSync("vendor/audio", path.join(dir, "vendor", "audio"), {recursive: true});
+  console.log("✅ 云端产物已写入 cloud/hosting/（index.html + manifest + sw.js + 音源，预缓存 %d 项）", shell.length);
 }
