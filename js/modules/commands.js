@@ -147,6 +147,21 @@ function buildItems(q){
     out.push({group: "年报", icon: "sparkle", label: "晨雾年报", hint: "打开",
       exec: () => WB.yearReview.open()});
   }
+  /* 纸：五张能打印 / 存 PDF 的页。同「仪式」「沉浸场景」一样只在有查询词时出现，
+     否则空面板会被五条打印项刷屏 */
+  if(t && WB.sheets && /纸|打印|pdf|一页|月历|海报|季刊|年刊|周页/i.test(t)){
+    const today = WB.bizDate();
+    const yr = today.slice(0, 4);
+    const q = Math.floor((Number(today.slice(5, 7)) - 1) / 3) + 1;
+    [
+      ["一页纸 · 今天", "feather", () => WB.sheets.open("day", today)],
+      ["周页 · 本周", "timer", () => WB.sheets.open("week")],
+      ["月历海报 · 本月", "calendar", () => WB.sheets.open("month")],
+      ["季刊页 · 本季", "trend-up", () => WB.sheets.open("quarter", Number(yr), q)],
+      ["年刊 · 今年", "sparkle", () => WB.sheets.open("year", yr)],
+    ].forEach(([label, ic, run]) =>
+      out.push({group: "纸", icon: ic, label, hint: "预览并打印 / 存 PDF", exec: run}));
+  }
   if(!t){
     out.length = Math.min(out.length, 6);
     /* 这三条是说明文字，不是命令：标 info 后不可点、上下键会跳过（以前点下去只是把面板关掉，像点错了） */

@@ -22,6 +22,9 @@ WB.registerModule({
     bar.appendChild(ymLabel);
     bar.appendChild(el("button", {class: "btn sm", html: icon("chev-right", 14), onclick: () => { ym = shift(ym, 1); paint(); }}));
     bar.appendChild(el("button", {class: "btn sm ghost", text: "今天", onclick: () => { ym = WB.monthStr(new Date()); selected = WB.bizDate(); paint(); }}));
+    /* 这张月历能贴墙：纸（js/modules/sheets.js）里的月历海报，跟着当前翻到的月份走 */
+    bar.appendChild(el("button", {class: "btn sm ghost", html: icon("image", 14) + "<span>本月海报</span>",
+      onclick: () => { if(WB.sheets) WB.sheets.open("month", ym); }}));
     bar.appendChild(el("span", {class: "grow"}));
     bar.appendChild(el("span", {class: "small faint"},
       "● 待办数　", el("span", {style: {color: "var(--accent)"}, text: "●"}, " 心情"), "　● 打卡环　● 日志角标"));

@@ -67,8 +67,9 @@ function staggerIn(scope, step = 50, base = 100){
 /* 有全屏遮罩时给 body 挂 scrim-open：让侧栏摘掉 backdrop-filter。
    减少「同时存在」的模糊层数，比给它们加 will-change 更有效（4.5） */
 function syncScrim(){
+  /* #sheet-viewer（纸）也算满屏遮罩：它盖住整页时侧栏该摘掉自己的 backdrop-filter（4.5） */
   document.body.classList.toggle("scrim-open",
-    !!document.querySelector(".modal-scrim, .cmdk-scrim, .sheet-scrim"));
+    !!document.querySelector(".modal-scrim, .cmdk-scrim, .sheet-scrim, #sheet-viewer:not([hidden])"));
 }
 
 /* ---------- 吐司 ----------

@@ -418,6 +418,13 @@ WB.registerModule({
       el("span", {class: "murmur-name", text: petNm + "："}),
       el("span", {text: murmurText(dateStr)})));
 
+    /* ===== 周的节拍：周一（及周二补看）浮现一行 —— 上周的周报好了，看不看由你 ===== *
+       不做成晨间/收工那样的多步仪式：一句问候 + 两扇门，点过或过完周二就不再出现 */
+    if(!minimalOn() && WB.sheets && WB.sheets.weekNudge){
+      const nudge = WB.sheets.weekNudge();
+      if(nudge) wrap.appendChild(nudge);
+    }
+
     /* ===== 一键动作：高频操作不跳页（极简模式下不显示，尊重「只留三大件」） ===== */
     const minimal = minimalOn();
     if(!minimal){
@@ -428,6 +435,8 @@ WB.registerModule({
           onclick: () => { if(WB.journal && WB.journal.editor) WB.journal.editor(dateStr); }}),
         el("button", {class: "btn sm ghost", html: icon("wallet", 14) + "<span>记一笔</span>",
           onclick: () => { if(WB.ledger && WB.ledger.quickAdd) WB.ledger.quickAdd(); }}),
+        el("button", {class: "btn sm ghost", html: icon("feather", 14) + "<span>一页纸</span>",
+          onclick: () => { if(WB.sheets) WB.sheets.open("day", dateStr); }}),
         el("button", {class: "btn sm ghost", html: icon("download", 14) + "<span>备份数据</span>",
           onclick: quickBackup})));
     }

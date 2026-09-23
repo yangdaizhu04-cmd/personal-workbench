@@ -313,14 +313,22 @@ function weeklyModal(){
   const sum = el("textarea", {class: "input", placeholder: "手写周总结：这周最得意的事 / 教训 / 下周想试的…", style: {minHeight: "90px", marginTop: "12px"}});
   sum.value = rep.summary || "";
   body.appendChild(sum);
+  const save = () => {
+    rep.summary = sum.value.trim();
+    const all = WB.store.get("weekReports", []).filter(r => r.weekStart !== ws);
+    all.unshift(rep);
+    WB.store.set("weekReports", all.slice(0, 60));
+  };
   WB.ui.modal({title: "每周报告 · " + rep.weekStart + " 起", icon: "gift", content: body, wide: true,
-    actions: [{label: "保存总结", primary: true, onClick: () => {
-      rep.summary = sum.value.trim();
-      const all = WB.store.get("weekReports", []).filter(r => r.weekStart !== ws);
-      all.unshift(rep);
-      WB.store.set("weekReports", all.slice(0, 60));
-      WB.ui.toast("周报已存档");
-    }}]});
+    actions: [
+      /* 纸：周页。先把正在写的总结落库再关窗，否则打印出来是空的 */
+      {label: "打印这周", onClick: () => {
+        save();
+        if(WB.closeTopModal) WB.closeTopModal();
+        setTimeout(() => { if(WB.sheets) WB.sheets.open("week", ws); }, 280);
+      }},
+      {label: "保存总结", primary: true, onClick: () => { save(); WB.ui.toast("周报已存档"); }},
+    ]});
 }
 function ensureWeekly(){
   const ws = weekStartOf(WB.bizDate());

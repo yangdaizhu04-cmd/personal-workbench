@@ -178,10 +178,16 @@ function open(year){
     WB.ui.toast("年度卡片已保存到下载");
     return true;
   }});
+  /* 纸：年刊（多页数据的打印版）。先关年报弹窗再开纸，避免打印层压在叙事弹窗上 */
+  actions.push({label: "打印年刊", onClick: () => {
+    if(WB.closeTopModal) WB.closeTopModal();
+    setTimeout(() => { if(WB.sheets) WB.sheets.open("year", year); }, 280);
+  }});
   actions.push({label: "关闭"});
 
   WB.ui.modal({title: "晨雾年报", icon: "sparkle", content, actions});
 }
 
-WB.yearReview = {open};
+/* gather 也对外：年刊（sheets.js）要用同一份统计口径，不能各算一套 */
+WB.yearReview = {open, gather};
 })();
