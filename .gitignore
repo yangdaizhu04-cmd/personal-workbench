@@ -10,3 +10,7 @@ node_modules/
 # 编辑器
 .vscode/
 .idea/
+
+# 扩展构建产物
+extension/dist/
+*.crx
