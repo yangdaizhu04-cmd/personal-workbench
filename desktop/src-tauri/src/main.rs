@@ -8,12 +8,12 @@ use tauri::{
     tray::{TrayIconBuilder, MouseButton, MouseButtonState},
     Manager,
 };
-use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
+use tauri_plugin_global_shortcut::ShortcutState;
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::Launchd,
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
         .plugin(
@@ -30,7 +30,6 @@ fn main() {
                             let _ = win.eval("if(window.WB&&WB.commands&&WB.commands.open){WB.commands.open();}");
                         }
                     }
-                    Ok(())
                 })
                 .build(),
         )

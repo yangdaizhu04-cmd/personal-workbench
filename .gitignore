@@ -14,3 +14,4 @@ node_modules/
 # 扩展构建产物
 extension/dist/
 *.crx
+desktop/src-tauri/target/
