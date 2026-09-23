@@ -129,6 +129,16 @@ function stopAndClear(){
   WB.bus.emit("pomo:finish", {mode: "stop", status: "stop"});
   dirty();
 }
+/* 外部（其它标签页）改了番茄状态后由路由层调用：让本页心跳与 store 对齐。
+   状态本身是时间戳制，读 store 就不会跑偏，这里只需让心跳跟着起或停 */
+function syncTicker(){
+  const s = stateRaw();
+  if(s && s.running) tickStart();
+  else tickStop();
+  emitPhase();
+  const st = state();
+  if(st && st.running && st.remainSec <= 0) finish();   // 在别的页面里跑到点了
+}
 
 /* ---------- 提醒三件套 ---------- */
 let titleTimer = null;
@@ -441,7 +451,7 @@ setTimeout(() => {
 
 /* finish / stopAndClear 原先没导出：沉浸层要「完成本段 / 先到这」两个动作，必须补上 */
 WB.pomodoro = {state, isFocusing, begin, pause, resume, giveUp, confirmNext, gardenStats,
-  finish, stopAndClear, toggleRun,
+  finish, stopAndClear, toggleRun, syncTicker,
   titleFlashing(){ return !!titleTimer; },
   toggleSound(){
     if(WB.sound && WB.sound.toggle) WB.sound.toggle();

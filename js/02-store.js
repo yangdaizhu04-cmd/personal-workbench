@@ -154,6 +154,17 @@ function collection(name, opts){
   };
 }
 
+/* ---- 跨标签页同步（发现 + 广播） ----
+   localStorage 的 storage 事件只在「其它」标签页触发（本页自己写自己收不到），
+   正好用来感知外部改动。这里只负责发现与广播；什么时候重绘交给路由层决定 ——
+   弹窗开着或正在输入时必须挂起，否则会把用户正在填的表单连根拔掉（见 09-router.js） */
+addEventListener("storage", e => {
+  if(e.storageArea && e.storageArea !== localStorage) return;
+  if(e.key !== null && !String(e.key).startsWith(PREFIX)) return;   // 不是本应用的数据
+  if(e.key && e.key.startsWith(PREFIX + "netcache:")) return;       // 网络缓存不值得刷界面
+  WB.bus.emit("store:external", {key: e.key});
+});
+
 WB.store = store;
 WB.collection = collection;
 WB.toTrash = toTrash;

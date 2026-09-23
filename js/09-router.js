@@ -234,9 +234,29 @@ function init(){
    现在低频的状态变更统一广播 view:dirty，由这里兜住；高频计时走各自订阅的 pomo:tick，
    不会经由这条路把页面按秒重建 */
 WB.bus.on("view:dirty", () => render());
+
+/* ---------- 跨标签页：外部改了数据 ----------
+   能刷就刷，不能刷就先记着 —— 弹窗开着、或正把光标放在输入框里打字时刷新，
+   等于把用户正在填的东西连根拔掉。挂起的会在「弹窗关闭」或「页面重新可见」时补一次 */
+let stalePending = false;
+function busyEditing(){
+  const a = document.activeElement;
+  if(a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.tagName === "SELECT" || a.isContentEditable)) return true;
+  return !!(WB.modalOpen && WB.modalOpen());
+}
+function flushExternal(){
+  if(!stalePending || busyEditing()) return;
+  stalePending = false;
+  render();
+  /* 另一页开始/继续/清空了番茄，本页心跳要跟上（状态是时间戳制，不会跑偏） */
+  if(WB.pomodoro && WB.pomodoro.syncTicker) WB.pomodoro.syncTicker();
+}
+WB.bus.on("store:external", () => { stalePending = true; flushExternal(); });
+addEventListener("visibilitychange", () => { if(!document.hidden) flushExternal(); });
+
 /* 弹窗关闭后补一次：弹窗内部改数据只重绘弹窗自己，背后的卡片会留着旧值
-   （技能里程碑计数、待办子任务 n/m 都是这样过期的） */
-WB.bus.on("modal:closed", () => render());
+   （技能里程碑计数、待办子任务 n/m 都是这样过期的）—— 顺带处理被挂起的跨标签页变更 */
+WB.bus.on("modal:closed", () => { render(); flushExternal(); });
 
 WB.router = {register, getRoute, allRoutes, groups, buildNav, nav, render, go, init, current,
   docTitle, openSheet, closeSheet, sheetOpen};
