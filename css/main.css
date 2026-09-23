@@ -1529,6 +1529,19 @@ html[data-theme="dark"] body.bg-dynamic-on.wb-islands #focus-stage[data-scene]{
 .paper .p-cell-tag{color:#8a8073; font-size:9.5px;}
 .paper .p-foot{margin-top:16px; padding-top:7px; border-top:1px solid rgba(61,58,53,.12);
   font-size:10px; color:#9a9084;}
+.paper .p-pageno{float:right; margin-left:10px;}
+
+/* 年刊册子（封面 + 一月一页） */
+.paper-cover{display:flex; flex-direction:column; justify-content:center;}
+.paper .p-cover-year{font-size:76px; font-weight:600; letter-spacing:.06em; line-height:1.05; text-align:center;}
+.paper .p-cover-sub{font-size:13px; color:#7a7267; text-align:center; margin-bottom:14px;}
+.paper-cover .p-sec{text-align:left;}
+/* 十二个月柱状：柱高按当月完成数，没数据的月份留一个点（不是 0，0 会被误解成"什么都不干"） */
+.paper .p-yearbars{display:flex; align-items:stretch; gap:6px; height:26mm;}
+.paper .p-yb{flex:1; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:3px;}
+.paper .p-yb>i{display:block; width:100%; background:var(--accent,#7fa3bd); border-radius:3px 3px 0 0; min-height:2px;}
+.paper .p-yb>b{font-size:10.5px; font-weight:600; line-height:1;}
+.paper .p-yb>span{font-size:9.5px; color:#8a8073; line-height:1;}
 @media (max-width:860px){
   .paper{width:100%; min-height:0; padding:16px;}
   .paper .p-kpi{grid-template-columns:repeat(2,1fr);}
@@ -1545,5 +1558,9 @@ html[data-theme="dark"] body.bg-dynamic-on.wb-islands #focus-stage[data-scene]{
   .paper{width:auto; min-height:0; max-width:none; padding:0; border-radius:0; box-shadow:none;}
   /* 省墨模式会把色块刷白：月历海报离了颜色就是一张白纸，所以强制保留 */
   .paper, .paper *{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  /* 多页册子（年刊 = 封面 + 一月一页）：每张纸之间自动分页；封面仍占满一页并居中 */
+  .paper{break-after:page; page-break-after:always;}
+  .paper:last-child{break-after:auto; page-break-after:auto;}
+  .paper-cover{min-height:265mm;}
   @page{size:A4; margin:12mm;}
 }

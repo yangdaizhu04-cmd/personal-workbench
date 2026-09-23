@@ -287,6 +287,49 @@ WB.registerModule({
       series: [{type: "heatmap", coordinateSystem: "calendar", data: heatData}],
     });
 
+    /* 8. 打断的来源（第五轮保留项 A4）
+       专注时被打断是最真实的一条数据，但它只用来**理解**，不用来考核：
+       没有目标值、没有惩罚、不进任何 streak —— 所以这里也不画图表，只排几行小条 */
+    const ints = WB.store.get("interrupts", []).filter(x => days.includes(x.date));
+    if(ints.length){
+      const kinds = (WB.pomodoro && WB.pomodoro.INTERRUPT_KINDS) || [];
+      const labelOf = k => (kinds.find(x => x.id === k) || {}).label || k;
+      const byKind = {};
+      ints.forEach(x => { byKind[x.kind] = (byKind[x.kind] || 0) + 1; });
+      const rows = Object.entries(byKind).sort((a, b) => b[1] - a[1]);
+      const max = rows[0][1];
+      /* 时段桶：夜 0-6 / 早 6-12 / 午 12-18 / 晚 18-24（按记录的真实时刻，不是业务日） */
+      const slotOf = ts => {
+        const h = new Date(ts).getHours();
+        return h < 6 ? "夜里" : h < 12 ? "上午" : h < 18 ? "下午" : "晚上";
+      };
+      const bySlot = {};
+      ints.forEach(x => { const s = slotOf(x.ts); bySlot[s] = (bySlot[s] || 0) + 1; });
+      /* 并列时把几个时段一起说出来 —— 三个时段各 2 次时只报"上午"是不诚实的 */
+      const hotSorted = Object.entries(bySlot).sort((a, b) => b[1] - a[1]);
+      const hotN = hotSorted.length ? hotSorted[0][1] : 0;
+      const hotNames = hotSorted.filter(x => x[1] === hotN).map(x => x[0]).join("和");
+      const top = rows[0];
+      const card = el("div", {class: "card", style: {marginTop: "16px"}},
+        el("div", {class: "card-title", html: icon("zap", 18) + "<span>打断的来源</span>" +
+          "<span class='card-sub'>近 " + range + " 天 · " + ints.length + " 次</span>"}),
+        el("div", {class: "small muted", style: {marginBottom: "10px"},
+          text: "最常是「" + labelOf(top[0]) + "」（" + top[1] + " 次）" +
+            (hotN ? "，最容易被打断的是" + hotNames + "（" + hotN + " 次）" : "")}));
+      rows.forEach(([k, n]) => card.appendChild(el("div", {style: {padding: "3px 0"}},
+        el("div", {class: "row", style: {gap: "8px", alignItems: "baseline"}},
+          el("span", {class: "small", text: labelOf(k)}),
+          el("span", {class: "grow"}),
+          el("span", {class: "small faint", text: n + " 次"})),
+        el("div", {style: {height: "6px", borderRadius: "99px", background: "var(--card-2)",
+          overflow: "hidden", marginTop: "3px"}},
+          el("div", {style: {height: "100%", width: Math.round(n / max * 100) + "%",
+            background: "var(--accent)"}})))));
+      card.appendChild(el("div", {class: "small faint", style: {marginTop: "8px"},
+        text: "记它只是为了看清，不为改变你 —— 被打断是常态，不是失误。"}));
+      view.appendChild(card);
+    }
+
     /* 周报自动生成检查（每周一以后补上周日的） */
     ensureWeekly();
   },

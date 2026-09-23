@@ -162,6 +162,11 @@ function buildItems(q){
     ].forEach(([label, ic, run]) =>
       out.push({group: "纸", icon: ic, label, hint: "预览并打印 / 存 PDF", exec: run}));
   }
+  /* 打断记录：离开番茄页也想记一笔的时候（专注中更常用，但不该只有那一处入口） */
+  if(t && WB.pomodoro && WB.pomodoro.interrupt && /打断|干扰|分心|中断/.test(t)){
+    out.push({group: "记录", icon: "zap", label: "记一次打断", hint: "被什么打断了？",
+      exec: () => WB.pomodoro.interrupt()});
+  }
   if(!t){
     out.length = Math.min(out.length, 6);
     /* 这三条是说明文字，不是命令：标 info 后不可点、上下键会跳过（以前点下去只是把面板关掉，像点错了） */

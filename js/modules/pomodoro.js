@@ -424,6 +424,10 @@ WB.registerModule({
         btns.appendChild(el("button", {class: "btn ghost", text: "先到这",
           onclick: () => { stopAndClear(); }}));
       }else if(st.running){
+        /* 打断记录：只在专注中露出来（休息时被打断不算），点一下弹出六个词选一个 */
+        if(st.mode === "focus")
+          btns.appendChild(el("button", {class: "btn ghost", html: icon("zap", 15) + "<span>被打断</span>",
+            title: "记一次打断（只为看清，不用来考核）", onclick: () => pickInterrupt()}));
         btns.appendChild(el("button", {class: "btn", text: "⏸ 暂停", onclick: () => { pause(); WB.router.render(); }}));
         btns.appendChild(el("button", {class: "btn danger", text: "放弃",
           onclick: async () => {
@@ -486,8 +490,34 @@ setTimeout(() => {
   else emitPhase();
 }, 800);
 
+/* ---------- 打断记录（第五轮保留项 A4） ----------
+   专注时被打断是**最真实的一条生产力数据**，但记它必须比打断本身更轻：
+   一次点击 → 一行选项 → 记完就散。它不惩罚、不入账、不进 streak、没有目标值。
+   存顶层集合 `interrupts`（而不是挂在某次番茄上）：番茄会被清掉，打断的统计不该跟着消失。 */
+const INTERRUPT_KINDS = [
+  {id: "phone",  label: "手机"},
+  {id: "msg",    label: "消息"},
+  {id: "people", label: "有人找我"},
+  {id: "mind",   label: "走神了"},
+  {id: "todo",   label: "临时的事"},
+  {id: "other",  label: "其他"},
+];
+function logInterrupt(kind){
+  WB.collection("interrupts").add({date: WB.bizDate(), ts: Date.now(), kind: kind.id, label: kind.label});
+  WB.ui.toast("记下了 · " + kind.label, "zap");
+}
+function pickInterrupt(){
+  const m = WB.ui.modal({title: "被什么打断了？", icon: "zap",
+    content: el("div", {class: "row", style: {gap: "8px", flexWrap: "wrap", justifyContent: "center", padding: "6px 0"}},
+      INTERRUPT_KINDS.map(k => el("button", {class: "chip",
+        style: {cursor: "pointer", fontSize: "14px", padding: "8px 16px"},
+        text: k.label, onclick: () => { m.close(); logInterrupt(k); }}))),
+    actions: [{label: "算了"}]});
+}
+
 /* finish / stopAndClear 原先没导出：沉浸层要「完成本段 / 先到这」两个动作，必须补上 */
 WB.pomodoro = {state, isFocusing, begin, pause, resume, giveUp, confirmNext, gardenStats,
+  INTERRUPT_KINDS, interrupt: pickInterrupt,
   finish, stopAndClear, toggleRun, syncTicker,
   titleFlashing(){ return !!titleTimer; },
   toggleSound(){

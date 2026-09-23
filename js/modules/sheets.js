@@ -127,6 +127,15 @@ function paperDay(dateStr){
   const rec = [];
   if(mood) rec.push(line("心情：" + MOOD_FACE[mood.level] + " " + (MOOD_CN[mood.level] || "") + (mood.note ? " —— " + mood.note : "")));
   if(logs.length) rec.push(line("打卡：" + logs.map(l => habitName(l.habitId) + (l.count > 1 ? "×" + l.count : "")).join("、")));
+  /* 打断也落在纸上：纸上留这一行，是承认"被打断"本来就是一天的一部分 */
+  const ints = WB.store.get("interrupts", []).filter(x => x.date === dateStr);
+  if(ints.length){
+    const kinds = WB.pomodoro && WB.pomodoro.INTERRUPT_KINDS || [];
+    const top = Object.entries(ints.reduce((a, x) => (a[x.kind] = (a[x.kind] || 0) + 1, a), {}))
+      .sort((a, b) => b[1] - a[1])[0];
+    const lab = (kinds.find(k => k.id === top[0]) || {}).label || top[0];
+    rec.push(line("被打断 " + ints.length + " 次（多是「" + lab + "」）"));
+  }
   if(rec.length) card.appendChild(sec("状态", ...rec));
 
   if(j && (j.done || j.problems || j.plan || j.free || j.answer)){
@@ -208,24 +217,8 @@ function monthCells(ym){
   while(cells.length % 7) cells.push(null);
   return cells;
 }
-function paperMonth(ym){
-  ym = ym || WB.monthStr(new Date());
-  const cells = monthCells(ym);
-  const days = cells.filter(Boolean);
-  const doneN = days.reduce((s, c) => s + c.done, 0);
-  const pomoMin = days.reduce((s, c) => s + pomoOn(c.ds).reduce((a, l) => a + (l.minutes || 0), 0), 0);
-  const spend = days.reduce((s, c) => s + spendOn(c.ds), 0);
-  const moodDays = days.filter(c => c.mood);
-  const moodAvg = moodDays.length ? moodDays.reduce((s, c) => s + c.mood.level, 0) / moodDays.length : 0;
-  const habitDays = days.filter(c => habitLogsOn(c.ds).length).length;
-  const best = days.slice().sort((a, b) => b.done - a.done)[0];
-
-  const card = el("div", {class: "paper paper-poster"});
-  const [yy, mm] = ym.split("-");
-  card.appendChild(head(Number(yy) + " 年 " + Number(mm) + " 月",
-    "有记录 " + days.filter(c => c.done || c.mood || c.log).length + " 天 · 这个月的形状",
-    moodAvg ? "心情 " + MOOD_FACE[Math.round(moodAvg)] + " " + moodAvg.toFixed(1) : ""));
-
+/* 月历网格：月历海报与年刊的月页共用同一份（一处排版，两处复用） */
+function monthGridEl(cells){
   const grid = el("div", {class: "p-grid"});
   ["日", "一", "二", "三", "四", "五", "六"].forEach(w => grid.appendChild(el("div", {class: "p-cell p-cell-h", text: w})));
   cells.forEach(c => {
@@ -240,17 +233,42 @@ function paperMonth(ym){
     box.style.background = c.mood ? MOOD_TINT[c.mood.level] : "";
     grid.appendChild(box);
   });
-  card.appendChild(sec("", grid));
-
+  return grid;
+}
+/* 一个月的聚合：月历海报、季刊页、年刊的月页都从这里取数（口径只有一份，踩坑 #074 的教训） */
+function yearMonthStat(year, m){
+  const ym = year + "-" + String(m).padStart(2, "0");
+  const cells = monthCells(ym);
+  const days = cells.filter(Boolean);
+  const moodDays = days.filter(c => c.mood);
+  return {ym, m, cells, days,
+    done: days.reduce((s, c) => s + c.done, 0),
+    pomoMin: days.reduce((s, c) => s + pomoOn(c.ds).reduce((a, l) => a + (l.minutes || 0), 0), 0),
+    spend: days.reduce((s, c) => s + spendOn(c.ds), 0),
+    habitDays: days.filter(c => habitLogsOn(c.ds).length).length,
+    logDays: days.filter(c => c.log).length,
+    moodDays: moodDays.length,
+    moodAvg: moodDays.length ? moodDays.reduce((s, c) => s + c.mood.level, 0) / moodDays.length : 0,
+    active: days.filter(c => c.done || c.mood || c.log).length};
+}
+function paperMonth(ym){
+  ym = ym || WB.monthStr(new Date());
+  const st = yearMonthStat(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)));
+  const best = st.days.slice().sort((a, b) => b.done - a.done)[0];
+  const card = el("div", {class: "paper paper-poster"});
+  card.appendChild(head(Number(ym.slice(0, 4)) + " 年 " + Number(ym.slice(5, 7)) + " 月",
+    "有记录 " + st.active + " 天 · 这个月的形状",
+    st.moodAvg ? "心情 " + MOOD_FACE[Math.round(st.moodAvg)] + " " + st.moodAvg.toFixed(1) : ""));
+  card.appendChild(sec("", monthGridEl(st.cells)));
   card.appendChild(sec("这个月", kpi([
-    ["完成的事", doneN + " 件"],
-    ["专注", pomoMin ? fmtMin(pomoMin) : "0"],
-    ["支出", fmtMoney(spend)],
-    ["打卡天数", habitDays + " 天"],
+    ["完成的事", st.done + " 件"],
+    ["专注", st.pomoMin ? fmtMin(st.pomoMin) : "0"],
+    ["支出", fmtMoney(st.spend)],
+    ["打卡天数", st.habitDays + " 天"],
   ])));
   const extra = [];
   if(best && best.done) extra.push(line("最勤的一天：" + dayCN(best.ds) + "，完成 " + best.done + " 件"));
-  if(moodDays.length) extra.push(line("心情记了 " + moodDays.length + " 天，多数是「" + MOOD_CN[Math.round(moodAvg)] + "」"));
+  if(st.moodDays) extra.push(line("心情记了 " + st.moodDays + " 天，多数是「" + MOOD_CN[Math.round(st.moodAvg)] + "」"));
   if(extra.length) card.appendChild(sec("", ...extra));
   card.appendChild(el("div", {class: "p-foot", text: "个人工作台 · 月历 · " + ym + " · 打印于 " + WB.todayStr()}));
   return card;
@@ -264,19 +282,10 @@ function paperQuarter(year, q){
   year = Number(year || now.slice(0, 4));
   q = Number(q) || (Math.floor((Number(now.slice(5, 7)) - 1) / 3) + 1);
   const startM = (q - 1) * 3 + 1;
-  const months = [0, 1, 2].map(i => year + "-" + String(startM + i).padStart(2, "0"));
-  const stat = m => {
-    const days = monthCells(m).filter(Boolean);
-    const done = days.reduce((s, c) => s + c.done, 0);
-    const min = days.reduce((s, c) => s + pomoOn(c.ds).reduce((a, l) => a + (l.minutes || 0), 0), 0);
-    const sp = days.reduce((s, c) => s + spendOn(c.ds), 0);
-    const md = days.filter(c => c.mood);
-    return {m, done, min, sp, moodAvg: md.length ? md.reduce((s, c) => s + c.mood.level, 0) / md.length : 0,
-      active: days.filter(c => c.done || c.mood || c.log).length};
-  };
-  const rows = months.map(stat);
-  const sum = rows.reduce((a, r) => ({done: a.done + r.done, min: a.min + r.min, sp: a.sp + r.sp, active: a.active + r.active}),
-    {done: 0, min: 0, sp: 0, active: 0});
+  /* 三个月的数走 yearMonthStat（与月历海报、年刊月页同一份口径） */
+  const rows = [0, 1, 2].map(i => yearMonthStat(year, startM + i));
+  const sum = rows.reduce((a, r) => ({done: a.done + r.done, min: a.min + r.pomoMin, sp: a.sp + r.spend,
+    active: a.active + r.active}), {done: 0, min: 0, sp: 0, active: 0});
   const maxDone = Math.max(1, ...rows.map(r => r.done));
 
   const card = el("div", {class: "paper"});
@@ -292,8 +301,8 @@ function paperQuarter(year, q){
       bar(r.done / maxDone * 100),
       el("div", {class: "p-qnums"},
         el("span", {text: "完成 " + r.done + " 件"}),
-        el("span", {text: r.min ? fmtMin(r.min) : "专注 0"}),
-        el("span", {text: fmtMoney(r.sp)}),
+        el("span", {text: r.pomoMin ? fmtMin(r.pomoMin) : "专注 0"}),
+        el("span", {text: fmtMoney(r.spend)}),
         el("span", {text: r.moodAvg ? MOOD_FACE[Math.round(r.moodAvg)] + " " + r.moodAvg.toFixed(1) : "心情 —"}))));
   });
   card.appendChild(sec("逐月", t));
@@ -316,38 +325,96 @@ function paperQuarter(year, q){
   return card;
 }
 
-/* ---------- 纸 ⑤：年刊页 ---------- */
+/* ---------- 纸 ⑤：年刊（多页册子：封面 + 一月一页） ----------
+   2026-09-24 用户追加要求「做成真正的多页册子（按月分节、一月一页）」。
+   结构 = 1 张封面（全年数字 + 十二月柱状 + 关键词）+ N 张月页（该月月历网格 + 四个数 +
+   亮点 + 该月写下的一句话）。**只装进有记录的月份** —— 一册十二张空白页不是年刊，是废纸；
+   封面会写明收了几个月。打印时每张纸之间 `break-after:page`（见 main.css）自动分页 */
+function paperYearCover(year, stats, s){
+  const card = el("div", {class: "paper paper-cover"});
+  card.appendChild(el("div", {class: "p-cover-year", text: year}));
+  card.appendChild(el("div", {class: "p-cover-sub", text: "这一年留下的东西"}));
+  card.appendChild(sec("", kpi([
+    ["完成的事", (s ? s.doneCount : 0) + " 件"],
+    ["专注", s && s.pomoMin ? fmtMin(s.pomoMin) : "0"],
+    ["番茄", (s ? s.pomoCount : 0) + " 个"],
+    ["写下的字", s && s.words ? s.words + " 字" : "0"],
+  ])));
+  /* 十二个月一眼看全年：柱高按当月完成数（没数据的月份留一个点，不是 0） */
+  const maxDone = Math.max(1, ...stats.map(r => r.done));
+  const bars = el("div", {class: "p-yearbars"});
+  stats.forEach(r => {
+    const col = el("div", {class: "p-yb"});
+    /* 没有完成记录的月份**不画柱子**（否则 2px 的零值柱看起来像一条下划线，
+       容易被读成"这个月被标了记号"）；有柱子的月份给 3% 下限，免得一根线看不见 */
+    if(r.done) col.appendChild(el("i", {style: {height: Math.max(3, Math.round(r.done / maxDone * 100)) + "%"}}));
+    col.appendChild(el("b", {text: r.done ? String(r.done) : "·"}));
+    col.appendChild(el("span", {text: r.m + "月"}));
+    bars.appendChild(col);
+  });
+  card.appendChild(sec("十二个月", bars));
+
+  const rows = [];
+  if(s && s.topDay) rows.push("最勤的一天：" + s.topDay[0] + "，完成 " + s.topDay[1] + " 件");
+  if(s && s.topHabit) rows.push("最坚持的习惯：「" + s.topHabit.name + "」打卡 " + s.topHabit.days + " 天");
+  if(s && s.moodCount) rows.push("心情气候：" + MOOD_CN[s.topMoodIdx] + "（记了 " + s.moodCount + " 天）");
+  if(s && s.journals) rows.push("日志：" + s.journals + " 篇");
+  if(s && s.outSum) rows.push("支出 " + fmtMoney(s.outSum) + " · 收入 " + fmtMoney(s.inSum) +
+    (s.topCat ? " · 最多的是「" + s.topCat + "」" : ""));
+  if(s && s.days) rows.push("小雾团陪了你 " + s.days + " 天");
+  if(rows.length) card.appendChild(sec("节点", el("div", {class: "p-list"}, ...rows.map(r => el("div", {text: r})))));
+  if(s && s.keywords && s.keywords.length){
+    card.appendChild(sec("关键词", el("div", {class: "p-quote", text: s.keywords.map(k => "#" + k).join("   ")})));
+  }
+  const withData = stats.filter(hasMonthData).length;
+  card.appendChild(el("div", {class: "p-foot",
+    text: "个人工作台 · 年刊 · " + year + " · 收了 " + withData + " 个月 · 打印于 " + WB.todayStr()}));
+  return card;
+}
+function hasMonthData(r){
+  return !!(r.done || r.moodDays || r.logDays || r.pomoMin || r.spend || r.habitDays);
+}
+function paperYearMonth(st){
+  const card = el("div", {class: "paper"});
+  card.appendChild(head(st.m + " 月",
+    "有记录 " + st.active + " 天 · 写了 " + st.logDays + " 篇日志",
+    st.moodAvg ? "心情 " + MOOD_FACE[Math.round(st.moodAvg)] + " " + st.moodAvg.toFixed(1) : ""));
+  card.appendChild(sec("", monthGridEl(st.cells)));
+  card.appendChild(sec("这个月", kpi([
+    ["完成的事", st.done + " 件"],
+    ["专注", st.pomoMin ? fmtMin(st.pomoMin) : "0"],
+    ["支出", fmtMoney(st.spend)],
+    ["打卡天数", st.habitDays + " 天"],
+  ])));
+  const best = st.days.slice().sort((a, b) => b.done - a.done)[0];
+  const notes = [];
+  if(best && best.done) notes.push("最勤的一天：" + dayCN(best.ds) + "，完成 " + best.done + " 件");
+  if(st.moodDays) notes.push("心情记了 " + st.moodDays + " 天，多数是「" + MOOD_CN[Math.round(st.moodAvg)] + "」");
+  if(notes.length) card.appendChild(sec("", ...notes.map(t => line(t))));
+  /* 这个月写下的一句话：册子读起来才像一本书，而不是十二张报表 */
+  const j = st.days.map(c => journalOn(c.ds)).find(x => x && (x.free || x.done || "").trim());
+  if(j){
+    const txt = (j.free || j.done || "").replace(/\s+/g, " ").trim();
+    card.appendChild(sec("这个月写下的一句",
+      el("div", {class: "p-quote", text: dayCN(j.date) + "　" + txt.slice(0, 160) + (txt.length > 160 ? "…" : "")})));
+  }
+  card.appendChild(el("div", {class: "p-foot", text: "个人工作台 · 年刊 · " + st.ym}));
+  return card;
+}
 function paperYear(year){
   /* 必须收成字符串：yearReview.gather 内部按 `date.slice(0,4) === year` 比对，
      传数字进来会静默全灭（探针实测：一张空白的年刊，还看不出哪里错） */
   year = String(year || WB.bizDate().slice(0, 4));
   const s = WB.yearReview && WB.yearReview.gather ? WB.yearReview.gather(year) : null;
-  const card = el("div", {class: "paper"});
-  card.appendChild(head(year + " 年", "这一年留下过的东西", "晨雾年报 · 打印版"));
-  if(!s || !s.doneCount && !s.pomoCount && !s.journals){
-    card.appendChild(sec("", line("这一年还没有可回看的数据。", "p-dim")));
-    card.appendChild(el("div", {class: "p-foot", text: "个人工作台 · 年刊 · " + year}));
-    return card;
+  const stats = [];
+  for(let m = 1; m <= 12; m++) stats.push(yearMonthStat(Number(year), m));
+  const pages = stats.filter(hasMonthData);
+  const out = [paperYearCover(year, stats, s)];
+  pages.forEach(r => out.push(paperYearMonth(r)));
+  if(!pages.length && (!s || (!s.doneCount && !s.pomoCount && !s.journals))){
+    out.push(el("div", {class: "paper"}, sec("", line("这一年还没有可回看的数据。", "p-dim"))));
   }
-  card.appendChild(sec("数字", kpi([
-    ["完成的事", s.doneCount + " 件"],
-    ["专注", s.pomoMin ? fmtMin(s.pomoMin) : "0"],
-    ["番茄", s.pomoCount + " 个"],
-    ["写下的字", s.words ? s.words + " 字" : "0"],
-  ])));
-  const rows = [];
-  if(s.topDay) rows.push("最勤的一天：" + s.topDay[0] + "，完成 " + s.topDay[1] + " 件");
-  if(s.topHabit) rows.push("最坚持的习惯：「" + s.topHabit.name + "」打卡 " + s.topHabit.days + " 天");
-  if(s.moodCount) rows.push("心情气候：" + MOOD_CN[s.topMoodIdx] + "（记了 " + s.moodCount + " 天）");
-  if(s.journals) rows.push("日志：" + s.journals + " 篇");
-  if(s.outSum) rows.push("支出 " + fmtMoney(s.outSum) + " · 收入 " + fmtMoney(s.inSum) + (s.topCat ? " · 最多的是「" + s.topCat + "」" : ""));
-  if(s.days) rows.push("小雾团陪了你 " + s.days + " 天");
-  card.appendChild(sec("节点", el("div", {class: "p-list"}, ...rows.map(r => el("div", {text: r})))));
-  if(s.keywords && s.keywords.length){
-    card.appendChild(sec("关键词", el("div", {class: "p-quote", text: s.keywords.map(k => "#" + k).join("   ")})));
-  }
-  card.appendChild(el("div", {class: "p-foot", text: "个人工作台 · 年刊 · " + year + " · 打印于 " + WB.todayStr()}));
-  return card;
+  return out;
 }
 
 /* ---------- 浮层 ---------- */
@@ -379,13 +446,24 @@ function open(kind, arg){
   ensureViewer();
   openKind = kind;
   paperEl.innerHTML = "";
-  paperEl.appendChild(k.build(arg));
+  /* build 可以返回一张纸，也可以返回一叠（年刊=封面+月页）：统一按数组处理 */
+  const built = k.build(arg);
+  const list = Array.isArray(built) ? built : [built];
+  if(list.length > 1){
+    /* 多页时给每张纸右下角标页码 —— 打印出来散页之后还能排回去 */
+    list.forEach((p, i) => {
+      const foot = p.querySelector(".p-foot");
+      if(foot) foot.appendChild(el("span", {class: "p-pageno", text: "第 " + (i + 1) + " / " + list.length + " 页"}));
+    });
+  }
+  list.forEach(n => paperEl.appendChild(n));
   viewer.hidden = false;
   viewer.scrollTop = 0;
   if(WB.ui.syncScrim) WB.ui.syncScrim();     // 满屏遮罩：让侧栏摘掉 backdrop-filter（4.5）
-  WB.$("#sheet-title").textContent = k.title + (kind === "day" ? " · " + (arg || WB.bizDate()) :
-    kind === "week" ? " · " + (arg || WB.stats.weekStartOf(WB.bizDate())) :
-    kind === "month" ? " · " + (arg || WB.monthStr(new Date())) : "");
+  WB.$("#sheet-title").textContent = k.title + (list.length > 1 ? " · " + list.length + " 页" : "") +
+    (kind === "day" ? " · " + (arg || WB.bizDate()) :
+     kind === "week" ? " · " + (arg || WB.stats.weekStartOf(WB.bizDate())) :
+     kind === "month" ? " · " + (arg || WB.monthStr(new Date())) : "");
 }
 function close(){
   if(!openKind || !viewer) return;
