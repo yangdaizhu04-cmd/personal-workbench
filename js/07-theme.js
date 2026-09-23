@@ -32,6 +32,11 @@ const DEFAULTS = {
   lastExportTs: 0,           // 上次导出 JSON 备份的时间（快照提醒用）
   firstSeenTs: 0,            // 首次使用时间：从未导出过时用它当提醒起点（免得从 1970 年算）
   customCss: "",             // 自定义 CSS 注入（高级）：挂载点统一在 apply() → #wb-custom-css
+  /* 氛围引擎（js/17-ambience.js）：按时段自动编排 场景/音景/主题。
+     默认关闭 —— 编排在位但不主动改界面，设置页确认后才生效 */
+  ambienceOn: false,
+  ambiencePlan: {},          // 用户编排（浅合并到 17-ambience.js 的 DEFAULT_PLAN 之上；空 = 全用默认）
+  ambienceAsked: false,      // 设置页是否已经问过「要不要跟随节律」
 };
 
 function all(){

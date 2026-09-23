@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>第五轮方案 · 影响分布</title>
+<style>
+  :root{
+    --bg:#f6f1e7; --card:#fdfaf3; --ink:#3d3a35; --ink2:#6b665e; --line:rgba(61,58,53,.10);
+    --mist:#7fa3bd; --lilac:#a294c9; --mint:#8fbf9f; --gold:#e0a878; --clay:#d98f8f; --ash:#b8b0a0;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:34px 22px 60px; background:var(--bg); color:var(--ink);
+    font:15px/1.65 -apple-system,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+  }
+  h1{font-size:23px; margin:0 0 6px; font-weight:650; letter-spacing:.3px}
+  .sub{color:var(--ink2); font-size:13px; margin:0 0 26px}
+  .wrap{max-width:1080px; margin:0 auto}
+  .panel{
+    background:var(--card); border-radius:20px; padding:24px 26px;
+    box-shadow:0 12px 34px rgba(120,105,80,.10); margin-bottom:22px;
+  }
+  .panel h2{font-size:16px; margin:0 0 4px; font-weight:600}
+  .panel h2 em{font-style:normal; color:var(--ink2); font-weight:400; font-size:13px; margin-left:8px}
+  .split{display:flex; gap:26px; align-items:flex-start; flex-wrap:wrap}
+  .split svg{flex:0 0 auto}
+  .legend{flex:1 1 320px; min-width:300px}
+  table{width:100%; border-collapse:collapse; font-size:13.5px}
+  th,td{text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top}
+  th{color:var(--ink2); font-weight:500; font-size:12px}
+  .dot{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:7px; vertical-align:-1px}
+  .pct{font-variant-numeric:tabular-nums; font-weight:600; white-space:nowrap}
+  .note{
+    margin:14px 0 0; padding:12px 14px; border-radius:12px; font-size:13px;
+    background:rgba(127,163,189,.10); color:var(--ink2);
+  }
+  .note b{color:var(--ink)}
+  footer{max-width:1080px; margin:0 auto; color:var(--ink2); font-size:12px; text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>个人工作台 · 第五轮优化方案 影响分布</h1>
+  <p class="sub">2026-09-23 · 讨论用示意图（纯静态，不依赖任何库，与项目源码无关）</p>
+
+  <!-- ① 收益分布 -->
+  <section class="panel">
+    <h2>① 收益分布 <em>完成后，各维度提升的占比</em></h2>
+    <div class="split">
+      <svg viewBox="0 0 420 420" width="400" height="400" role="img"
+           aria-label="收益分布饼图：数据闭环 30%、时间精力洞察 20%、本地智能自动化 18%、可靠性数据安全 15%、形态与触达 12%、情感与回忆 5%">
+        <g stroke="#fdfaf3" stroke-width="2.5" stroke-linejoin="round">
+          <path d="M210 210 L210 50 A160 160 0 0 1 362.17 259.44 Z" fill="#7fa3bd"/>
+          <path d="M210 210 L362.17 259.44 A160 160 0 0 1 210 370 Z" fill="#a294c9"/>
+          <path d="M210 210 L210 370 A160 160 0 0 1 65.23 278.12 Z" fill="#8fbf9f"/>
+          <path d="M210 210 L65.23 278.12 A160 160 0 0 1 69.79 132.92 Z" fill="#e0a878"/>
+          <path d="M210 210 L69.79 132.92 A160 160 0 0 1 160.56 57.83 Z" fill="#d98f8f"/>
+          <path d="M210 210 L160.56 57.83 A160 160 0 0 1 210 50 Z" fill="#b8b0a0"/>
+        </g>
+        <g fill="#fffdf8" font-size="15" font-weight="600" text-anchor="middle" dominant-baseline="middle"
+           font-family="-apple-system,'Segoe UI','Microsoft YaHei',sans-serif">
+          <text x="311" y="137">30%</text>
+          <text x="283" y="311">20%</text>
+          <text x="143" y="315">18%</text>
+          <text x="85" y="206">15%</text>
+          <text x="129" y="115">12%</text>
+        </g>
+      </svg>
+
+      <div class="legend">
+        <table>
+          <tr><th style="width:38%">提升维度</th><th style="width:14%">占比</th><th>来自哪些功能</th></tr>
+          <tr>
+            <td><span class="dot" style="background:#7fa3bd"></span>数据闭环<br><span style="color:var(--ink2);font-size:12px">记录 → 自动流动</span></td>
+            <td class="pct" style="color:#7fa3bd">30%</td>
+            <td>A1 周期记账 · A2 目标↔待办 · A3 复习卡</td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:#a294c9"></span>时间与精力洞察<br><span style="color:var(--ink2);font-size:12px">从"做了多少"到"为什么"</span></td>
+            <td class="pct" style="color:#a294c9">20%</td>
+            <td>A4 预计 vs 实际 · A4 打断记录</td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:#8fbf9f"></span>本地智能与自动化<br><span style="color:var(--ink2);font-size:12px">零 Key / 零云端 / 数据不外发</span></td>
+            <td class="pct" style="color:#8fbf9f">18%</td>
+            <td>B1 浏览器内置 AI · A1 自动入账 · B2 规则洞察</td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:#e0a878"></span>可靠性与数据安全<br><span style="color:var(--ink2);font-size:12px">不丢数据、不掉提醒</span></td>
+            <td class="pct" style="color:#e0a878">15%</td>
+            <td>C2 快照 diff + 选择性恢复 · A1 同步键补齐</td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:#d98f8f"></span>形态与触达<br><span style="color:var(--ink2);font-size:12px">关窗之后仍然在</span></td>
+            <td class="pct" style="color:#d98f8f">12%</td>
+            <td>C1 桌面后台提醒 · C3 移动端套壳</td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:#b8b0a0"></span>情感与回忆沉淀<br><span style="color:var(--ink2);font-size:12px">记录有回响</span></td>
+            <td class="pct" style="color:#b8b0a0">5%</td>
+            <td>D1 问答集锦 · D3 周报长图</td>
+          </tr>
+        </table>
+        <p class="note">
+          占比为<b>体感收益权重</b>（我按"这项做完之后，日常使用感受的变化幅度"估的），不是可用代码量或工时。<br>
+          最大的两块（数据闭环 + 洞察）合计 <b>50%</b>，共同点只有一个：<b>让已经记下来的数据自己动起来</b>，而不是再发明一种新数据要你填。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② 成本分布 -->
+  <section class="panel">
+    <h2>② 成本分布 <em>推荐的四批里，工作量落在哪</em></h2>
+    <div class="split">
+      <svg viewBox="0 0 420 420" width="400" height="400" role="img"
+           aria-label="成本分布饼图：批1 补漏小件 12%、批2 账本闭环 28%、批3 目标贯通 22%、批4 本地 AI 38%">
+        <g stroke="#fdfaf3" stroke-width="2.5" stroke-linejoin="round">
+          <path d="M210 210 L210 50 A160 160 0 0 1 319.53 93.36 Z" fill="#7fa3bd"/>
+          <path d="M210 210 L319.53 93.36 A160 160 0 0 1 304.05 339.44 Z" fill="#a294c9"/>
+          <path d="M210 210 L304.05 339.44 A160 160 0 0 1 100.47 326.64 Z" fill="#8fbf9f"/>
+          <path d="M210 210 L100.47 326.64 A160 160 0 0 1 210 50 Z" fill="#e0a878"/>
+        </g>
+        <g fill="#fffdf8" font-size="15" font-weight="600" text-anchor="middle" dominant-baseline="middle"
+           font-family="-apple-system,'Segoe UI','Microsoft YaHei',sans-serif">
+          <text x="256" y="94">12%</text>
+          <text x="335" y="218">28%</text>
+          <text x="202" y="335">22%</text>
+          <text x="94" y="164">38%</text>
+        </g>
+      </svg>
+
+      <div class="legend">
+        <table>
+          <tr><th style="width:38%">批次</th><th style="width:14%">工作量</th><th>内容</th></tr>
+          <tr>
+            <td><span class="dot" style="background:#7fa3bd"></span>批 1 · 补漏小件</td>
+            <td class="pct" style="color:#7fa3bd">12%</td>
+            <td>D1 今日一问问答集锦（需求承诺未兑现）+ A4 打断记录</td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:#a294c9"></span>批 2 · 账本闭环</td>
+            <td class="pct" style="color:#a294c9">28%</td>
+            <td>A1 周期记账 / 订阅总览（含预算口径与同步键改动）</td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:#8fbf9f"></span>批 3 · 目标贯通</td>
+            <td class="pct" style="color:#8fbf9f">22%</td>
+            <td>A2 目标 ↔ 待办联动（含进度语义与孤儿处理）</td>
+          </tr>
+          <tr>
+            <td><span class="dot" style="background:#e0a878"></span>批 4 · 本地 AI</td>
+            <td class="pct" style="color:#e0a878">38%</td>
+            <td>B1 内置 AI 可用性实测 + 翻译/摘要落地 + 全链路降级</td>
+          </tr>
+        </table>
+        <p class="note">
+          <b>性价比拐点</b>：只做批 1 + 批 2，投入约 <b>40%</b> 的工作量，能拿到约 <b>50%</b> 的收益（账本闭环 + 补漏）。<br>
+          批 4 最贵且最不确定（取决于机器是否满足 22GB 磁盘 / VRAM&gt;4GB 门槛），所以排在最后 —— 实测不通过就退回现状，不伤已有功能。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>③ 一句话对照 <em>现状 → 完成后</em></h2>
+    <table>
+      <tr><th style="width:22%">维度</th><th style="width:39%">现在的状态</th><th>完成后的状态</th></tr>
+      <tr><td>数据闭环</td><td>账本全靠手记；目标百分比手填；单词/问答/旧忆看完即弃</td><td>固定支出自动入账；目标进度由任务驱动；旧内容按记忆曲线回来找你</td></tr>
+      <tr><td>洞察</td><td>只统计"做了多少"（番茄数 / 时长 / 完成率）</td><td>还解释"为什么"：估时偏差、被打断的来源、情绪与专注的关系</td></tr>
+      <tr><td>智能</td><td>AI 助手是死功能（CloudBase 未部署）；翻译走联网</td><td>本地模型离线可用，数据不出本机，零 Key</td></tr>
+      <tr><td>可靠性</td><td>快照恢复是覆盖式（之后的新数据会丢）；关窗后提醒全静默</td><td>先看差异再恢复；关窗也能收到桌面通知</td></tr>
+      <tr><td>形态</td><td>桌面版一关就没；移动端只有 PWA</td><td>桌面常驻提醒；扩展形态吃到 Chrome 138 稳定版的内置 AI</td></tr>
+      <tr><td>情感</td><td>年报是唯一的"成册"输出</td><td>问答集锦 / 周报长图 / 复习卡让记录有回响</td></tr>
+    </table>
+    <p class="note">
+      诚实说明：这一轮<b>不会</b>提升首屏性能，也<b>不会</b>让单文件变小（除 B1 是零体积外，其余每批预计 +2~10 KB）；
+      移动端的原生体验只有做 C3 才有。它解决的是<b>「数据用不起来」和「提醒不可靠」</b>，不是「跑得更快」。
+    </p>
+  </section>
+
+</div>
+<footer>个人工作台 · 第五轮方案讨论稿 · 确认后再开工，此文件可随讨论删除</footer>
+</body>
+</html>

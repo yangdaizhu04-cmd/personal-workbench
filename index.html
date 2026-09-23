@@ -151,6 +151,8 @@
 <script src="js/modules/scenes.js"></script>
 <!-- 沉浸专注层：排在 modules/sound.js 之后，保证 pomo:start 的渐入排在 restoreCombo 之后能听到 -->
 <script src="js/16-immersive.js"></script>
+<!-- 氛围引擎：按时段编排场景/音景/主题。排在 immersive/sound 之后（要调它们的接口），main.js 之前 -->
+<script src="js/17-ambience.js"></script>
 <!-- ThreeUI 视觉 island（构建产物：tools/build-islands.mjs；React 组件打包为普通脚本） -->
 <script src="vendor/threeui/islands/core.js"></script>
 <!-- ===== boot ===== -->

@@ -136,6 +136,79 @@ WB.registerModule({
       cssEditor(),
     ]));
 
+    /* --- 氛围编排（js/17-ambience.js）：按时段自动编排 场景 / 音景 / 主题 ---
+       引擎默认关闭；这里是唯一的确认入口与唯一的搭配入口。
+       下拉用原生 select（十二个场景用分段控件会撑爆一行），样式走已有的 select.input */
+    const AMB = WB.ambience;
+    if(AMB){
+      const amb = AMB.plan();
+      const nowSeg = AMB.currentSeg();
+      const ambRows = [];
+
+      const pickSel = (items, cur, onSet) => {
+        const sel = el("select", {class: "input",
+          style: {width: "auto", minWidth: "92px", padding: "5px 8px", fontSize: "13px"}});
+        items.forEach(([v, l]) => sel.appendChild(el("option", {value: v, text: l})));
+        sel.value = cur;
+        sel.addEventListener("change", () => onSet(sel.value));
+        return sel;
+      };
+      const sceneOpts = [["off", "不干预"]].concat(
+        (WB.immersive && WB.immersive.order ? WB.immersive.order : [])
+          .map(id => [id, WB.immersive.scenes[id]]));
+      const soundOpts = [["off", "无"]].concat(AMB.SOUND_KEYS);
+      const themeOpts = [["light", "晨雾奶油"], ["dark", "夜雾"], ["auto", "跟随系统"]];
+
+      /* 首次进来问一次（不是弹窗：不打断，也不进 modal 栈） */
+      if(!s.ambienceAsked){
+        ambRows.push(el("div", {class: "row",
+          style: {gap: "10px", alignItems: "center", padding: "10px 0", flexWrap: "wrap"}},
+          el("div", {class: "grow"},
+            el("div", {text: "让工作台跟着一天走？", style: {fontSize: "14.5px"}}),
+            el("div", {class: "small faint", text: "打开后场景、音景、主题按时段自动切换（下面每一格都能自己改）。不点它，它一次都不会动你的界面"})),
+          el("button", {class: "btn sm primary", text: "启用跟随节律",
+            onclick: () => { WB.theme.merge({ambienceOn: true, ambienceAsked: true}); AMB.apply(true); WB.router.render(); }}),
+          el("button", {class: "btn sm ghost", text: "先不用",
+            onclick: () => { WB.theme.set("ambienceAsked", true); WB.router.render(); }})));
+      }
+
+      ambRows.push(row("跟随节律", "按时段自动编排下面的搭配；关掉就一切照旧，手动开关完全不受影响",
+        toggle(s.ambienceOn, v => {
+          WB.theme.set("ambienceOn", v);
+          if(v){ if(!s.ambienceAsked) WB.theme.set("ambienceAsked", true); AMB.apply(true); }
+          WB.router.render();
+        })));
+
+      AMB.SEGS.forEach(seg => {
+        const c = amb[seg.id];
+        const isNow = seg.id === nowSeg.id;
+        const r = row(seg.name + " " + AMB.timeLabel(seg) + (isNow ? " · 当前" : ""),
+          isNow ? AMB.describe(seg.id) : "",
+          el("div", {class: "row", style: {gap: "6px", flexWrap: "wrap", alignItems: "center"}},
+            pickSel(sceneOpts, c.scene, v => { AMB.setSeg(seg.id, {scene: v}); WB.router.render(); }),
+            pickSel(soundOpts, c.sound, v => { AMB.setSeg(seg.id, {sound: v}); WB.router.render(); }),
+            pickSel(themeOpts, c.theme, v => { AMB.setSeg(seg.id, {theme: v}); WB.router.render(); })));
+        r.classList.add("amb-row");   // 窄屏换行规则见 main.css（否则标签列被三个下拉挤成竖条）
+        ambRows.push(r);
+      });
+
+      ambRows.push(el("div", {class: "small faint", style: {padding: "8px 0 0"}},
+        AMB.soundReady()
+          ? "音景在时段切换时会替换成上面那一格（你手动调的多路混音会被它覆盖；选「无」则本时段不放）。本地音乐与我的音频库不受影响"
+          : "音景要等你手动播放过一次声音之后才会自动切 —— 浏览器不允许页面自己起播音频；在那之前只切场景与主题"));
+
+      ambRows.push(el("div", {class: "row", style: {gap: "8px", flexWrap: "wrap", paddingTop: "10px"}},
+        el("button", {class: "btn sm", text: "立即应用当前时段", onclick: () => {
+          const r = AMB.apply(true);
+          WB.ui.toast(r ? "已切到「" + nowSeg.name + "」：" + AMB.describe(nowSeg.id) : "先打开「跟随节律」开关");
+        }}),
+        el("button", {class: "btn sm ghost", text: "恢复默认编排", onclick: () => {
+          AMB.resetPlan(); WB.router.render(); WB.ui.toast("已恢复默认编排");
+        }})));
+
+      wrap.appendChild(sectionCard("sparkle", "氛围编排", ambRows));
+    }
+
     /* --- 番茄钟与提醒 --- */
     wrap.appendChild(sectionCard("timer", "番茄钟与提醒", [
       rowNum("专注时长（分钟）", s.pomodoroFocus, v => WB.theme.set("pomodoroFocus", v), 5, 180),

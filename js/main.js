@@ -161,6 +161,7 @@ function checkDayRollover(){
 /* ---------- 启动 ---------- */
 function boot(){
   WB.theme.init();
+  if(WB.ambience && WB.ambience.init) WB.ambience.init();   // 引擎没开时 init 直接返回，零成本
   if(WB.scenes && WB.scenes.init) WB.scenes.init();
   WB.iconHydrate(document);
   WB.router.init();

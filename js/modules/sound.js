@@ -637,10 +637,29 @@ function restoreCombo(){
   const p = prefs();
   Object.keys(p.active).forEach(k => { if(p.active[k]) startSource(k); });
 }
+/* 氛围引擎用：把上面这七路自动音源精确切到指定一路（key 为空/"off" = 全停，改静音时段）。
+   幂等 —— 目标与现状一致时什么都不做，所以重复调用绝不会打断正在播的音频。
+   只动这七路；本地音乐（local）与我的音频库（url）一律不碰（那是用户自己放的东西）。 */
+function setCombo(key){
+  const want = (key && key !== "off") ? key : null;
+  const p = prefs();
+  let changed = false;
+  SRC_META.forEach(([k]) => {
+    const on = (k === want);
+    if(on && !running[k]){ startSource(k); changed = true; }
+    if(!on && running[k]){ stopSource(k); changed = true; }
+    if(!!p.active[k] !== on){ p.active[k] = on; changed = true; }
+  });
+  if(changed){ setPrefs(p); refreshPanel(); }
+  return changed;
+}
+/* 音频上下文是否已被用户手势解锁：没解锁时起播只会得到一个挂起的 context，
+   静默失败还让「音景明明切了却没声音」变得无法解释 —— 所以引擎据此决定要不要动手 */
+function unlocked(){ return !!ctx && ctx.state === "running"; }
 
 WB.registerModule({id: "sound-internal", title: "声音", icon: "music", hidden: true, render(){}});
 WB.sound = {renderPanel(elx){ renderPanelInto(elx); }, toggle: toggleAll, muteAll, restoreCombo, anyPlaying,
-  setDuck, duckReset, duckLevel(){ return duckFactor; }};
+  setCombo, unlocked, setDuck, duckReset, duckLevel(){ return duckFactor; }};
 
 /* 番茄开始自动恢复组合；结束/收工先淡出再静音（原来 pomo:finish 全项目没人 emit，
    属于死订阅，2026-09-21 随沉浸专注层一并接上） */
