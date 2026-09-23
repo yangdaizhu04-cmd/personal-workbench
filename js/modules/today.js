@@ -74,10 +74,94 @@ function setCardsExpanded(v){
   ui.todayExpanded = !!v;
   WB.store.set("uiPrefs", ui);
 }
+/* 极简模式：一键只留顶部日期天气 + 今日三大件（比折叠条更彻底的专注时刻） */
+function minimalOn(){
+  const ui = WB.store.get("uiPrefs", {});
+  return !!ui.todayMinimal;
+}
+function setMinimal(v){
+  const ui = WB.store.get("uiPrefs", {});
+  ui.todayMinimal = !!v;
+  WB.store.set("uiPrefs", ui);
+}
 /* 防分心：番茄专注中或收工后，内容类卡片淡出 */
 function contentHidden(){
   return (WB.pomodoro && WB.pomodoro.isFocusing && WB.pomodoro.isFocusing()) ||
          (WB.store.get("offworkDone:" + WB.bizDate(), false));
+}
+
+/* ---------- 今日纪念卡：三大件全完成时生成一张可保存的 PNG（每天最多弹一次） ---------- */
+function showMemoryCard(dateStr, items){
+  if(WB.store.get("memoryCard:" + dateStr, false)) return;
+  WB.store.set("memoryCard:" + dateStr, true);
+  setTimeout(() => {   // 让彩带先飞一会儿再上弹窗
+    const W = 720, H = 900;
+    const cv = document.createElement("canvas");
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d");
+    const FONT = '"LXGW WenKai Subset","LXGW WenKai","Microsoft YaHei",sans-serif';
+    ctx.fillStyle = "#f7f2e8";
+    ctx.fillRect(0, 0, W, H);
+    const blob = (x, y, r, c) => {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, c); g.addColorStop(1, "rgba(247,242,232,0)");
+      ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    };
+    blob(130, 150, 280, "rgba(127,163,189,.28)");
+    blob(620, 260, 250, "rgba(176,160,209,.24)");
+    blob(560, 780, 320, "rgba(238,196,168,.2)");
+    const rr = (x, y, w, h, r) => {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    };
+    rr(60, 90, 600, 640, 28);
+    ctx.fillStyle = "rgba(255,253,247,.85)";
+    ctx.fill();
+    const d = WB.parseDate(dateStr);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#4a4a5a";
+    ctx.font = "600 46px " + FONT;
+    ctx.fillText((d.getMonth() + 1) + " 月 " + d.getDate() + " 日", W / 2, 210);
+    ctx.fillStyle = "#8a8a9a";
+    ctx.font = "24px " + FONT;
+    ctx.fillText(WB.WEEK_CN[d.getDay()] + " · 今日三大件全部完成", W / 2, 258);
+    ctx.strokeStyle = "rgba(127,163,189,.5)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(140, 292); ctx.lineTo(580, 292); ctx.stroke();
+    ctx.textAlign = "left";
+    items.forEach((it, i) => {
+      const y = 366 + i * 96;
+      ctx.strokeStyle = "#7fa3bd"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(150, y - 12, 17, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(141, y - 12); ctx.lineTo(148, y - 4); ctx.lineTo(161, y - 22);
+      ctx.stroke();
+      ctx.fillStyle = "#4a4a5a";
+      ctx.font = "30px " + FONT;
+      ctx.fillText(it.title.length > 14 ? it.title.slice(0, 14) + "…" : it.title, 190, y);
+    });
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#7fa3bd";
+    ctx.font = "600 34px " + FONT;
+    ctx.fillText("把今天好好过完了 ✦", W / 2, 672);
+    ctx.fillStyle = "#b0a8b8";
+    ctx.font = "20px " + FONT;
+    ctx.fillText("晨雾奶油 · 个人工作台", W / 2, 838);
+    cv.style.cssText = "width:100%;max-width:330px;border-radius:16px;box-shadow:0 12px 32px rgba(80,80,120,.14);margin:0 auto;display:block;";
+    WB.ui.modal({title: "今日纪念卡片", icon: "sparkle", content: cv,
+      actions: [
+        {label: "保存图片", primary: true, onClick: () => {
+          cv.toBlob(b => WB.downloadFile("今日纪念卡-" + dateStr + ".png", b, "image/png"));
+          WB.ui.toast("已保存到下载");
+          return true;   // 返回真值 → modal 自动关
+        }},
+        {label: "关闭"}]});
+  }, 800);
 }
 
 WB.registerModule({
@@ -94,7 +178,8 @@ WB.registerModule({
     wrap.appendChild(this.dateCard(dateStr));
 
     /* ===== 窗景入口（ThreeUI 场景页；单文件版自动隐藏） ===== */
-    if(WB.scenes && !window.WB_SINGLE_FILE){
+    const minimal = minimalOn();
+    if(!minimal && WB.scenes && !window.WB_SINGLE_FILE){
       wrap.appendChild(el("div", {class: "row", style: {gap: "8px", flexWrap: "wrap"}},
         el("span", {class: "small faint", style: {alignSelf: "center"}, text: "窗外："}),
         Object.entries(WB.scenes.SCENES).map(([key, s]) =>
@@ -127,6 +212,7 @@ WB.registerModule({
     const expanded = cardsExpanded();
     prefs.forEach(p => {
       if(p.hidden) return;
+      if(minimal && p.id !== "big3") return;            // 极简：只留三大件
       if(!PINNED.includes(p.id) && !expanded) return;   // 折叠态只渲染常驻三张
       if(p.id === "content" && contentHidden()) return;
       const b = builders[p.id];
@@ -140,6 +226,7 @@ WB.registerModule({
       nodes.push(card);
     });
     nodes.forEach(n => grid.appendChild(n));
+    if(minimal) grid.style.gridTemplateColumns = "1fr";   // 只剩一张卡时占满整行
     if(!nodes.length){
       grid.appendChild(el("div", {class: "card"},
         WB.ui.emptyState("sparkle", "今天从一张白纸开始", "右侧 ⚙ 可以在设置里打开卡片，或去仪式里圈出今日重点。")));
@@ -152,24 +239,30 @@ WB.registerModule({
       WB.ui.toast("卡片顺序已记住");
     }});
 
-    /* 卡片管理条 */
-    const manageBar = el("div", {class: "row", style: {justifyContent: "flex-end", padding: "2px 4px"}});
-    manageBar.appendChild(el("button", {class: "btn sm ghost", html: icon("grid", 14) + "<span>卡片管理</span>",
-      onclick: () => this.cardManager()}));
-    wrap.appendChild(manageBar);
+    /* 卡片管理条（极简模式下连管理条也收掉） */
+    if(!minimal){
+      const manageBar = el("div", {class: "row", style: {justifyContent: "flex-end", padding: "2px 4px"}});
+      manageBar.appendChild(el("button", {class: "btn sm ghost", html: icon("grid", 14) + "<span>卡片管理</span>",
+        onclick: () => this.cardManager()}));
+      wrap.appendChild(manageBar);
+    }
     wrap.appendChild(grid);
 
-    /* 折叠条：常驻三张之外的卡片收在这里。
+    /* 折叠条 + 极简开关：常驻三张之外的卡片收在这里。
        以前 15 张卡默认全铺，首屏要滚 2.6 屏；现在新档案一眼看完，点一下全展开 */
     const extra = prefs.filter(p => !p.hidden && !PINNED.includes(p.id) && builders[p.id]);
-    if(extra.length){
+    const bar = el("div", {class: "center col", style: {gap: "4px"}});
+    bar.appendChild(el("button", {class: "btn sm ghost",
+      text: minimal ? "退出极简模式" : "极简模式 · 只留三大件",
+      onclick: () => { setMinimal(!minimal); WB.router.render(); }}));
+    if(!minimal && extra.length){
       const names = extra.slice(0, 4).map(p => (CARD_META[p.id] || {}).name).filter(Boolean).join(" · ");
-      wrap.appendChild(el("div", {class: "center col", style: {gap: "4px"}},
-        el("button", {class: "btn sm ghost",
-          text: expanded ? "收起卡片（只留三大件 / 待办 / 日志）" : "展开其余 " + extra.length + " 张卡片",
-          onclick: () => { setCardsExpanded(!expanded); WB.router.render(); }}),
-        expanded ? null : el("span", {class: "small faint", text: names + (extra.length > 4 ? " 等" : "")})));
+      bar.appendChild(el("button", {class: "btn sm ghost",
+        text: expanded ? "收起卡片（只留三大件 / 待办 / 日志）" : "展开其余 " + extra.length + " 张卡片",
+        onclick: () => { setCardsExpanded(!expanded); WB.router.render(); }}));
+      if(!expanded) bar.appendChild(el("span", {class: "small faint", text: names + (extra.length > 4 ? " 等" : "")}));
     }
+    wrap.appendChild(bar);
 
     /* ===== 收工按钮（18 点后 / 手动） ===== */
     const hour = new Date().getHours();
@@ -237,7 +330,7 @@ WB.registerModule({
             if(it.done){
               WB.ui.starBurst(e.clientX || innerWidth / 2, e.clientY || innerHeight / 2);
               WB.ui.chime("done");
-              if(items.every(x => x.done)){ WB.ui.celebrate({big: true}); WB.ui.toast("今日三大件全部完成，了不起 ✦"); }
+              if(items.every(x => x.done)){ WB.ui.celebrate({big: true}); WB.ui.toast("今日三大件全部完成，了不起 ✦"); showMemoryCard(dateStr, items); }
               }
               WB.router.render();
               if(WB.badgeCheck) WB.badgeCheck();   // 三大件结算点：以前漏了
@@ -259,7 +352,8 @@ WB.registerModule({
     const todos = WB.store.get("todos", []).filter(t => t.date === dateStr && !t.done);
     const overdue = WB.store.get("todos", []).filter(t => !t.done && t.date && t.date < dateStr && !(t.repeat && t.repeat.type !== "none"));
     const box = el("div", {class: "card"},
-      el("div", {class: "card-title", html: icon("check-circle", 18) + "<span>今日待办</span>",
+      el("div", {class: "card-title", html: icon("check-circle", 18) + "<span>今日待办</span><span class='card-sub'>"
+        + todos.length + " 件待完成" + (overdue.length ? " · 逾期 " + overdue.length : "") + "</span>",
         onclick: () => WB.router.go("todos")}));
     if(overdue.length){
       box.appendChild(el("div", {class: "row small", style: {color: "var(--danger)", marginBottom: "8px"},
@@ -329,7 +423,8 @@ WB.registerModule({
 
   /* ---------- 心情速记 ---------- */
   moodCard(dateStr){
-    const rec = WB.store.get("moods", []).find(m => m.date === dateStr);
+    const allMoods = WB.store.get("moods", []);
+    const rec = allMoods.find(m => m.date === dateStr);
     const faces = [["😞", "很糟"], ["🙁", "不太好"], ["😐", "一般"], ["🙂", "不错"], ["😄", "很好"]];
     const row = el("div", {class: "row", style: {justifyContent: "space-between", fontSize: "24px"}});
     faces.forEach(([emoji, label], i) => {
@@ -356,6 +451,18 @@ WB.registerModule({
       el("div", {class: "card-title", html: icon("smile", 18) + "<span>心情速记</span><span class='card-sub'>点一下就好</span>",
         onclick: () => WB.router.go("mood")}),
       row);
+    /* 近 7 天情绪小条：一眼看到这周的起伏（都是"·"= 没记过就不占行） */
+    const MOOD_FACES = ["😞", "🙁", "😐", "🙂", "😄"];
+    const wk = [];
+    for(let i = 6; i >= 0; i--){
+      const ds = WB.dateStr(new Date(WB.parseDate(dateStr).getTime() - i * 86400000));
+      const m = allMoods.find(x => x.date === ds);
+      wk.push(m ? MOOD_FACES[(m.level || 3) - 1] : "·");
+    }
+    if(wk.some(c => c !== "·")){
+      card.appendChild(el("div", {class: "small faint", style: {marginTop: "10px", letterSpacing: "2px"},
+        text: "近 7 天 " + wk.join(" ")}));
+    }
     if(rec && rec.note) card.appendChild(el("div", {class: "small muted", style: {marginTop: "8px"}, text: "「" + rec.note + "」"}));
     return card;
   },

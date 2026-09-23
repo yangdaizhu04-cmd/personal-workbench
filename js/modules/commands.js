@@ -9,19 +9,35 @@ let box = null, input = null, listEl = null, selIdx = 0, items = [];
 function parseDateWords(text){
   const today = WB.parseDate(WB.bizDate());
   let date = null, clean = text;
-  const cnNum = "一二三四五六日天";
+  /* getDay() 周日=0、周一=1。以前直接用 "一二三四六".indexOf 当星期值，全体差一天（"周三"解析到周二） */
+  const dayIdx = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "日": 0, "天": 0};
   const rep = (re, fn) => {
     const m = clean.match(re);
     if(m){ const r = fn(m); if(r){ date = r; clean = clean.replace(re, "").trim(); } }
   };
+  /* 重复规则与优先级要先抽走：否则"每周三"会被下面的"周X"正则当成一次性日期，
+     标题只剩一个"每"字（老问题：每周一三五 → 标题"每三五"） */
+  let repeat = null, prio = null;
+  const wkm = clean.match(/(?:^|\s)每周([一二三四五六日天]+)/);
+  if(wkm){
+    repeat = {type: "weekly", days: [...new Set([...wkm[1]].map(ch => dayIdx[ch]).filter(d => d !== undefined))]};
+    if(!repeat.days.length) repeat = {type: "daily", days: []};
+    clean = clean.replace(wkm[0], " ").trim();
+  }else{
+    const dm = clean.match(/(?:^|\s)(每天|每日)/);
+    if(dm){ repeat = {type: "daily", days: []}; clean = clean.replace(dm[0], " ").trim(); }
+  }
+  const pm = clean.match(/(?:^|\s)!([123])(?=$|\s)/);
+  if(pm){ prio = {"1": "high", "2": "mid", "3": "low"}[pm[1]]; clean = clean.replace(pm[0], " ").trim(); }
   /* 允许出现在句中，但要求前面是空格或开头：「交周报 明天 15:00」能识别，
      而「整理明天的会议纪要」不会误伤（"明天"前没有分隔） */
   rep(/(?:^|\s)(大后天)/, () => WB.dateStr(new Date(today.getTime() + 3 * 86400000)));
   rep(/(?:^|\s)(后天)/, () => WB.dateStr(new Date(today.getTime() + 2 * 86400000)));
   rep(/(?:^|\s)(明天)/, () => WB.dateStr(new Date(today.getTime() + 86400000)));
   rep(/(?:^|\s)(今天)/, () => WB.bizDate());
-  rep(/\s*(下周|下周|下周)([一二三四五六日天])/, m => {
-    const want = cnNum.indexOf(m[2]);
+  rep(/(?:^|\s)(\d{1,3})\s*天后/, m => WB.dateStr(new Date(today.getTime() + Number(m[1]) * 86400000)));
+  rep(/\s*(下周)([一二三四五六日天])/, m => {
+    const want = dayIdx[m[2]];
     const cur = today.getDay();
     let add = (7 - cur + want);
     if(add <= 0) add += 7;
@@ -29,7 +45,7 @@ function parseDateWords(text){
     return WB.dateStr(new Date(today.getTime() + add * 86400000));
   });
   rep(/\s*(周|礼拜|星期)([一二三四五六日天])/, m => {
-    const want = cnNum.indexOf(m[2]);
+    const want = dayIdx[m[2]];
     const cur = today.getDay();
     let add = want - cur;
     if(add <= 0) add += 7;
@@ -48,7 +64,7 @@ function parseDateWords(text){
     time = String(Number(tm[1])).padStart(2, "0") + ":" + (tm[2] ? String(Number(tm[2])).padStart(2, "0") : "00");
     clean = clean.replace(tm[0], " ").trim();
   }
-  return {date, clean, time};
+  return {date, clean, time, repeat, prio};
 }
 
 /* ---------- 数据收集 ---------- */
@@ -129,7 +145,7 @@ function buildItems(q){
   if(!t){
     out.length = Math.min(out.length, 6);
     /* 这三条是说明文字，不是命令：标 info 后不可点、上下键会跳过（以前点下去只是把面板关掉，像点错了） */
-    out.push({group: "捕捉", icon: "plus", label: "输入文字回车 → 新待办（支持 明天/周五/3月5日/15:00）", hint: "", info: true});
+    out.push({group: "捕捉", icon: "plus", label: "输入文字回车 → 新待办（明天/周五/15:00/每周一/!1/3天后）", hint: "", info: true});
     out.push({group: "捕捉", icon: "edit", label: "以「记 」开头回车 → 新笔记（#标签自动归类）", hint: "", info: true});
     out.push({group: "捕捉", icon: "translate", label: "「翻译 xxx」→ 中英互译", hint: "", info: true});
     focusItems();     // 放在 out.length 截断之后，否则会被砍掉
@@ -150,15 +166,21 @@ function buildItems(q){
       const parsed = parseDateWords(t);
       const title = parsed.clean || t;
       const date = parsed.date || WB.bizDate();
-      /* 日期与时刻一起写进待办：「明天 15:00 交周报」一句话成型，
-         以前只能先建成"明天"的待办、再打开弹窗补时刻 */
-      const when = (parsed.date ? WB.relDayLabel(parsed.date) : "") + (parsed.time ? (parsed.date ? " " : "今天 ") + parsed.time : "");
+      /* 日期/时刻/重复一句话成型：「交周报 明天 15:00」→ 明天 15:00；「喝水 每天」→ 每天重复；
+         !1/!2/!3 映射高/中/低（todos.js 的 repeat 结构：{type:"daily"|"weekly", days:[周日=0]}） */
+      const repTxt = parsed.repeat
+        ? (parsed.repeat.type === "daily" ? "每天" : "每周" + parsed.repeat.days.map(d => "日一二三四五六"[d]).join(""))
+        : "";
+      let when = (parsed.date ? WB.relDayLabel(parsed.date) : "") + (parsed.time ? (parsed.date ? " " : "今天 ") + parsed.time : "");
+      if(repTxt) when += (when ? " · " : "") + repTxt;
       out.push({group: "捕捉", icon: "check-circle",
         label: "新待办：" + title + (when ? "（" + when + "）" : ""),
         hint: "回车添加",
         exec: () => {
-          WB.collection("todos").add({title, prio: "mid", date, time: parsed.time || "", done: false});
-          WB.ui.toast("已添加到 " + WB.relDayLabel(date) + (parsed.time ? " " + parsed.time : ""));
+          WB.collection("todos").add({title, prio: parsed.prio || "mid", date,
+            time: parsed.time || "", done: false, repeat: parsed.repeat || {type: "none", days: []}});
+          WB.ui.toast("已添加到 " + WB.relDayLabel(date) + (parsed.time ? " " + parsed.time : "")
+            + (repTxt ? " · " + repTxt : "") + (parsed.prio ? " · " + {"high": "高", "mid": "中", "low": "低"}[parsed.prio] + "优先级" : ""));
           WB.router.render();
         }});
       out.push({group: "捕捉", icon: "edit", label: "或存为笔记：" + t, hint: "Shift+回车", alt: true,
