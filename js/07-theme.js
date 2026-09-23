@@ -30,6 +30,7 @@ const DEFAULTS = {
   funPetDuringRest: false,
   themeCustomBg: "",         // 自定义背景图 dataURL（可选）
   lastExportTs: 0,           // 上次导出 JSON 备份的时间（快照提醒用）
+  firstSeenTs: 0,            // 首次使用时间：从未导出过时用它当提醒起点（免得从 1970 年算）
 };
 
 function all(){

@@ -39,6 +39,22 @@ function saveCardPrefs(prefs){
   p.todayCards = prefs;
   WB.store.set("uiPrefs", p);
 }
+/* 常驻三张：仪式 → 执行 → 复盘，首屏一眼看完（其余卡片收在折叠条里） */
+const PINNED = ["big3", "todos", "journal"];
+/* 折叠状态：
+   - 全新档案（没有 todayCards）→ 默认收起，首屏只有三张卡
+   - 已经布局过的老档案（有 todayCards 但没这个键）→ 默认展开，不会被突然收走
+   - 用户手动点过折叠条 → 以记下的值为准 */
+function cardsExpanded(){
+  const ui = WB.store.get("uiPrefs", {});
+  if(typeof ui.todayExpanded === "boolean") return ui.todayExpanded;
+  return !!ui.todayCards;
+}
+function setCardsExpanded(v){
+  const ui = WB.store.get("uiPrefs", {});
+  ui.todayExpanded = !!v;
+  WB.store.set("uiPrefs", ui);
+}
 /* 防分心：番茄专注中或收工后，内容类卡片淡出 */
 function contentHidden(){
   return (WB.pomodoro && WB.pomodoro.isFocusing && WB.pomodoro.isFocusing()) ||
@@ -89,8 +105,10 @@ WB.registerModule({
       content: () => this.contentCard(dateStr),
     };
     const nodes = [];
+    const expanded = cardsExpanded();
     prefs.forEach(p => {
       if(p.hidden) return;
+      if(!PINNED.includes(p.id) && !expanded) return;   // 折叠态只渲染常驻三张
       if(p.id === "content" && contentHidden()) return;
       const b = builders[p.id];
       if(!b) return;
@@ -121,6 +139,18 @@ WB.registerModule({
       onclick: () => this.cardManager()}));
     wrap.appendChild(manageBar);
     wrap.appendChild(grid);
+
+    /* 折叠条：常驻三张之外的卡片收在这里。
+       以前 15 张卡默认全铺，首屏要滚 2.6 屏；现在新档案一眼看完，点一下全展开 */
+    const extra = prefs.filter(p => !p.hidden && !PINNED.includes(p.id) && builders[p.id]);
+    if(extra.length){
+      const names = extra.slice(0, 4).map(p => (CARD_META[p.id] || {}).name).filter(Boolean).join(" · ");
+      wrap.appendChild(el("div", {class: "center col", style: {gap: "4px"}},
+        el("button", {class: "btn sm ghost",
+          text: expanded ? "收起卡片（只留三大件 / 待办 / 日志）" : "展开其余 " + extra.length + " 张卡片",
+          onclick: () => { setCardsExpanded(!expanded); WB.router.render(); }}),
+        expanded ? null : el("span", {class: "small faint", text: names + (extra.length > 4 ? " 等" : "")})));
+    }
 
     /* ===== 收工按钮（18 点后 / 手动） ===== */
     const hour = new Date().getHours();
@@ -612,7 +642,7 @@ WB.registerModule({
     const prefs = cardPrefs();
     const body = el("div");
     body.appendChild(el("p", {class: "small muted", style: {marginBottom: "10px"},
-      text: "拖动调整总览卡片顺序；开关控制显隐。顺序即时保存。"}));
+      text: "拖动调整总览卡片顺序；开关控制显隐。顺序即时保存。除常驻的三大件 / 今日待办 / 今日日志外，其余卡片平时收在总览底部的折叠条里。"}));
     const list = el("div", {class: "list"});
     const render = () => {
       list.innerHTML = "";

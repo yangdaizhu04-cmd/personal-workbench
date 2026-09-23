@@ -81,12 +81,21 @@ async function maybeDaily(){
     const has = (await WB.idb.allKeys(PREFIX)).includes(PREFIX + today);
     if(!has) await take("auto");
     const s = WB.theme.all();
-    const last = s.lastExportTs || 0;
+    /* 从未导出过时以「首次使用」为起点算天数：lastExportTs 默认 0 是 1970 年，
+       直接算会弹出「已经 20719 天没有导出」这种荒谬文案（新用户第一天就撞上） */
+    let last = s.lastExportTs || 0;
+    if(!last){
+      last = s.firstSeenTs || 0;
+      if(!last){ last = Date.now(); WB.theme.set("firstSeenTs", last); }
+    }
     const days = (Date.now() - last) / 86400000;
     const remindKey = "lastSnapRemindDay";
     if(days > 7 && WB.store.get(remindKey) !== today){
       WB.store.set(remindKey, today);
-      setTimeout(() => WB.ui.toast("已经 " + Math.floor(days) + " 天没有导出 JSON 备份文件了，快照只在本机浏览器里，建议到 设置→数据管理 导出一份", "warn"), 3000);
+      const tip = s.lastExportTs
+        ? "已经 " + Math.floor(days) + " 天没有导出 JSON 备份文件了，快照只在本机浏览器里，建议到 设置→数据管理 导出一份"
+        : "还没有导出过备份文件：数据只在本机浏览器里，建议到 设置→数据管理 导出一份带走";
+      setTimeout(() => WB.ui.toast(tip, "warn"), 3000);
     }
   }catch(e){ console.error("[snapshots] daily", e); }
 }
