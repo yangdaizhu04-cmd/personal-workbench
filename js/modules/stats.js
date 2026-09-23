@@ -172,6 +172,19 @@ WB.registerModule({
           {offset: 0, color: A.accent2}, {offset: 1, color: A.accent}]}}}],
     });
 
+    /* 2.5 晨雾指数（按时完成 +5 / 逾期 -3 / 番茄 +2，封顶 100；历史逾期状态无法复原，只对今天计扣分） */
+    const karmaData = days.map(d => WB.karmaDay ? WB.karmaDay(d) : 0);
+    chartCard(view, "晨雾指数", "sparkle").setOption({
+      grid: baseGrid(),
+      tooltip: {trigger: "axis"},
+      xAxis: {type: "category", data: days.map(d => d.slice(5)), axisLabel: {color: A.ink3, fontSize: 10}, axisLine: {lineStyle: {color: A.split}}},
+      yAxis: {type: "value", min: 0, max: 100, axisLabel: {color: A.ink3, fontSize: 10}, splitLine: {lineStyle: {color: A.split}}},
+      series: [{type: "line", data: karmaData, smooth: true, symbolSize: 5,
+        lineStyle: {color: A.accent2, width: 2.5}, itemStyle: {color: A.accent2},
+        areaStyle: {color: {type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [
+          {offset: 0, color: A.accent2 + "55"}, {offset: 1, color: A.accent2 + "05"}]}}}],
+    });
+
     /* 3. 心情曲线 */
     const moodData = days.map(d => {
       const m = WB.store.get("moods", []).find(x => x.date === d);

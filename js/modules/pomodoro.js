@@ -91,6 +91,7 @@ function finish(){
   const minutes = Math.round(s.plannedSec / 60);
   pomoLog.add({date: WB.bizDate(), mode: s.mode, status: "done", minutes,
     bindType: s.bindType, bindId: s.bindId, bindTitle: s.bindTitle, ts: Date.now()});
+  if(WB.coins && s.mode === "focus") WB.coins.forPomo();
   s.running = false; s.accumMs = s.plannedSec * 1000; s.resumeTs = null;
   s.needConfirm = true; s.nextMode = s.mode === "focus" ? "rest" : "focus";
   setState(s); tickStop(); emitPhase();
@@ -267,24 +268,40 @@ function sceneRow(){
 }
 
 /* ---------- 小花园（由 pomoLog 推导） ---------- */
+/* 植物图鉴：按累计番茄数解锁品种；雾中银杏用 CSS 滤镜调成金色 */
+const SPECIES = [
+  {n: 0, emoji: "🌱", name: "小草"},
+  {n: 10, emoji: "🌿", name: "香草"},
+  {n: 25, emoji: "🌸", name: "桃花"},
+  {n: 50, emoji: "🌹", name: "玫瑰"},
+  {n: 100, emoji: "🌳", name: "樱花树"},
+  {n: 200, emoji: "🌳", name: "雾中银杏", gold: true},
+];
+function speciesAt(n){
+  let cur = SPECIES[0];
+  SPECIES.forEach(s => { if(n >= s.n) cur = s; });
+  return cur;
+}
+const GOLD_FILTER = "sepia(1) saturate(2.4) hue-rotate(-18deg) brightness(1.05)";
 function gardenView(){
   const logs = pomoLog.all().slice(-28).reverse(); // 最近的在前
   const wrap = el("div", {class: "row", style: {flexWrap: "wrap", gap: "10px", padding: "6px 0"}});
   if(!logs.length){
-    wrap.appendChild(el("span", {class: "small faint", text: "每完成一个番茄，花园里就长出一株小苗 🌱 每 4 个开一朵花 🌸 放弃会让小苗蔫掉…"}));
+    wrap.appendChild(el("span", {class: "small faint", text: "每完成一个番茄，花园里就长出一株小苗 🌱 累计专注解锁新植物，放弃会留下枯树桩…"}));
     return wrap;
   }
   let focusCount = logs.filter(l => l.status === "done" && l.mode === "focus").length;
   logs.forEach(l => {
-    let emoji;
-    if(l.status === "quit") emoji = "🥀";
+    let emoji, gold = false, name = "";
+    if(l.status === "quit") emoji = "🪵";   // 枯树桩：中断的痕迹留在花园里
     else if(l.mode === "focus"){
-      const n = focusCount;
-      emoji = n % 4 === 0 ? "🌸" : l.minutes >= 50 ? "🌳" : l.minutes >= 25 ? "🌿" : "🌱";
+      const sp = speciesAt(focusCount);
+      emoji = sp.emoji; gold = sp.gold; name = sp.name;
       focusCount--;
     }else emoji = "💧";
-    wrap.appendChild(el("span", {title: (l.bindTitle || "专注") + " · " + l.minutes + " 分钟 · " + (l.status === "done" ? "完成" : "中断"),
-      style: {fontSize: "24px", transition: "transform .2s"}, text: emoji}));
+    wrap.appendChild(el("span", {title: (l.bindTitle || "专注") + " · " + l.minutes + " 分钟 · " +
+        (l.status === "done" ? (name || "完成") : "中断"),
+      style: {fontSize: "24px", transition: "transform .2s", filter: gold ? GOLD_FILTER : "none"}, text: emoji}));
   });
   return wrap;
 }
@@ -297,6 +314,24 @@ function gardenStats(){
     flowers: Math.floor(done.length / 4),
     quits: logs.filter(l => l.status === "quit").length,
   };
+}
+/* 植物图鉴卡：解锁的亮出品种，未解锁显示门槛 */
+function dexCard(){
+  const g = gardenStats();
+  const card = el("div", {class: "card", style: {marginTop: "14px"}},
+    el("div", {class: "card-title", html: icon("sprout", 18) + "<span>植物图鉴</span><span class='card-sub'>已收集 " +
+      SPECIES.filter(s => g.pomos >= s.n).length + " / " + SPECIES.length + "</span>"}));
+  const row = el("div", {class: "row", style: {flexWrap: "wrap", gap: "14px", padding: "6px 0"}});
+  SPECIES.forEach(s => {
+    const got = g.pomos >= s.n;
+    row.appendChild(el("div", {class: "center col", style: {minWidth: "64px", gap: "2px",
+        opacity: got ? 1 : .45},
+      title: got ? s.name + " · 已解锁" : "累计 " + s.n + " 个番茄解锁"},
+      el("span", {style: {fontSize: "26px", filter: s.gold && got ? GOLD_FILTER : "none"}, text: got ? s.emoji : "❔"}),
+      el("span", {class: "small" + (got ? "" : " faint"), text: got ? s.name : s.n + " 番茄"})));
+  });
+  card.appendChild(row);
+  return card;
 }
 
 /* ---------- 模块 ---------- */
@@ -418,6 +453,8 @@ WB.registerModule({
     if(WB.sound && WB.sound.renderPanel) WB.sound.renderPanel(soundCard);
     grid.appendChild(soundCard);
     view.appendChild(grid);
+
+    view.appendChild(dexCard());
 
     /* 今日专注记录 */
     const today = WB.bizDate();

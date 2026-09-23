@@ -134,6 +134,51 @@ WB.registerModule({
         onclick: () => WB.exports && WB.exports.ledger()})),
     ]));
 
+    /* --- 晨雾币 · 奖励商店 --- */
+    const coinBox = el("div");
+    const coinSub = el("span", {class: "card-sub"});
+    const paintBalance = () => { coinSub.textContent = WB.coins.balance() + " 币"; };
+    const paintCoins = () => {
+      coinBox.innerHTML = "";
+      const rs = WB.coins.rewards();
+      if(!rs.length){
+        coinBox.appendChild(el("div", {class: "small faint", style: {padding: "6px 0"},
+          text: "还没有奖励。给自己定几个：完成目标就兑换，别客气。"}));
+      }
+      rs.forEach(r => {
+        coinBox.appendChild(el("div", {class: "row", style: {padding: "7px 0", borderTop: "1px dashed var(--card-border)", alignItems: "center"}},
+          el("div", {class: "grow"},
+            el("div", {text: r.name, style: {fontSize: "14.5px"}}),
+            el("div", {class: "small faint", text: r.cost + " 币"})),
+          el("button", {class: "btn sm", text: "兑换",
+            onclick: () => {
+              if(WB.coins.spend(r.cost, r.name)){
+                WB.ui.chime("big"); WB.ui.toast("已兑换「" + r.name + "」，好好享受 ✦");
+                paintCoins(); paintBalance();
+              }else WB.ui.toast("币还不够，再攒攒（现有 " + WB.coins.balance() + " 币）", "warn");
+            }})));
+      });
+    };
+    const rewardName = el("input", {class: "input", placeholder: "奖励名称（如：玩 30 分钟游戏）", style: {maxWidth: "240px"}});
+    const rewardCost = el("input", {class: "input", type: "number", min: "1", placeholder: "币", style: {maxWidth: "80px"}});
+    const coinAdd = el("div", {class: "row", style: {padding: "9px 0", borderTop: "1px dashed var(--card-border)", gap: "8px", flexWrap: "wrap"}},
+      rewardName, rewardCost,
+      el("button", {class: "btn sm", html: icon("plus", 14) + "<span>添加奖励</span>",
+        onclick: () => {
+          const name = rewardName.value.trim(), cost = Math.round(Number(rewardCost.value));
+          if(!name || !(cost > 0)){ WB.ui.toast("填好名称和币数", "warn"); return; }
+          const rs = WB.coins.rewards().concat({id: WB.uid(), name, cost});
+          WB.store.set("coinRewards", rs);
+          rewardName.value = ""; rewardCost.value = "";
+          paintCoins(); WB.ui.toast("奖励已上架");
+        }}));
+    paintBalance(); paintCoins();
+    wrap.appendChild(el("div", {class: "card"},
+      el("div", {class: "card-title", html: icon("star", 18) + "<span>晨雾币 · 奖励商店</span>", onclick: null}, coinSub),
+      el("div", {class: "small faint", style: {marginBottom: "6px"},
+        text: "完成待办 +2（高优先 +4）· 习惯打卡 +1 · 番茄 +3 · 三大件全完成 +5。赚来的币，花在自己身上。"}),
+      coinBox, coinAdd));
+
     /* --- BYOK 我的密钥 --- */
     const byokS = WB.store.get("byok", {});
     const byokField = (label, key, placeholder, type) => {

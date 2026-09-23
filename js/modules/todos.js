@@ -76,11 +76,13 @@ function checkTodo(t, ev){
     }
     if(ev) WB.ui.starBurst(ev.clientX, ev.clientY);
     WB.ui.chime("done");
+    if(WB.coins) WB.coins.forTodo(t, true);
     const today = WB.bizDate();
     const todays = todos.all().filter(x => x.date === today && !x.repeatOf);
     if(todays.length && todays.every(x => x.done)) WB.ui.celebrate({big: true});
   }else{
     todos.update(t.id, {done: false, doneAt: undefined});
+    if(WB.coins) WB.coins.forTodo(t, false);
   }
   WB.bus.emit("view:dirty");
   if(WB.badgeCheck) WB.badgeCheck();   // 以前漏了这句：完成 500 件也不解锁「五百件事」

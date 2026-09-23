@@ -169,4 +169,52 @@ WB.store = store;
 WB.collection = collection;
 WB.toTrash = toTrash;
 WB.restoreTrash = restoreTrash;
+
+/* ---- 晨雾币（游戏化结算：完成赚币、奖励商店花币） ----
+   只在本地推导与轻 KV，不进云同步白名单；exportAll 全量导出天然带上 */
+const COIN_RULES = {todo: 2, todoHigh: 4, habit: 1, habitCount: 2, pomo: 3, big3: 5};
+function coinShift(delta, why){
+  const c = store.get("coins", {balance: 0, log: []});
+  c.balance += delta;
+  c.log.unshift({t: Date.now(), delta, why});
+  c.log = c.log.slice(0, 30);
+  store.set("coins", c);
+}
+WB.coins = {
+  rules: COIN_RULES,
+  balance(){ return store.get("coins", {balance: 0}).balance || 0; },
+  /* 完成待办赚币 / 取消完成对称扣回（高优先双倍） */
+  forTodo(t, done){
+    const n = t.prio === "high" ? COIN_RULES.todoHigh : COIN_RULES.todo;
+    coinShift(done ? n : -n, done ? "完成待办" : "取消完成");
+  },
+  forHabit(n){ coinShift(n, "习惯打卡"); },
+  forPomo(){ coinShift(COIN_RULES.pomo, "完成番茄"); },
+  /* 三大件全完成：每日一次奖励（门闩防取消重勾反复领） */
+  big3Bonus(){
+    const d = WB.bizDate();
+    if(store.get("big3Bonus:" + d, false)) return;
+    store.set("big3Bonus:" + d, true);
+    coinShift(COIN_RULES.big3, "三大件全完成");
+    if(WB.ui && WB.ui.toast) WB.ui.toast("✦ 三大件全完成 +" + COIN_RULES.big3 + " 币");
+  },
+  spend(cost, name){
+    if(this.balance() < cost) return false;
+    coinShift(-cost, "兑换 · " + name);
+    return true;
+  },
+  rewards(){ return store.get("coinRewards", []); },
+};
+
+/* ---- 晨雾指数（Todoist Karma 思路，渲染期推导不落库）----
+   当日完成待办 +5 / 在身逾期任务 -3 / 完成番茄 +2，封顶 0-100 */
+WB.karmaDay = function(dateStr){
+  const done = store.get("todos", []).filter(t => t.done && t.doneAt &&
+    WB.dateStr(new Date(t.doneAt)) === dateStr).length;
+  const pomos = store.get("pomoLog", []).filter(l => l.date === dateStr && l.status === "done" && l.mode === "focus").length;
+  const overdue = dateStr === WB.bizDate()
+    ? store.get("todos", []).filter(t => !t.done && t.date && t.date < dateStr && !(t.repeat && t.repeat.type !== "none")).length
+    : 0;
+  return Math.max(0, Math.min(100, done * 5 + pomos * 2 - overdue * 3));
+};
 })();

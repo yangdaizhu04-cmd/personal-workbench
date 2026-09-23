@@ -302,7 +302,11 @@ WB.registerModule({
               text: hol.type === "休" ? hol.name + " · 休" : "调休上班"}) : null),
           el("div", {class: "small muted", style: {marginTop: "4px"}},
             lunar ? "农历 " + lunar.monthCn + lunar.dayCn + " · " + lunar.animal + "年" : "",
-            fest ? " · " + fest : "")),
+            fest ? " · " + fest : ""),
+          /* 晨雾币 + 晨雾指数：常驻一眼可见，点击进设置里的奖励商店 */
+          el("div", {class: "small", style: {marginTop: "4px", color: "var(--accent)", cursor: "pointer"},
+            onclick: () => WB.router.go("settings"),
+            text: "✦ " + (WB.coins ? WB.coins.balance() : 0) + " 币 · 晨雾指数 " + (WB.karmaDay ? WB.karmaDay(dateStr) : 0)})),
         right));
   },
 
@@ -330,7 +334,11 @@ WB.registerModule({
             if(it.done){
               WB.ui.starBurst(e.clientX || innerWidth / 2, e.clientY || innerHeight / 2);
               WB.ui.chime("done");
-              if(items.every(x => x.done)){ WB.ui.celebrate({big: true}); WB.ui.toast("今日三大件全部完成，了不起 ✦"); showMemoryCard(dateStr, items); }
+              if(items.every(x => x.done)){
+                WB.ui.celebrate({big: true}); WB.ui.toast("今日三大件全部完成，了不起 ✦");
+                if(WB.coins) WB.coins.big3Bonus();
+                showMemoryCard(dateStr, items);
+              }
               }
               WB.router.render();
               if(WB.badgeCheck) WB.badgeCheck();   // 三大件结算点：以前漏了

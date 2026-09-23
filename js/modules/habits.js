@@ -106,6 +106,7 @@ function checkRow(h, dateStr, big){
         setLog(h.id, dateStr, done ? 0 : 1);
         if(!done){
           WB.ui.starBurst(e.clientX, e.clientY); WB.ui.chime("done");
+          if(WB.coins) WB.coins.forHabit(1);
           if(wasFirst){ WB.ui.celebrate({}); WB.ui.toast("今天第一次打卡，开个好头 ✨"); }
           const s = streakOf(h.id);
           if(s > 0 && s % 7 === 0) WB.ui.toast("🔥「" + h.name + "」连续 " + s + " 天！");
@@ -121,7 +122,8 @@ function checkRow(h, dateStr, big){
     btns.appendChild(el("button", {class: "btn sm", text: "＋1",
       onclick: e => {
         setLog(h.id, dateStr, count + 1);
-        if(count + 1 >= target){ WB.ui.starBurst(e.clientX, e.clientY); WB.ui.chime("done"); WB.ui.toast("「" + h.name + "」今日达标 ✓"); }
+        if(count + 1 >= target){ WB.ui.starBurst(e.clientX, e.clientY); WB.ui.chime("done"); WB.ui.toast("「" + h.name + "」今日达标 ✓");
+          if(WB.coins && count + 1 === target) WB.coins.forHabit(2); }   // 每日首次达标 +2，超刷不加
         WB.router.render();
         if(WB.badgeCheck) WB.badgeCheck();
       }}));
