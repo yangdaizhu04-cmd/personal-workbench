@@ -1,16 +1,21 @@
-/* 17-ambience.js —— 氛围引擎：按时段自动编排「场景 / 音景 / 主题」
+/* 17-ambience.js —— 氛围引擎：按时段自动编排「沉浸专注」与「首页」两套氛围
    来源：第五轮方案主线 🅐（2026-09-23）。工作台已经攒了 12 套沉浸场景、12 支循环视频、
-   7 路音源、双主题，但它们彼此不知道对方存在，全靠手动开关 —— 本层只做「编排」，
-   不新增任何素材、不新增依赖。
+   7 路音源、双主题、3 套点缀色、3 扇窗景，但它们彼此不知道对方存在，全靠手动开关 ——
+   本层只做「编排」，不新增任何素材、不新增依赖。
+
+   编排的五个格子分两处落地：
+   · 沉浸专注：场景（pomoImmersiveScene）、音景（soundPrefs）
+   · 首页    ：主题、点缀色、氛围层色温（#amb-veil）、窗外（今日页入口高亮哪一扇）
 
    工程约束（改这里前先读这段）：
    · **默认关闭**（ambienceOn=false）：编排在位但一次都不主动改用户的界面，设置页确认后才生效
    · **只在时段切换时应用一次**（lastSeg 门闩），不每秒重写 ——
-     用户在段内手动改的主题 / 场景 / 声音不会被引擎抢回去
+     用户在段内手动改的主题 / 场景 / 声音不会被引擎抢回去；但**用户改当前时段要立刻生效**
    · **音景受浏览器自动播放策略限制**：AudioContext 没被用户手势解锁前不起播（也不假装起了），
      此时只切场景与主题；等解锁后的下一次时段切换再补上音景（设置页有明确说明）
    · **番茄沉浸层的语义一个字不动**：它自己读 pomoImmersiveScene、自己管切换与提示；
      本层只是在时段切换时替用户把偏好改掉（走 WB.immersive.pick，与手动选场景同一条路）
+   · 窗外只用"高亮入口"的方式随时段走，**绝不自动开窗**（那是 2.4MB 的 iframe 弹层）
    · 设置键全部落在 settings 里（ambienceOn / ambiencePlan / ambienceAsked），
      云端与 WebDAV 同步白名单天然覆盖，不需要额外改同步层 */
 (function(){
@@ -25,21 +30,40 @@ const SEGS = [
   {id: "dusk",    name: "暮", from: 17, to: 21},
   {id: "night",   name: "夜", from: 21, to: 6},
 ];
-/* 内置默认编排：跟着光线走 —— 早上雾里落雨、白天深海白噪、傍晚壁炉暖光、夜里星野低吟 */
+/* 内置默认编排：跟着光线走 —— 早上雾里落雨、白天深海白噪、傍晚壁炉暖光、夜里星野低吟；
+   首页同步：早雾蓝、午薄荷、晚蜜桃、夜深蓝紫，窗外从山雾换到和塔再换到书房灯下 */
 const DEFAULT_PLAN = {
-  morning: {scene: "mist",  sound: "rain",  theme: "light"},
-  day:     {scene: "deep",  sound: "white", theme: "light"},
-  dusk:    {scene: "ember", sound: "fire",  theme: "dark"},
-  night:   {scene: "star",  sound: "lofi",  theme: "dark"},
+  morning: {scene: "mist",  sound: "rain",  theme: "light", accent: "mist",  window: "mountains"},
+  day:     {scene: "deep",  sound: "white", theme: "light", accent: "mint",  window: "mountains"},
+  dusk:    {scene: "ember", sound: "fire",  theme: "dark",  accent: "peach", window: "tower"},
+  night:   {scene: "star",  sound: "lofi",  theme: "dark",  accent: "mist",  window: "study"},
 };
-const OFF = "off";            // 场景=不干预 / 音景=无
+/* 首页氛围层的色温（色相 + 强度）。色相走 @property 注册过的数字属性，
+   于是 linear-gradient 能被补间而不是硬跳（main.css 里的 #amb-veil） */
+const AMB_TINT = {
+  morning: {h: 34,  h2: 205, o: .26},
+  day:     {h: 200, h2: 168, o: .18},
+  dusk:    {h: 24,  h2: 282, o: .28},
+  night:   {h: 250, h2: 212, o: .34},
+};
+const OFF = "off";            // 场景/点缀色/窗外=不干预，音景=无
 const SOUND_KEYS = [["rain", "雨声"], ["waves", "海浪"], ["white", "白噪"], ["fire", "篝火"],
   ["piano", "钢琴"], ["pad", "晨间氛围"], ["lofi", "Lo-Fi 心流"]];
+const ACCENT_KEYS = [["mist", "雾蓝淡紫"], ["peach", "蜜桃鹅黄"], ["mint", "薄荷奶咖"]];
+/* 主题中文名以 07-theme.js 的 THEME_CN 为唯一来源，这里只补「跟随系统」并兜底 */
+const THEME_CN = Object.assign({light: "晨雾奶油", dark: "夜雾", rose: "暮霞粉", auto: "跟随系统"},
+  (WB.theme && WB.theme.THEME_CN) || {});
+const WINDOW_CN = {mountains: "山雾四季", tower: "和塔暮色", study: "书房灯下"};
 
 function pad(n){ return String(n).padStart(2, "0"); }
 function timeLabel(seg){ return pad(seg.from) + ":00–" + pad(seg.to) + ":00"; }
+function windowMap(){ return (WB.scenes && WB.scenes.SCENES) || {}; }
+function windowName(k){
+  const m = windowMap()[k];
+  return (m && m.title) ? m.title.replace("窗外 · ", "") : (WINDOW_CN[k] || k);
+}
 
-/* 用户编排（浅合并到默认之上）：只覆盖用户动过的那几格，新增时段自动拿到默认值 */
+/* 用户编排（浅合并到默认之上）：只覆盖用户动过的那几格，新增格子自动拿到默认值 */
 function plan(){
   const raw = WB.theme.get("ambiencePlan") || {};
   const out = {};
@@ -60,6 +84,22 @@ function soundReady(){ return !!(WB.sound && WB.sound.unlocked && WB.sound.unloc
 
 let lastSeg = "";             // 已应用过的时段：同一个时段内绝不重复动手
 
+/* 首页氛围层：把当前时段的色温写进 #amb-veil（亮/暗主题的浓淡由 CSS 决定，
+   壁纸与动态壁纸开着时 CSS 会自动收淡 —— 浅底上叠重色会发灰发泥） */
+function paintVeil(segId){
+  const on = !!WB.theme.get("ambienceOn");
+  document.body.classList.toggle("amb-on", on);
+  if(!on) return null;
+  const t = AMB_TINT[segId] || AMB_TINT.day;
+  const v = document.getElementById("amb-veil");
+  if(v){
+    v.style.setProperty("--amb-h", t.h);
+    v.style.setProperty("--amb-h2", t.h2);
+    v.style.setProperty("--amb-o", t.o);
+  }
+  return t;
+}
+
 /* 应用一个时段。force=true 时无视门闩（启用开关、改当前时段、点「立即应用」）。
    silent=true 时不弹提示（只在启动时用：那一秒里雾开、入卡动画、晨间仪式都在抢注意力）。
    返回 null = 引擎没开或无需动作；否则返回本次真正做了什么（供设置页与探针核对） */
@@ -69,7 +109,8 @@ function apply(force, silent){
   if(!force && seg.id === lastSeg) return null;
   lastSeg = seg.id;
   const cfg = cfgOf(seg.id);
-  const done = {seg: seg.id, scene: "", theme: "", sound: "", soundBlocked: false};
+  const done = {seg: seg.id, scene: "", theme: "", accent: "", sound: "", window: "",
+    soundBlocked: false, veil: 0};
 
   /* 场景：与用户在沉浸里点场景面板是同一条路（pick 会落偏好并在沉浸中就位） */
   if(cfg.scene && cfg.scene !== OFF && WB.immersive && WB.immersive.pick &&
@@ -77,11 +118,20 @@ function apply(force, silent){
     WB.immersive.pick(cfg.scene);
     done.scene = cfg.scene;
   }
-  /* 主题：值相同就不写，免得白发一轮 settings:changed 与 700ms 交叉过渡 */
+  /* 主题与点缀色：值相同就不写，免得白发一轮 settings:changed 与 700ms 交叉过渡 */
   if(cfg.theme && WB.theme.get("theme") !== cfg.theme){
     WB.theme.set("theme", cfg.theme);
     done.theme = cfg.theme;
   }
+  if(cfg.accent && cfg.accent !== OFF && WB.theme.get("accent") !== cfg.accent){
+    WB.theme.set("accent", cfg.accent);
+    done.accent = cfg.accent;
+  }
+  /* 首页氛围层：色温随时段走（"首页也跟着变"最直观的一处） */
+  const tint = paintVeil(seg.id);
+  if(tint) done.veil = tint.o;
+  /* 窗外：只决定今日页入口点亮哪一扇，不自动开窗 */
+  if(cfg.window && cfg.window !== OFF && windowMap()[cfg.window]) done.window = cfg.window;
   /* 音景：选「无」= 本时段不放（也要把引擎自己放起来的那一路停掉，否则「无」形同虚设）。
      没解锁就只记账，不起播（浏览器不允许无手势自动播放，静默失败会让「切了却没声音」无从解释） */
   if(WB.sound && WB.sound.setCombo){
@@ -94,15 +144,18 @@ function apply(force, silent){
     }
   }
   /* 让"生效了"这件事看得见：场景只在沉浸专注层里出现，切完不吭声等于什么都没发生。
-     静默只留给启动那一刻，其余（时段切换 / 启用 / 改搭配 / 点立即应用）都给一句轻提示 */
+     静默只留给启动那一刻，其余（时段切换 / 启用 / 改搭配 / 点立即应用）都给一句轻提示。
+     改过东西就广播一次 view:dirty —— 首页的「现在的窗外」入口要跟着换扇 */
+  if(done.scene || done.theme || done.accent || done.window) WB.bus.emit("view:dirty");
   if(!silent && WB.ui && WB.ui.toast){
-    WB.ui.toast("✦ 跟着节律切到「" + seg.name + "」：" + describe(seg.id));
+    WB.ui.toast("✦ 跟着节律切到「" + seg.name + "」：" +
+      describeFocus(seg.id) + " · " + (THEME_CN[cfg.theme] || cfg.theme));
   }
   return done;
 }
 
 /* 改某一格：就地重算 plan 落库。改的若是**当前**时段 → 立刻应用（用户改完就该看见结果，
-   等下一次检查最长 60 秒，体感就是"没生效"）；改的是别的时段则什么都做（大中午改「夜」不该打断你） */
+   等下一次检查最长 60 秒，体感就是"没生效"）；改的是别的时段则什么都不做（大中午改「夜」不该打断你） */
 function setSeg(id, patch){
   if(!SEGS.some(s => s.id === id)) return;
   const raw = WB.store.get("settings", {}).ambiencePlan || {};
@@ -116,18 +169,33 @@ function resetPlan(){
   lastSeg = "";
 }
 
-/* 一句话描述某时段（设置页与提示复用，避免两处各写一份文案） */
-function describe(id){
+/* 当前时段的窗外（今日页入口据此点亮；引擎没开或选了「不干预」时返回 null） */
+function nowWindow(){
+  if(!WB.theme.get("ambienceOn")) return null;
+  const c = cfgOf(currentSeg().id);
+  return (c.window && c.window !== OFF && windowMap()[c.window]) ? c.window : null;
+}
+
+/* 文案：沉浸那两格 / 首页那三格 / 全量（设置页、提示、探针复用同一份，别处不再各写一句） */
+function describeFocus(id){
   const c = cfgOf(id);
   const scene = (c.scene === OFF || !WB.immersive) ? "不干预"
     : (WB.immersive.scenes[c.scene] || c.scene);
   const sound = c.sound === OFF ? "无"
     : ((SOUND_KEYS.find(k => k[0] === c.sound) || [c.sound, c.sound])[1]);
-  const theme = {light: "晨雾奶油", dark: "夜雾", auto: "跟随系统"}[c.theme] || c.theme;
-  return scene + " · " + sound + " · " + theme;
+  return scene + " · " + sound;
 }
+function describeHome(id){
+  const c = cfgOf(id);
+  const accent = c.accent === OFF ? "不干预"
+    : ((ACCENT_KEYS.find(k => k[0] === c.accent) || [c.accent, c.accent])[1]);
+  const win = (c.window === OFF) ? "不干预" : windowName(c.window);
+  return (THEME_CN[c.theme] || c.theme) + " · " + accent + " · " + win;
+}
+function describe(id){ return describeFocus(id) + " · " + describeHome(id); }
 
 function init(){
+  paintVeil(currentSeg().id);                 // 引擎关着时它只负责摘掉 body 类名
   if(!WB.theme.get("ambienceOn")) return;
   /* 延后 1.4s：避开入场雾开与首屏卡片动画，也让 immersive/sound 两个模块都挂好。静默应用 */
   setTimeout(() => apply(true, true), 1400);
@@ -137,14 +205,17 @@ function init(){
   addEventListener("focus", () => apply());
 }
 
-/* 开关被打开（设置页 / 导入备份 / 云端拉取）时立刻对齐一次 —— 派生状态不挂在具体入口上 */
+/* 开关被打开 / 搭配被改（设置页、导入备份、云端拉取）时立刻对齐 —— 派生状态不挂在具体入口上 */
 WB.bus.on("settings:changed", patch => {
-  if(patch && patch.key === "ambienceOn" && patch.val) apply(true);
+  if(!patch || (patch.key !== "ambienceOn" && patch.key !== "ambiencePlan")) return;
+  paintVeil(currentSeg().id);
+  if(patch.key === "ambienceOn" && patch.val) apply(true);
 });
 
 WB.ambience = {
-  SEGS, DEFAULT_PLAN, SOUND_KEYS, OFF,
-  plan, cfgOf, currentSeg, timeLabel, describe, apply, setSeg, resetPlan, init, soundReady,
+  SEGS, DEFAULT_PLAN, SOUND_KEYS, ACCENT_KEYS, AMB_TINT, OFF,
+  plan, cfgOf, currentSeg, timeLabel, describe, describeFocus, describeHome,
+  nowWindow, windowName, paintVeil, apply, setSeg, resetPlan, init, soundReady,
   enabled(){ return !!WB.theme.get("ambienceOn"); },
 };
 })();

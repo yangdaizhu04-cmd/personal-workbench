@@ -4,7 +4,7 @@
 const WB = (window.WB = window.WB || {});
 
 const DEFAULTS = {
-  theme: "light",            // light | dark | auto
+  theme: "light",            // light 晨雾奶油 | dark 夜雾 | rose 暮霞粉 | auto 跟随系统
   accent: "mist",            // mist | peach | mint | custom
   accentCustom: "#7fa3bd",
   wallpaper: false,          // 兼容旧键：Bing 壁纸开关
@@ -91,7 +91,7 @@ function apply(){
   html.classList.toggle("no-motion", !get("motion"));
   // 3.3 地址栏/状态栏配色跟随主题（否则深色下仍是米白）
   const meta = document.querySelector('meta[name="theme-color"]');
-  if(meta) meta.content = cur === "dark" ? "#232339" : "#f6f1e7";
+  if(meta) meta.content = cur === "dark" ? "#232339" : (cur === "rose" ? "#f9efe9" : "#f6f1e7");
   // 月亮/太阳图标必须在 apply() 里同步，不能只写在 toggleTheme()：
   // 设置页的分段控件走的是 theme.set、auto 模式还会跟随系统变化，
   // 只挂 toggleTheme 会让图标和实际主题脱节（亮色下显示太阳）
@@ -184,13 +184,20 @@ function adaptVeil(url){
   img.src = url;
 }
 
+/* 主题中文名：D 键提示、设置页、氛围引擎共用一份（别处不要再各写一句） */
+const THEME_CN = {light: "晨雾奶油", dark: "夜雾", rose: "暮霞粉"};
+
 function toggleTheme(){
   // 冷却闸门：与 --dur-scene(.7s) 交叉过渡对齐。否则连按 D 会在淡入淡出中途反复重启，
   // 渐变层被撕成两半（2.1）。返回 false 表示冷却中，本次操作整体丢弃。
   if(!WB.ui.lock("theme", 700)) return;
   const cur = resolvedTheme();
-  set("theme", cur === "dark" ? "light" : "dark");   // set → apply，图标一并同步
-  WB.ui.toast(cur === "dark" ? "回到晨雾奶油" : "夜雾模式，晚安");
+  /* D 键是「亮 ↔ 暗」二态；从暗切回来时回到你上次用的那个亮色主题 ——
+     否则在暮霞粉下按两下 D，暮霞粉就被悄悄吃掉了，还得回设置页重新挑 */
+  if(cur !== "dark") WB.store.set("lastLightTheme", cur);
+  const next = cur === "dark" ? (WB.store.get("lastLightTheme", "light")) : "dark";
+  set("theme", next);   // set → apply，图标一并同步
+  WB.ui.toast(next === "dark" ? "夜雾模式，晚安" : "回到" + (THEME_CN[next] || "晨雾奶油"));
 }
 
 function init(){
@@ -206,6 +213,6 @@ function init(){
   });
 }
 
-WB.theme = {DEFAULTS, all, get, set, merge, apply, toggleTheme, init, resolvedTheme, bgMode,
+WB.theme = {DEFAULTS, THEME_CN, all, get, set, merge, apply, toggleTheme, init, resolvedTheme, bgMode,
   motionUserSet, adaptVeil};
 })();

@@ -1,7 +1,7 @@
 /* ============================================================
    个人工作台 · 晨雾奶油 Cream Reverie
    设计系统：米白奶油底 / 雾蓝淡紫点缀 / 大圆角 / 柔和大弥散阴影
-   主题：data-theme="light|dark"   点缀色：data-accent="mist|peach|mint|custom"
+   主题：data-theme="light|dark|rose"   点缀色：data-accent="mist|peach|mint|custom"
    动效开关：html.no-motion
    ============================================================ */
 
@@ -73,6 +73,34 @@ html[data-theme="dark"]{
   --glass-line-c:rgba(206,206,246,0);
   --pri-mask:rgba(12,12,30,.22);   /* 暗色下把主按钮渐变压下去一档 */
 }
+/* 暮霞粉：用户在看氛围层「暮」那档配色时点名的第三个主题。
+   口径仍是低饱和（不是粉色少女风）：只把色相往玫瑰偏，饱和度压到与晨雾奶油同一档，
+   点缀色仍是雾蓝 + 淡紫。对比度与 light 同口径：--ink-2 ≈4.9:1、--ink-3 ≈3.5:1（底色 #f9efe9） */
+html[data-theme="rose"]{
+  --bg:#f9efe9;
+  --bg-2:#f1e5de;
+  --card:#fdf7f3;
+  --card-2:#f7ece6;
+  --card-border:rgba(176,142,128,.16);
+  --ink:#4a3f3c; --ink-2:#75655f; --ink-3:#8d7c76;
+  --accent:#7fa3bd; --accent-2:#a294c9; --accent-ink:#3e5a6e;
+  --accent-soft:rgba(127,163,189,.15);
+  --accent2-soft:rgba(162,148,201,.16);
+  --danger:#c26f65; --ok:#7fae8e; --warn:#c69a5c;
+  --shadow:0 10px 34px rgba(166,124,110,.14), 0 2px 8px rgba(166,124,110,.08);
+  --shadow-s:0 4px 16px rgba(166,124,110,.11);
+  --veil:rgba(249,239,233,.96);
+  --scrim:rgba(88,64,58,.30);
+  --glass-bg:rgba(255,250,247,.52);
+  --glass-line-a:rgba(255,255,255,.55);
+  --glass-line-b:rgba(255,255,255,.15);
+  --glass-line-c:rgba(255,255,255,0);
+  --pri-mask:transparent;
+}
+/* 侧栏玻璃与第一团光斑跟着偏暖：粉色底上浮一层冷奶油会显脏 */
+html[data-theme="rose"] #sidebar::before{background:linear-gradient(180deg, rgba(255,250,246,.64), rgba(255,244,238,.36));}
+html[data-theme="rose"] .blob-a{background:radial-gradient(circle, rgba(228,180,190,.5), transparent 62%);}
+
 /* 三套点缀色预设（奶油框架不变） */
 html[data-accent="peach"]{ --accent:#dd9a84; --accent-2:#d9bc72; --accent-ink:#6e4a3c;
   --accent-soft:rgba(221,154,132,.17); --accent2-soft:rgba(217,188,114,.18);}
@@ -210,6 +238,29 @@ body.wallpaper-on::after{
 }
 html[data-theme="dark"] body.wallpaper-on::before{opacity:0;}
 html[data-theme="dark"] body.wallpaper-on::after{opacity:1;}
+/* ---------- 首页氛围层（js/17-ambience.js）：色温随时段走 ----------
+   @property 把色相注册成可补间的 <number>：渐变本身不可插值（§8c 的老问题），
+   但注册过的自定义属性可以 —— 于是时段切换是 1.6s 的呼吸，不是硬跳。
+   不支持 @property 的浏览器只会退化成硬切，不影响功能 */
+@property --amb-h{syntax:"<number>"; inherits:false; initial-value:205;}
+@property --amb-h2{syntax:"<number>"; inherits:false; initial-value:280;}
+@property --amb-o{syntax:"<number>"; inherits:false; initial-value:0;}
+#amb-veil{
+  position:fixed; inset:0; z-index:var(--z-bg); pointer-events:none; opacity:0;
+  transition:opacity 1.6s var(--ease-cross), --amb-h 1.6s linear, --amb-h2 1.6s linear, --amb-o 1.6s linear;
+  background:linear-gradient(168deg,
+    hsla(var(--amb-h), 40%, 78%, var(--amb-o)) 0%,
+    hsla(var(--amb-h2), 34%, 84%, var(--amb-o)) 55%,
+    hsla(var(--amb-h), 36%, 74%, var(--amb-o)) 100%);
+}
+body.amb-on #amb-veil{opacity:1;}
+/* 壁纸与动态壁纸开着时只铺一层淡雾：浅底上叠重色会发灰发泥（同沉浸层 §8d 的教训） */
+body.amb-on.wallpaper-on #amb-veil{opacity:.34;}
+body.amb-on.bg-dynamic-on #amb-veil{opacity:.5;}
+html[data-theme="dark"] body.amb-on #amb-veil{opacity:.62;}
+html[data-theme="dark"] body.amb-on.wallpaper-on #amb-veil{opacity:.24;}
+html[data-theme="dark"] body.amb-on.bg-dynamic-on #amb-veil{opacity:.36;}
+
 #bg-blobs{position:fixed; inset:0; z-index:var(--z-bg); overflow:hidden; pointer-events:none;}
 .blob{position:absolute; border-radius:50%; filter:blur(70px); opacity:.5; will-change:transform;
   transition:opacity var(--dur-scene) var(--ease-cross);}
@@ -343,7 +394,8 @@ html[data-theme="dark"] .card.hoverable:hover{box-shadow:0 16px 42px rgba(0,0,0,
   transition:transform var(--dur-tap) var(--ease-std), opacity var(--dur),
              box-shadow var(--dur-scene) var(--ease-cross);
 }
-html[data-theme="light"] .btn.primary{color:#fff;}
+/* 亮色系主题共用：夜雾之外（含新增的暮霞粉）主按钮都用白字 */
+html:not([data-theme="dark"]) .btn.primary{color:#fff;}
 .btn.primary:hover{box-shadow:0 8px 22px var(--accent-soft), 0 4px 12px var(--accent2-soft),
   inset 0 0 0 200px var(--pri-mask,transparent);}
 .btn.primary:active{transform:scale(.96);

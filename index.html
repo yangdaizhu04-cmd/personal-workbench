@@ -17,7 +17,7 @@
     var t = s.theme;
     if(t === "auto") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     var html = document.documentElement;
-    if(t === "dark" || t === "light") html.dataset.theme = t;
+    if(t === "dark" || t === "light" || t === "rose") html.dataset.theme = t;
     if(s.accent) html.dataset.accent = s.accent === "custom" ? "mist" : s.accent;
     if(s.accent === "custom" && s.accentCustom) html.style.setProperty("--accent", s.accentCustom);
     if(s.motion === false) html.classList.add("no-motion");   // 动效关掉时首帧就别播入场
@@ -43,6 +43,8 @@
 </div>
 <!-- 动态壁纸层（晨露/夜雾星座，ThreeUI 移植，设置里开启） -->
 <div id="bg-shader" aria-hidden="true"></div>
+<!-- 首页氛围层（氛围引擎：色温随时段走；引擎关着时 body 上没有 .amb-on，整层不可见） -->
+<div id="amb-veil" aria-hidden="true"></div>
 <!-- 番茄钟专注球体（持久宿主，渲染时被 pomodoro 移入计时卡圆孔） -->
 <div id="focus-orb" data-state="idle" aria-hidden="true"></div>
 

@@ -124,8 +124,9 @@ WB.registerModule({
     accentRow.appendChild(colorInput);
 
     wrap.appendChild(sectionCard("palette", "外观", [
-      row("深浅色", "夜雾模式更护眼，快捷键 D 切换",
-        seg([["light", "晨雾奶油"], ["dark", "夜雾"], ["auto", "跟随系统"]], s.theme, v => WB.theme.set("theme", v))),
+      row("主题", "三套配色 + 跟随系统；快捷键 D 在亮暗之间切（会记住你上次用的那套亮色）",
+        seg([["light", "晨雾奶油"], ["dark", "夜雾"], ["rose", "暮霞粉"], ["auto", "跟随系统"]],
+          s.theme, v => WB.theme.set("theme", v))),
       row("点缀色", "三套预设 + 自定义强调色", accentRow),
       row("静音动效", "一键关闭所有动画与音效",
         toggle(s.motion, v => WB.theme.set("motion", v))),
@@ -157,7 +158,11 @@ WB.registerModule({
         (WB.immersive && WB.immersive.order ? WB.immersive.order : [])
           .map(id => [id, WB.immersive.scenes[id]]));
       const soundOpts = [["off", "无"]].concat(AMB.SOUND_KEYS);
-      const themeOpts = [["light", "晨雾奶油"], ["dark", "夜雾"], ["auto", "跟随系统"]];
+      const themeOpts = [["light", "晨雾奶油"], ["dark", "夜雾"], ["rose", "暮霞粉"], ["auto", "跟随系统"]];
+      const accentOpts = [["off", "不干预"]].concat(AMB.ACCENT_KEYS);
+      /* 单文件版不含窗景页（构建时剥离），那一格就不出现 */
+      const windowOpts = [["off", "不干预"]].concat(
+        Object.keys((WB.scenes && WB.scenes.SCENES) || {}).map(k => [k, AMB.windowName(k)]));
 
       /* 首次进来问一次（不是弹窗：不打断，也不进 modal 栈） */
       if(!s.ambienceAsked){
@@ -172,24 +177,36 @@ WB.registerModule({
             onclick: () => { WB.theme.set("ambienceAsked", true); WB.router.render(); }})));
       }
 
-      ambRows.push(row("跟随节律", "按时段自动编排下面的搭配（场景用在沉浸专注层：进专注后按 F）；关掉就一切照旧，手动开关完全不受影响",
+      ambRows.push(row("跟随节律", "场景与音景作用在沉浸专注层（进专注后按 F），主题、点缀色、窗外作用在首页（首页还会叠一层随时段走的色温）；关掉就一切照旧",
         toggle(s.ambienceOn, v => {
           WB.theme.set("ambienceOn", v);
           if(v){ if(!s.ambienceAsked) WB.theme.set("ambienceAsked", true); AMB.apply(true); }
           WB.router.render();
         })));
 
+      /* 每个时段两行：上行管沉浸专注（场景/音景），下行管首页（主题/点缀色/窗外）。
+         九个控件挤一行在桌面上也读不出哪格管哪，拆开之后"改哪、看哪里"一目了然 */
       AMB.SEGS.forEach(seg => {
         const c = amb[seg.id];
         const isNow = seg.id === nowSeg.id;
-        const r = row(seg.name + " " + AMB.timeLabel(seg) + (isNow ? " · 当前" : ""),
-          isNow ? AMB.describe(seg.id) : "",
+        const focusRow = row(seg.name + " " + AMB.timeLabel(seg) + (isNow ? " · 当前" : ""),
+          isNow ? AMB.describeFocus(seg.id) : "",
           el("div", {class: "row", style: {gap: "6px", flexWrap: "wrap", alignItems: "center"}},
             pickSel(sceneOpts, c.scene, v => { AMB.setSeg(seg.id, {scene: v}); WB.router.render(); }),
-            pickSel(soundOpts, c.sound, v => { AMB.setSeg(seg.id, {sound: v}); WB.router.render(); }),
-            pickSel(themeOpts, c.theme, v => { AMB.setSeg(seg.id, {theme: v}); WB.router.render(); })));
-        r.classList.add("amb-row");   // 窄屏换行规则见 main.css（否则标签列被三个下拉挤成竖条）
-        ambRows.push(r);
+            pickSel(soundOpts, c.sound, v => { AMB.setSeg(seg.id, {sound: v}); WB.router.render(); })));
+        focusRow.classList.add("amb-row");
+        ambRows.push(focusRow);
+
+        const homeCtl = el("div", {class: "row", style: {gap: "6px", flexWrap: "wrap", alignItems: "center"}},
+          pickSel(themeOpts, c.theme, v => { AMB.setSeg(seg.id, {theme: v}); WB.router.render(); }),
+          pickSel(accentOpts, c.accent, v => { AMB.setSeg(seg.id, {accent: v}); WB.router.render(); }));
+        if(!window.WB_SINGLE_FILE){
+          homeCtl.appendChild(pickSel(windowOpts, c.window, v => { AMB.setSeg(seg.id, {window: v}); WB.router.render(); }));
+        }
+        const homeRow = row("↳ 首页", isNow ? AMB.describeHome(seg.id) : "", homeCtl);
+        homeRow.classList.add("amb-row");
+        homeRow.style.opacity = ".92";
+        ambRows.push(homeRow);
       });
 
       ambRows.push(el("div", {class: "small faint", style: {padding: "8px 0 0"}},

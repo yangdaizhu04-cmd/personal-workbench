@@ -1,6 +1,6 @@
 /* Service Worker —— 云端版专用（本地 file:// 双击版自动跳过注册）
    策略：静态资源 cache-first + 后台更新；API 请求不缓存 */
-const CACHE = "wb-cache-v3";
+const CACHE = "wb-cache-v4";   // 主题/氛围批次改了外壳资源 → 升版让老 PWA 用户拿到新壳
 const SHELL = [
   "./",
   "./index.html",

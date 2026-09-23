@@ -326,12 +326,18 @@ WB.registerModule({
           onclick: quickBackup})));
     }
 
-    /* ===== 窗景入口（ThreeUI 场景页；单文件版自动隐藏） ===== */
+    /* ===== 窗景入口（ThreeUI 场景页；单文件版自动隐藏）=====
+       氛围引擎开着时，当前时段那一扇会被点亮并排到行首 —— 这就是"窗外也跟着一天走"的落点。
+       只改入口顺序与高亮，**不自动开窗**（那是 2.4MB 的 iframe 弹层，得由用户点） */
     if(!minimal && WB.scenes && !window.WB_SINGLE_FILE){
+      const nowWin = (WB.ambience && WB.ambience.nowWindow) ? WB.ambience.nowWindow() : null;
+      const wins = Object.entries(WB.scenes.SCENES);
+      if(nowWin) wins.sort((a, b) => (b[0] === nowWin ? 1 : 0) - (a[0] === nowWin ? 1 : 0));
       wrap.appendChild(el("div", {class: "row", style: {gap: "8px", flexWrap: "wrap"}},
-        el("span", {class: "small faint", style: {alignSelf: "center"}, text: "窗外："}),
-        Object.entries(WB.scenes.SCENES).map(([key, s]) =>
-          el("button", {class: "btn sm ghost", text: s.title.replace("窗外 · ", ""),
+        el("span", {class: "small faint", style: {alignSelf: "center"}, text: nowWin ? "现在的窗外：" : "窗外："}),
+        wins.map(([key, s]) =>
+          el("button", {class: "btn sm " + (key === nowWin ? "primary" : "ghost"),
+            text: s.title.replace("窗外 · ", ""),
             onclick: () => WB.scenes.open(key)}))));
     }
 
