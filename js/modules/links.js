@@ -80,7 +80,7 @@ function qrModal(link){
     box.textContent = "二维码生成失败";
   }
   WB.ui.modal({title: "二维码 · " + link.name, icon: "qr", content: body,
-    actions: [{label: "关", primary: true, onClick: () => {}}]});
+    actions: [{label: "关", primary: true}]});
 }
 
 WB.registerModule({

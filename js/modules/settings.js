@@ -32,6 +32,9 @@ WB.registerModule({
     colorInput.addEventListener("input", () => {
       WB.theme.merge({accent: "custom", accentCustom: colorInput.value});
     });
+    /* 松手（change）才重绘：「自定义」chip 要亮起来，但拖动过程里 input 是高频事件，
+       逐帧重建整页会卡，所以拖拽期间只改主题、不重建 */
+    colorInput.addEventListener("change", () => WB.router.render());
     accentRow.appendChild(colorInput);
 
     wrap.appendChild(sectionCard("palette", "外观", [
@@ -292,6 +295,7 @@ WB.registerModule({
             WB.theme.set("themeCustomBg", reader.result);
             WB.theme.set("bgMode", "custom");
             WB.ui.toast("背景已更换");
+            WB.router.render();          // 「背景」分段控件要跟着切到「自定义」
           };
           reader.readAsDataURL(blob);
         }catch(err){ WB.ui.toast("图片处理失败", "warn"); }
@@ -313,10 +317,11 @@ WB.registerModule({
             WB.theme.set("themeCustomBg", url);
             WB.theme.set("bgMode", "custom");
             WB.ui.toast("背景已更换（Unsplash）");
+            WB.router.render();
           }else WB.ui.toast("Unsplash 暂不可用，检查 Key 或网络", "warn");
         }}));
       box.appendChild(el("button", {class: "btn sm ghost", text: "恢复默认",
-        onclick: () => { WB.theme.set("themeCustomBg", ""); WB.theme.set("bgMode", "blobs"); WB.ui.toast("已恢复奶油风"); }}));
+        onclick: () => { WB.theme.set("themeCustomBg", ""); WB.theme.set("bgMode", "blobs"); WB.ui.toast("已恢复奶油风"); WB.router.render(); }}));
       return box;
     }
     function notifyBtn(){

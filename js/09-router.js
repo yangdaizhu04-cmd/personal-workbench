@@ -36,11 +36,21 @@ function nav(){
   return parseHash().id;
 }
 
+/* 当前视图应显示的标签页标题。抽出来是为了让番茄结束的标题闪烁能正确还原 ——
+   原先 pomodoro.js 存的是「模块加载那一刻」的标题快照，闪完会把页名丢掉（踩坑 #057） */
+function docTitle(){
+  const mod = routes[current.id] || {};
+  return (mod.title ? mod.title + " · " : "") + "个人工作台 · 晨雾奶油";
+}
+
 function render(){
   const {id, param} = parseHash();
   const mod = routes[id] || routes["today"];
   current.id = mod.id;
   current.param = param;
+  /* 重复任务物化：原先只挂在待办页的 render 里，跨天直接落在今日页/日历时
+     当天的重复实例根本不生成（必须先进一次待办页才行）。提到路由层 = 所有页都对齐 */
+  if(WB.todos && WB.todos.materializeRepeats) WB.todos.materializeRepeats();
 
   // 视图
   const view = WB.$("#view");
@@ -65,7 +75,7 @@ function render(){
   const sub = WB.$("#page-sub");
   if(mod.sub) sub.textContent = typeof mod.sub === "function" ? mod.sub() : mod.sub;
   else sub.textContent = "";
-  document.title = (mod.title ? mod.title + " · " : "") + "个人工作台 · 晨雾奶油";
+  document.title = docTitle();
 
   // 导航高亮
   WB.$$("#side-nav .nav-item, #bottombar .bb-item").forEach(n => {
@@ -218,6 +228,16 @@ function init(){
   render();
 }
 
+/* ---------- 脏数据推送：数据变了就重绘当前视图 ----------
+   结构性修法（踩坑 #057）：以前每个调用点都得自己记得 render，漏一处就留下过期 DOM
+   （沉浸层里暂停番茄钟后退出、弹窗里改完用 × 关闭，都是这么过期的）。
+   现在低频的状态变更统一广播 view:dirty，由这里兜住；高频计时走各自订阅的 pomo:tick，
+   不会经由这条路把页面按秒重建 */
+WB.bus.on("view:dirty", () => render());
+/* 弹窗关闭后补一次：弹窗内部改数据只重绘弹窗自己，背后的卡片会留着旧值
+   （技能里程碑计数、待办子任务 n/m 都是这样过期的） */
+WB.bus.on("modal:closed", () => render());
+
 WB.router = {register, getRoute, allRoutes, groups, buildNav, nav, render, go, init, current,
-  openSheet, closeSheet, sheetOpen};
+  docTitle, openSheet, closeSheet, sheetOpen};
 })();

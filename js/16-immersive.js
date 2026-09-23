@@ -291,11 +291,13 @@ function closePicker(){
   clearTimeout(pickerTimer);
   pickerTimer = setTimeout(() => { if(parts && !pickerShown) parts.picker.hidden = true; }, 320);
 }
-/* 换景的唯一出口：记住偏好 + 在沉浸中就立即换（面板 / 番茄卡 / ⌘K 三处共用同一条路径） */
+/* 换景的唯一出口：记住偏好 + 在沉浸中就立即换（面板 / 番茄卡 / ⌘K 三处共用同一条路径）。
+   广播 view:dirty 是为了让番茄卡底部的场景色点条跟着高亮 —— 沉浸里换完再退出时它不是过期 DOM */
 function pick(id){
   if(!SCENES[id]) return;
   WB.theme.set("pomoImmersiveScene", id);
   if(active) setScene(id, true);
+  WB.bus.emit("view:dirty");
 }
 /* ← / → = 上一个 / 下一个场景，按 SCENE_ORDER 首尾循环。
    换景后把场景名浮一下：控件可能已自动隐藏，不提示就不知道换到了哪一支 */
@@ -501,7 +503,9 @@ function titleSync(){
 function bindMedia(name, fn){
   try{ navigator.mediaSession.setActionHandler(name, fn); mediaBound.push(name); }catch(e){}
 }
-function mediaBind(){
+/* 元数据 + 播放态同步：状态一变就得更新，不能只在进入沉浸那一刻写一次 ——
+   否则沉浸里暂停后，锁屏/耳机键那套系统媒体面板还显示「正在播放」（踩坑 #057） */
+function mediaSync(){
   if(!("mediaSession" in navigator)) return;
   const s = session();
   if(!s) return;
@@ -512,13 +516,21 @@ function mediaBind(){
         artist: s.bindTitle || "个人工作台 · 番茄钟",
         album: "沉浸专注",
       });
-    navigator.mediaSession.playbackState = s.running ? "playing" : "paused";
+    navigator.mediaSession.playbackState = (s.running && !s.needConfirm) ? "playing" : "paused";
+  }catch(e){}
+  mediaPos();
+}
+function mediaBind(){
+  if(!("mediaSession" in navigator)) return;
+  const s = session();
+  if(!s) return;
+  try{
     bindMedia("play", () => { const x = session(); if(x && !x.running && WB.pomodoro.resume) WB.pomodoro.resume(); });
     bindMedia("pause", () => { const x = session(); if(x && x.running && WB.pomodoro.pause) WB.pomodoro.pause(); });
     bindMedia("stop", () => exit());
     bindMedia("nexttrack", () => finishPhase());
   }catch(e){}
-  mediaPos();
+  mediaSync();
 }
 function mediaPos(){
   if(!("mediaSession" in navigator)) return;
@@ -615,6 +627,7 @@ function onPhase(){
   soundSync();
   setTimeout(paintSoundBtn, 700);       // 音源可能在 pomo:start 之后才真正开播
   if(!active) return;
+  mediaSync();                          // 暂停/继续/切段都要同步到系统媒体面板
   render();
   showPhaseNote();
 }

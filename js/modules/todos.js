@@ -61,14 +61,16 @@ function checkTodo(t, ev){
   if(done){
     if(t.repeatOf){ // 重复任务的当日实例：完成即可
       todos.update(t.id, {done: true, doneAt: Date.now()});
-    }else if(t.repeat && t.repeat.type !== "none"){ // 模板：生成下一期，模板本身保持未完成
-      todos.add({
-        title: t.title, prio: t.prio, listId: t.listId,
-        date: nextRepeatDate(t, t.date), time: t.time, remindAhead: t.remindAhead,
-        important: t.important, urgent: t.urgent,
-        repeat: t.repeat,
-        subtasks: (t.subtasks || []).map(s => ({id: WB.uid(), title: s.title, done: false})),
-      });
+    }else if(t.repeat && t.repeat.type !== "none"){
+      /* 模板：不能新建一个「下一期模板」—— 那个新对象没有 repeatOf，会被 materializeRepeats
+         当成模板立刻物化，于是今天凭空多出一条重复待办（勾一次多一条）。
+         正确做法是把模板自身的日期推进到下一期，并把今天已生成的实例标记完成。
+         推进基准取「模板日期与今天的较晚者」：模板过期时按今天算（下一期才是真的下一期），
+         模板在将来时按它自己算（不会被勾一下反而倒退） */
+      const base = t.date > WB.bizDate() ? t.date : WB.bizDate();
+      todos.update(t.id, {date: nextRepeatDate(t, base)});
+      const inst = todos.all().find(x => x.repeatOf === t.id && x.date === WB.bizDate());
+      if(inst) todos.update(inst.id, {done: true, doneAt: Date.now()});
     }else{
       todos.update(t.id, {done: true, doneAt: Date.now()});
     }
@@ -80,7 +82,8 @@ function checkTodo(t, ev){
   }else{
     todos.update(t.id, {done: false, doneAt: undefined});
   }
-  WB.router.render();
+  WB.bus.emit("view:dirty");
+  if(WB.badgeCheck) WB.badgeCheck();   // 以前漏了这句：完成 500 件也不解锁「五百件事」
 }
 
 /* ---------- 添加/编辑弹窗 ---------- */
@@ -238,7 +241,7 @@ function listManager(){
 
   function openAgain(){ setTimeout(() => listManager(), 50); }
   WB.ui.modal({title: "清单管理", icon: "folder", content: body,
-    actions: [{label: "完成", primary: true, onClick: () => WB.router.render()}]});
+    actions: [{label: "完成", primary: true}]});   // 无 onClick 才会自动关；刷新走 modal:closed 订阅
 }
 
 function todoRow(t){
@@ -326,7 +329,7 @@ function subtaskModal(t){
   body.appendChild(el("div", {class: "field"}, el("label", {text: "新增步骤"}), input));
   body.appendChild(list);
   WB.ui.modal({title: "子任务 · " + t.title, icon: "list", content: body,
-    actions: [{label: "完成", primary: true, onClick: () => WB.router.render()}]});
+    actions: [{label: "完成", primary: true}]});   // 无 onClick 才会自动关；行尾 n/m 由 modal:closed 订阅刷新
   render();
 }
 
@@ -552,6 +555,9 @@ function listViewWith(content, prefiltered){
   });
 }
 
-/* 供总览/命令面板/快捷键调用 */
-WB.todos = {quickAdd(preset){ todoModal(null, typeof preset === "object" ? preset : undefined); }, materializeRepeats};
+/* 供总览/命令面板/快捷键/日历调用。
+   toggle 是「勾选一条待办」的唯一出口 —— 日历里那个复选框以前直写 update，
+   于是重复任务模板在日历里勾 = 直接变已完成、不生成下一期，与待办页行为不一致 */
+WB.todos = {quickAdd(preset){ todoModal(null, typeof preset === "object" ? preset : undefined); },
+  materializeRepeats, toggle: checkTodo};
 })();

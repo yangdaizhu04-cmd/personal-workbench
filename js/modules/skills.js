@@ -108,7 +108,7 @@ function detailModal(s){
     icon: "zap", content: body, wide: true,
     actions: [{label: "完成", primary: true, onClick: () => {
       skills.update(s.id, {progress: WB.clamp(parseInt(prog.value) || 0, 0, 100)});
-      WB.router.render();
+      m.close();   // 自己关：关闭后由 modal:closed 订阅统一刷新背后的卡片
     }}]});
   renderMs(); renderLinks();
 }

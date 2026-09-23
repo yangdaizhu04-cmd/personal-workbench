@@ -26,6 +26,25 @@ const CARD_META = {
   content:   {name: "今日看点", icon: "sparkle"},
 };
 
+/* ---------- 今日页的番茄卡：秒级局部跟随 ----------
+   pomo:tick 每秒来一次，只改这两个文本节点（整页重建太贵）；
+   状态切换（暂停/继续/完成/放弃）由 pomodoro.js 广播 view:dirty 走整页重绘，两条路各管各的 */
+let pomoLive = null;
+function fmtPomo(sec){
+  sec = Math.max(0, Math.round(sec));
+  return String(Math.floor(sec / 60)).padStart(2, "0") + ":" + String(sec % 60).padStart(2, "0");
+}
+function pomoTag(st){
+  if(st.needConfirm) return st.mode === "focus" ? "专注完成 · 去确认" : "休息结束 · 去确认";
+  if(!st.running) return "已暂停 · 点开继续";
+  return st.mode === "focus" ? "专注中 · 保持住" : "休息一下";
+}
+WB.bus.on("pomo:tick", t => {
+  if(!pomoLive || !pomoLive.num.isConnected) return;
+  pomoLive.num.textContent = fmtPomo(t.remainSec);
+  pomoLive.tag.textContent = pomoTag({mode: t.mode, running: t.running, needConfirm: false});
+});
+
 function cardPrefs(){
   const saved = WB.store.get("uiPrefs", {}).todayCards;
   if(!saved) return DEFAULT_CARDS.map(id => ({id, hidden: false}));
@@ -219,8 +238,9 @@ WB.registerModule({
               WB.ui.starBurst(e.clientX || innerWidth / 2, e.clientY || innerHeight / 2);
               WB.ui.chime("done");
               if(items.every(x => x.done)){ WB.ui.celebrate({big: true}); WB.ui.toast("今日三大件全部完成，了不起 ✦"); }
-            }
-            WB.router.render();
+              }
+              WB.router.render();
+              if(WB.badgeCheck) WB.badgeCheck();   // 三大件结算点：以前漏了
           }}),
         el("span", {class: "grow" + (it.done ? " faint" : ""),
           style: it.done ? {textDecoration: "line-through"} : {}, text: it.title}),
@@ -346,13 +366,16 @@ WB.registerModule({
     const card = el("div", {class: "card"},
       el("div", {class: "card-title", html: icon("timer", 18) + "<span>番茄专注</span>",
         onclick: () => WB.router.go("pomodoro")}));
-    if(st && st.running){
-      const min = Math.floor(st.remainSec / 60), sec = st.remainSec % 60;
-      card.appendChild(el("div", {class: "center col", style: {padding: "8px 0"}},
-        el("div", {style: {fontSize: "34px", fontWeight: "600", fontVariantNumeric: "tabular-nums"},
-          text: String(min).padStart(2, "0") + ":" + String(sec).padStart(2, "0")}),
-        el("div", {class: "small muted", text: st.mode === "focus" ? "专注中 · 保持住" : "休息一下"})));
+    if(st){
+      /* 有会话就显示会话（含暂停与待确认）——以前只认 running，
+         一暂停整张卡就退化成「开始专注」按钮，等于这段番茄不存在 */
+      const num = el("div", {style: {fontSize: "34px", fontWeight: "600", fontVariantNumeric: "tabular-nums"},
+        text: fmtPomo(st.remainSec)});
+      const tag = el("div", {class: "small muted", text: pomoTag(st)});
+      card.appendChild(el("div", {class: "center col", style: {padding: "8px 0"}}, num, tag));
+      pomoLive = {num, tag};
     }else{
+      pomoLive = null;
       const today = WB.bizDate();
       const done = WB.store.get("pomoLog", []).filter(l => l.date === today && l.mode === "focus" && l.status === "done").length;
       card.appendChild(el("div", {class: "center col", style: {padding: "6px 0"}},
@@ -671,8 +694,9 @@ WB.registerModule({
       ids.forEach((id, i) => { const p = prefs.find(x => x.id === id); if(p){ prefs.splice(prefs.indexOf(p), 1); prefs.splice(i, 0, p); } });
       saveCardPrefs(prefs); render();
     }});
+    /* 无 onClick → modal 自己关；关闭后由 modal:closed 订阅统一重绘（不必在这里调 render） */
     WB.ui.modal({title: "总览卡片管理", icon: "grid", content: body, wide: true,
-      actions: [{label: "完成", primary: true, onClick: () => { WB.router.render(); }}]});
+      actions: [{label: "完成", primary: true}]});
   },
 });
 })();

@@ -145,7 +145,7 @@ function buildItems(q){
     if(/^(记|笔)\s+/.test(t)){
       const content = t.replace(/^(记|笔)\s+/, "");
       out.push({group: "捕捉", icon: "edit", label: "存为笔记：" + content, hint: "回车保存",
-        exec: () => { WB.collection("notes").add({content, tags: WB.md.extractTags(content)}); WB.ui.toast("已存入笔记"); if(WB.badgeCheck) WB.badgeCheck(); }});
+        exec: () => { WB.collection("notes").add({content, tags: WB.md.extractTags(content)}); WB.ui.toast("已存入笔记"); if(WB.badgeCheck) WB.badgeCheck(); WB.router.render(); }});
     }else{
       const parsed = parseDateWords(t);
       const title = parsed.clean || t;
@@ -162,7 +162,7 @@ function buildItems(q){
           WB.router.render();
         }});
       out.push({group: "捕捉", icon: "edit", label: "或存为笔记：" + t, hint: "Shift+回车", alt: true,
-        exec: () => { WB.collection("notes").add({content: t, tags: WB.md.extractTags(t)}); WB.ui.toast("已存入笔记"); }});
+        exec: () => { WB.collection("notes").add({content: t, tags: WB.md.extractTags(t)}); WB.ui.toast("已存入笔记"); if(WB.badgeCheck) WB.badgeCheck(); WB.router.render(); }});
     }
   }
   // 搜索

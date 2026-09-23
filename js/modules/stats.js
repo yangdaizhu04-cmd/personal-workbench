@@ -58,6 +58,7 @@ function badgeCheck(){
   });
   if(newly.length){
     WB.store.set("badges", got);
+    if(liveBadgeGrid && liveBadgeGrid.isConnected) paintBadgeGrid(liveBadgeGrid);   // 墙开着就即时点亮
     newly.forEach((b, i) => setTimeout(() => {
       WB.ui.celebrate({big: newly.length === 1});
       WB.ui.toast("🏆 解锁徽章：「" + b.name + "」");
@@ -139,7 +140,7 @@ WB.registerModule({
     bar.appendChild(el("button", {class: "btn sm", html: icon("star", 14) + "<span>徽章墙</span>", onclick: () => badgeModal()}));
     bar.appendChild(el("button", {class: "btn sm", html: icon("grid", 14) + "<span>人生刻度</span>", onclick: () => {
       WB.ui.modal({title: "人生刻度图 · 4000 周", icon: "grid", content: lifeGrid(), wide: true,
-        actions: [{label: "关", primary: true, onClick: () => {}}]});
+        actions: [{label: "关", primary: true}]});
     }}));
     view.appendChild(bar);
 
@@ -319,11 +320,12 @@ function ensureWeekly(){
 }
 
 /* ---------- 徽章墙 ---------- */
-function badgeModal(){
-  badgeCheck();
+/* 墙开着的时候解锁新徽章（例如一边专注一边开着它），格子要立刻点亮而不是停在灰态：
+   记下当前格子容器，badgeCheck 解锁后直接重绘它（踩坑 #057） */
+let liveBadgeGrid = null;
+function paintBadgeGrid(grid){
+  grid.innerHTML = "";
   const got = WB.store.get("badges", {});
-  const body = el("div");
-  const grid = el("div", {class: "grid grid-3", style: {gap: "10px"}});
   BADGES.forEach(b => {
     const on = !!got[b.id];
     grid.appendChild(el("div", {class: "card center col", style: {padding: "18px 10px", textAlign: "center",
@@ -335,9 +337,18 @@ function badgeModal(){
       el("div", {class: "small", style: {color: on ? "var(--accent)" : "var(--ink-3)", marginTop: "4px"},
         text: on ? "✓ " + new Date(got[b.id]).toLocaleDateString() : "未解锁"})));
   });
+}
+function badgeModal(){
+  badgeCheck();
+  const body = el("div");
+  const grid = el("div", {class: "grid grid-3", style: {gap: "10px"}});
+  liveBadgeGrid = grid;
+  paintBadgeGrid(grid);
   body.appendChild(grid);
-  WB.ui.modal({title: "成就徽章墙", icon: "star", content: body, wide: true,
-    actions: [{label: "关", primary: true, onClick: () => {}}]});
+  let m = null;
+  m = WB.ui.modal({title: "成就徽章墙", icon: "star", content: body, wide: true,
+    onClose: () => { liveBadgeGrid = null; },
+    actions: [{label: "关", primary: true, onClick: () => { if(m) m.close(); }}]});
 }
 
 WB.badgeCheck = badgeCheck;

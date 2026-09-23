@@ -108,7 +108,7 @@ function puzzleModal(){
   do{ cells.sort(() => Math.random() - .5); }while(cells.every((x, i) => x === i));
   render();
   WB.ui.modal({title: "休息小游戏 · 拼图", icon: "gamepad", content: body,
-    actions: [{label: "关", primary: true, onClick: () => {}}]});
+    actions: [{label: "关", primary: true}]});   // 无 onClick 的按钮由 modal 自己关（带 onClick 的必须自己 m.close）
 }
 
 /* ---------- 涂鸦板 ---------- */
@@ -178,7 +178,7 @@ function doodleGallery(){
     });
   });
   WB.ui.modal({title: "我的涂鸦", icon: "image", content: body, wide: true,
-    actions: [{label: "关", primary: true, onClick: () => {}}]});
+    actions: [{label: "关", primary: true}]});
 }
 
 /* ---------- 治愈一刻 ---------- */
@@ -324,7 +324,7 @@ function dishManager(){
       render();
     }}));
   WB.ui.modal({title: "转盘选项管理", icon: "plate", content: body,
-    actions: [{label: "完成", primary: true, onClick: () => WB.router.render()}]});
+    actions: [{label: "完成", primary: true}]});
 }
 
 WB.fun = {spinWheel, petModal};

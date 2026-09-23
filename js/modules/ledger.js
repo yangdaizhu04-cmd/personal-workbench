@@ -76,6 +76,7 @@ function quickAdd(preset){
       ledger.add({type: curType, amount: amt, catId: curCat, date: dateIn.value || WB.bizDate(), note: noteIn.value.trim()});
       m.close(); WB.ui.toast("已记账 " + (curType === "out" ? "-" : "+") + "¥" + amt);
       WB.router.render();
+      if(WB.badgeCheck) WB.badgeCheck();   // 记账结算点：以前漏了
       checkBudgetWarn();
     }}],
   });
@@ -152,12 +153,13 @@ function catManager(){
   body.appendChild(el("div", {class: "small faint", style: {margin: "10px 0 4px"}, text: "点按删除分类："}));
   body.appendChild(delRow);
 
-  WB.ui.modal({title: "预算与分类", icon: "wallet", content: body,
+  let m = null;
+  m = WB.ui.modal({title: "预算与分类", icon: "wallet", content: body,
     actions: [{label: "完成", primary: true, onClick: () => {
       const bb = budgets();
       bb.total = parseFloat(totalIn.value) || 0;
       setBudgets(bb);
-      WB.router.render();
+      m.close();   // 自己关；背后的刷新交给 modal:closed 订阅
     }}]});
 }
 

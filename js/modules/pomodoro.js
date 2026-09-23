@@ -12,6 +12,10 @@ const PRESETS = [
 ];
 
 /* ---------- 状态（时间戳制：elapsed = accum + now-resumeTs） ---------- */
+/* 任何状态变更后统一广播，由 09-router.js 重绘当前视图（结构性修法，踩坑 #057）。
+   本模块不再各自调 render —— 漏一处就是过期 DOM：
+   「沉浸里暂停后按 Esc 退出，卡片还写着专注中」就是这么来的 */
+function dirty(){ WB.bus.emit("view:dirty"); }
 function stateRaw(){ return WB.store.get("pomodoro", null); }
 function setState(s){ WB.store.set("pomodoro", s); }
 function state(){
@@ -47,9 +51,9 @@ function begin(mode, plannedMin){
     startedAt: Date.now()});
   tickStart();
   emitPhase();
+  dirty();                     // 内容类卡片立即淡出（今日页/番茄页都靠它刷新）
   if(mode === "focus"){
     WB.bus.emit("pomo:start"); // 声音面板自动恢复上次组合
-    if(WB.router.nav() === "today") WB.router.render(); // 内容类卡片立即淡出
   }
   /* 自动进沉浸：默认关闭（设置 → 番茄钟与提醒 → 开始专注时自动进入）。
      延迟交给浏览器先跑完点击反馈；仍在用户激活窗口内，全屏请求有效 */
@@ -61,12 +65,12 @@ function begin(mode, plannedMin){
 function pause(){
   const s = stateRaw(); if(!s || !s.running) return;
   s.accumMs += Date.now() - s.resumeTs; s.resumeTs = null; s.running = false;
-  setState(s); tickStop(); emitPhase();
+  setState(s); tickStop(); emitPhase(); dirty();
 }
 function resume(){
   const s = stateRaw(); if(!s || s.running) return;
   s.resumeTs = Date.now(); s.running = true; s.needConfirm = false;
-  setState(s); tickStart(); emitPhase();
+  setState(s); tickStart(); emitPhase(); dirty();
 }
 function giveUp(){
   const s = stateRaw(); if(!s) return;
@@ -80,7 +84,7 @@ function giveUp(){
   }
   setState(null); tickStop(); emitPhase();
   WB.bus.emit("pomo:finish", {mode: s.mode, status: "quit"});
-  WB.router.render();
+  dirty();
 }
 function finish(){
   const s = stateRaw(); if(!s) return;
@@ -94,13 +98,13 @@ function finish(){
   /* 声音面板监听 pomo:finish 做淡出后静音，但此前全项目无人 emit（死订阅） */
   WB.bus.emit("pomo:finish", {mode: s.mode, status: "done"});
   if(WB.badgeCheck) WB.badgeCheck();
+  dirty();   // 以前漏了这句：倒数走完卡片会永远停在「专注中」，待确认按钮也不出现
 }
 function confirmNext(){
   const s = stateRaw(); if(!s || !s.needConfirm) return;
   const settings = WB.theme.all();
   const minutes = s.nextMode === "focus" ? settings.pomodoroFocus : settings.pomodoroRest;
-  begin(s.nextMode, minutes);
-  WB.router.render();
+  begin(s.nextMode, minutes);   // begin 内部会广播 view:dirty
 }
 /* P 键（任何页面通用）：暂停 / 继续 / 待确认时推进到下一段 —— 与沉浸里空格的语义一致。
    沉浸外没有中央提示语，所以每次都给一条轻提示，否则在别的页面按下像没反应 */
@@ -118,23 +122,25 @@ function toggleRun(){
     resume();
     WB.ui.toast("▶ 继续 · 剩 " + fmtRemain(state().remainSec));
   }
-  if(WB.router.nav() === "pomodoro") WB.router.render();
+  // 刷新由 pause/resume/confirmNext 内部的 dirty() 广播，这里不再自己调 render
 }
 function stopAndClear(){
   setState(null); tickStop(); emitPhase();
   WB.bus.emit("pomo:finish", {mode: "stop", status: "stop"});
-  WB.router.render();
+  dirty();
 }
 
 /* ---------- 提醒三件套 ---------- */
 let titleTimer = null;
+/* 兜底标题：正常走 WB.router.docTitle()，路由器还没初始化时（模块加载早于 router.init）才用它 */
 const baseTitle = document.title;
 /* 停掉标题闪烁（函数声明，供 setTimeout 提前引用；同时把 titleTimer 归零，
-   沉浸层靠 titleFlashing() 判断要不要接管 document.title） */
+   沉浸层靠 titleFlashing() 判断要不要接管 document.title）。
+   还原成「当前路由」的标题而不是加载时的快照 —— 否则闪完页名就没了（踩坑 #057） */
 function stopFlash(){
   clearInterval(titleTimer);
   titleTimer = null;
-  document.title = baseTitle;
+  document.title = (WB.router && WB.router.docTitle) ? WB.router.docTitle() : baseTitle;
 }
 function notifyAll(mode){
   const st = WB.theme.all();

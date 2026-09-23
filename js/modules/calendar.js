@@ -121,7 +121,10 @@ WB.registerModule({
       if(!t.length) tbox.appendChild(el("div", {class: "small faint", text: "无待办"}));
       t.forEach(x => tbox.appendChild(el("label", {class: "row small", style: {gap: "8px"}},
         Object.assign(el("input", {type: "checkbox"}), {checked: !!x.done,
-          onchange: function(){ todos.update(x.id, {done: this.checked, doneAt: this.checked ? Date.now() : undefined}); paint(); }}),
+          /* 走 WB.todos.toggle（待办页同一条路径）：重复任务模板会「生成下一期、模板保持未完成」，
+             以前这里直写 update，日历勾一下模板就变已完成且不生成下一期 —— 两页行为不一致。
+             toggle 内部会广播 view:dirty，整页重建，所以这里不用再调 paint() */
+          onchange: () => { if(WB.todos && WB.todos.toggle) WB.todos.toggle(x); }}),
         el("span", {text: x.title, style: x.done ? {textDecoration: "line-through", color: "var(--ink-3)"} : {}}),
         x.time ? el("span", {class: "faint", text: x.time}) : null)));
       left.appendChild(tbox);

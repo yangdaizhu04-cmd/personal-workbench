@@ -111,6 +111,7 @@ function checkRow(h, dateStr, big){
           if(s > 0 && s % 7 === 0) WB.ui.toast("🔥「" + h.name + "」连续 " + s + " 天！");
         }
         WB.router.render();
+        if(WB.badgeCheck) WB.badgeCheck();   // 打卡结算点：以前漏了，条件满足也不解锁徽章
       },
     }));
   }else{
@@ -122,6 +123,7 @@ function checkRow(h, dateStr, big){
         setLog(h.id, dateStr, count + 1);
         if(count + 1 >= target){ WB.ui.starBurst(e.clientX, e.clientY); WB.ui.chime("done"); WB.ui.toast("「" + h.name + "」今日达标 ✓"); }
         WB.router.render();
+        if(WB.badgeCheck) WB.badgeCheck();
       }}));
     if(count > 0) btns.appendChild(el("button", {class: "btn sm ghost", text: "－1",
       onclick: () => { setLog(h.id, dateStr, count - 1); WB.router.render(); }}));

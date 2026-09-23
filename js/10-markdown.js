@@ -2,6 +2,10 @@
 (function(){
 "use strict";
 const WB = (window.WB = window.WB || {});
+/* esc 必须解构出来：本文件的 render() 一直在用它，但从来没引入过 ——
+   只要调用 WB.md.render() 就抛 ReferenceError（笔记页有笔记时整页渲染失败）。
+   以前没暴露是因为「笔记页 + 有笔记」这条路径平时没人走到（踩坑 #057 的连带发现） */
+const { esc } = WB;
 
 function inline(s){
   return s
