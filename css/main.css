@@ -493,6 +493,8 @@ button.list-row:last-child{border-bottom:none;}
   transition:transform var(--dur) var(--ease-std);}
 .murmur-dot:hover{transform:scale(1.18);}
 html.no-motion .murmur-dot{transition:none;}
+/* 说话人：它的名字。给了名字之后这句话就是它在说，不是系统在报数 */
+.murmur-name{color:var(--accent); font-weight:600; flex:none;}
 
 /* 晨雾年报（Wrapped 式年度回顾大弹窗） */
 .yr-year{font-size:56px; font-weight:600; color:var(--ink); letter-spacing:2px;}

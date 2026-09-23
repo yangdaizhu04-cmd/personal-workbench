@@ -136,19 +136,92 @@ function daysAgoCN(ts){
    但渲染时实时校验前提（test），不成立就重选——不会说「心情还没记」这类过时话。
    措辞一律温柔不催促：积极类在前，提醒类次之，兜底永远成立。 */
 const MURMURS = [
-  {id: "big3done", test: c => c.big3All, text: () => "今天的三大件都完成了，安心 ✦"},
-  {id: "doneN",    test: c => c.doneToday >= 3, text: c => "今天已经完成 " + c.doneToday + " 件事，节奏刚好。"},
-  {id: "streak",   test: c => c.bestStreak >= 3, text: c => "「" + c.bestHabit + "」已经陪你 " + c.bestStreak + " 天了。"},
-  {id: "pomo",     test: c => c.pomoToday >= 1, text: c => "今天已专注 " + c.pomoToday + " 个番茄，剩下的慢慢来。"},
+  {id: "big3done", test: c => c.big3All, text: () => "今天的三大件都完成了，我替你高兴 ✦"},
+  {id: "doneN",    test: c => c.doneToday >= 3, text: c => "今天已经完成 " + c.doneToday + " 件事，节奏刚刚好。"},
+  {id: "streak",   test: c => c.bestStreak >= 3, text: c => "「" + c.bestHabit + "」已经陪你 " + c.bestStreak + " 天了，我也在看着它长。"},
+  {id: "pomo",     test: c => c.pomoToday >= 1, text: c => "今天你在专注里待了 " + c.pomoToday + " 个番茄，我就守在旁边。"},
   {id: "mood",     test: c => !c.moodToday, text: () => "今天的心情还没落笔，顺手记一下？"},
-  {id: "overdue",  test: c => c.overdue > 0, text: c => "有 " + c.overdue + " 件事在等过去的你交代——不急，先从一件开始。"},
+  {id: "overdue",  test: c => c.overdue > 0, text: c => "有 " + c.overdue + " 件事在等过去的你交代——不急，我陪你从一件开始。"},
   {id: "journal",  test: c => c.journalCount > 0 && c.daysNoJournal >= 3, text: () => "日志本有一些日子没翻了，写两句就好。"},
-  {id: "empty",    test: c => c.pending === 0 && c.doneToday === 0 && c.overdue === 0, text: () => "今天是留白的一天，也挺好。"},
-  {id: "calm",     test: () => true, text: () => "按自己的节奏来，就已经很好 ✦"},
+  {id: "empty",    test: c => c.pending === 0 && c.doneToday === 0 && c.overdue === 0, text: () => "今天是留白的一天，我也在这儿陪你发呆。"},
+  {id: "calm",     test: () => true, text: () => "按你自己的节奏来，就已经很好 ✦"},
 ];
 /* ---------- 宠物「小雾团」：絮语行的化身，状态跟着今天过得怎么样走 ----------
    Finch 式情感绑定的温柔版：只陪伴不惩罚。四态——
-   蛋（还没开始）/ 飘（有一点动静）/ 发光（完成度高）/ 静静陪（心情低落日） */
+   蛋（还没开始）/ 飘（有一点动静）/ 发光（完成度高）/ 静静陪（心情低落日）
+
+   2026-09-23（第五轮批 2「关系深化」）补上关系的三件：**名字**、**它记得的日子**、
+   **第一人称的絮语**。依据是 Finch 四万条评论里最集中的那个机制 ——
+   忠诚来自"互惠关系"（我照顾它 = 我照顾自己）而不是可爱：用户会叫它 my birb，
+   会说"因为它在等我"所以回来。所以这里做的是**命名 + 记忆 + 它在说话**，
+   而不是再画一只宠物。反面教训同样重要：数据丢失被体验为"失去了我的小鸟"，
+   所以关系越深，数据可靠性越不是基础设施而是体验本身。 */
+const PET_DEFAULT = "小雾团";
+function petNamed(){ return !!(WB.store.get("companionName", "") || "").trim(); }
+function petName(){ return petNamed() ? WB.store.get("companionName", "").trim() : PET_DEFAULT; }
+
+function renameModal(){
+  const input = el("input", {class: "input", value: petNamed() ? petName() : "",
+    placeholder: "比如 雾团 / 小云 / 团团"});
+  const body = el("div", {}, el("div", {class: "field"},
+    el("label", {text: "给它起个名字"}),
+    input,
+    el("div", {class: "small faint", style: {marginTop: "6px"},
+      text: "起完名字，每天的絮语就是它在跟你说话（留空即恢复默认）"})));
+  const m = WB.ui.modal({title: "给它起个名字", icon: "sparkle", content: body, actions: [
+    {label: "保存", primary: true, onClick: () => {
+      const v = input.value.trim();
+      if(v) WB.store.set("companionName", v); else WB.store.del("companionName");
+      m.close(); WB.router.render();
+      WB.ui.toast(v ? "它记住了这个名字：" + v : "回到「" + PET_DEFAULT + "」");
+    }},
+  ]});
+  setTimeout(() => input.focus(), 60);
+}
+
+/* 它记得的日子：每天冻结一句"它的记忆"，写在**第二天**首次打开时（今天还没过完，
+   能盖棺的只有昨天）。存 `companion:日期`，戳开弹窗时按时间倒序回放最近几条 */
+function memoryLine(c){
+  if(c.big3All) return "三大件都完成了，我把这天收得很好。";
+  if(c.doneToday >= 5) return "一起做完了 " + c.doneToday + " 件事，这天的雾都是亮的。";
+  if(c.doneToday >= 1) return "做了 " + c.doneToday + " 件小事，慢慢来也很好。";
+  if(c.pomoToday >= 1) return "陪你在专注里待了 " + c.pomoToday + " 个番茄。";
+  if(c.mood && c.mood.level <= 2) return "这天你有点低落，我就静静待着。";
+  return "这天是留白的，我也睡了很久。";
+}
+/* 记忆里带一个"当天数据签名"：数据没变就一个字都不重写（记忆要稳），
+   变了才重写这一行。加这层是因为本项目**支持补写历史** —— 今天的你可能在补昨天的日志，
+   而无脑"同一天只写一次"会把那次补写漏在记忆之外（探针实测出来的真实缺口） */
+function memorySig(c){
+  return [c.doneToday, c.pomoToday, c.big3All ? 1 : 0, c.mood ? c.mood.level : "-"].join("|");
+}
+function remember(dateStr){
+  const key = "companion:" + dateStr;
+  const c = murmurCtx(dateStr);
+  const sig = memorySig(c);
+  const old = WB.store.get(key, null);
+  if(old && old.sig === sig) return null;
+  const rec = {date: dateStr, line: memoryLine(c), done: c.doneToday, pomo: c.pomoToday, sig, ts: Date.now()};
+  WB.store.set(key, rec);
+  return rec;
+}
+function rememberYesterday(){
+  return remember(WB.dateStr(new Date(WB.parseDate(WB.bizDate()).getTime() - 86400000)));
+}
+/* 倒序取最近 n 条记忆：键是日期算得出来的，不做全库扫描（30 天窗口够用） */
+function petMemories(n){
+  const out = [], t = WB.parseDate(WB.bizDate()).getTime();
+  for(let i = 1; i <= 30 && out.length < (n || 5); i++){
+    const rec = WB.store.get("companion:" + WB.dateStr(new Date(t - i * 86400000)), null);
+    if(rec && rec.line) out.push(rec);
+  }
+  return out;
+}
+function petDay(dateStr){
+  const d = WB.parseDate(dateStr);
+  return (d.getMonth() + 1) + " 月 " + d.getDate() + " 日";
+}
+
 function petState(dateStr){
   const todos = WB.store.get("todos", []);
   const doneToday = todos.filter(t => t.done && t.date === dateStr).length;
@@ -162,26 +235,52 @@ function petState(dateStr){
   const detail = "今日完成 " + doneToday + " 件 · 专注 " + pomoToday + " 个番茄" +
     (big3.length ? " · 三大件 " + big3.filter(i => i.done).length + "/" + big3.length : "") +
     (overdue ? " · 还有 " + overdue + " 件小事不急" : "");
+  /* 四句状态话都要带上它的名字：起了名字之后，这些句子就是它在说自己 */
+  const nm = petName();
   if(mood && mood.level <= 2){
-    return {emoji: "🌙", title: "雾团今天安安静静地陪你，累了就歇歇", detail};
+    return {emoji: "🌙", title: nm + "今天安安静静地陪你，累了就歇歇", detail};
   }
   if(big3All || doneToday >= 5){
-    return {emoji: "☁️✨", title: "小雾团今天在发光——把日子过得亮亮的", detail};
+    return {emoji: "☁️✨", title: nm + "今天在发光——把日子过得亮亮的", detail};
   }
   if(moved){
-    return {emoji: "☁️", title: "小雾团轻轻飘着，陪你慢慢来", detail};
+    return {emoji: "☁️", title: nm + "轻轻飘着，陪你慢慢来", detail};
   }
-  return {emoji: "🥚", title: "雾团里睡着一颗蛋——今天还没开始，不急", detail};
+  return {emoji: "🥚", title: nm + "还在雾里睡着——今天还没开始，不急", detail};
 }
 function petModal(dateStr){
   const p = petState(dateStr);
-  const body = el("div", {class: "center col", style: {gap: "10px", padding: "8px 0 4px"}});
+  const name = petName();
+  const body = el("div", {class: "center col", style: {gap: "8px", padding: "8px 0 4px"}});
   body.appendChild(el("div", {class: "pet-art breathe", text: p.emoji, style: {fontSize: "44px"}}));
-  body.appendChild(el("div", {style: {fontWeight: "600"}, text: p.title}));
+  body.appendChild(el("div", {style: {fontWeight: "600"}, text: name}));
+  body.appendChild(el("div", {class: "small faint", text: p.title}));
   body.appendChild(el("div", {class: "small faint", text: p.detail}));
-  WB.ui.modal({title: "小雾团", icon: "sparkle", content: body, actions: [{label: "去忙吧"}]});
+
+  const mems = petMemories(5);
+  body.appendChild(el("div", {class: "small",
+    style: {marginTop: "10px", width: "100%", textAlign: "left", color: "var(--accent)"},
+    text: "它记得的日子"}));
+  if(!mems.length){
+    body.appendChild(el("div", {class: "small faint", style: {width: "100%", textAlign: "left"},
+      text: "从明天起，它会记住你们一起过的每一天。"}));
+  }else{
+    mems.forEach(m => body.appendChild(el("div", {class: "small faint",
+      style: {width: "100%", textAlign: "left", padding: "5px 0", borderTop: "1px dashed var(--card-border)"}},
+      el("span", {style: {color: "var(--accent)"}, text: petDay(m.date)}),
+      el("span", {text: " · " + m.line}))));
+  }
+
+  const m = WB.ui.modal({title: name, icon: "sparkle", content: body, actions: [
+    /* 有 onClick 的按钮必须自己关窗（06-ui.js 的动作语义） */
+    {label: petNamed() ? "改个名字" : "给它起个名字", onClick: () => { m.close(); renameModal(); }},
+    {label: "去忙吧"},
+  ]});
 }
-function murmurText(dateStr){
+
+/* 絮语素材（口径与各卡片一致）。抽成独立函数是因为它现在有两个消费者：
+   当天的絮语，以及第二天为「它记得的日子」盖棺 */
+function murmurCtx(dateStr){
   if(WB.habits && WB.habits.invalidateLogs) WB.habits.invalidateLogs();   // 外部改了打卡记录也能拿到最新连续天数
   const todos = WB.store.get("todos", []);
   const big3 = WB.store.get("bigThree:" + dateStr, []);
@@ -193,17 +292,21 @@ function murmurText(dateStr){
     const s = WB.habits && WB.habits.streakOf ? WB.habits.streakOf(h.id) : 0;
     if(s > bestStreak){ bestStreak = s; bestHabit = h.name; }
   });
-  const ctx = {
+  return {
     doneToday: todos.filter(t => t.done && t.date === dateStr).length,
     pending: todos.filter(t => !t.done && t.date === dateStr).length,
     overdue: todos.filter(t => !t.done && t.date && t.date < dateStr && !(t.repeat && t.repeat.type !== "none")).length,
     big3All: big3.length > 0 && big3.every(i => i.done),
     pomoToday: WB.store.get("pomoLog", []).filter(l => l.date === dateStr && l.status === "done" && l.mode === "focus").length,
     moodToday: WB.store.get("moods", []).some(m => m.date === dateStr),
+    mood: WB.store.get("moods", []).find(m => m.date === dateStr) || null,   // 记忆要按档位说话
     journalCount: journals.length,
     daysNoJournal: lastJournal ? Math.floor((Date.now() - WB.parseDate(lastJournal).getTime()) / 86400000) : 999,
     bestStreak, bestHabit,
   };
+}
+function murmurText(dateStr){
+  const ctx = murmurCtx(dateStr);
   const key = "murmur:" + dateStr;
   let id = WB.store.get(key, "");
   let rule = MURMURS.find(r => r.id === id);
@@ -304,12 +407,15 @@ WB.registerModule({
     /* ===== 晨雾絮语：规则式一行洞察（极简模式也保留，一行氛围小字） =====
        行首的小雾团就是宠物：状态跟今天完成度/心情走，戳一下看详情 */
     const pet = petState(dateStr);
+    const petNm = petName();
+    rememberYesterday();       // 补记昨天（今天还没过完；同一天只写一次，重复渲染无副作用）
     const murmurDot = el("span", {class: "murmur-dot", role: "button", tabindex: "0",
-      text: pet.emoji, title: pet.title, "aria-label": "小雾团：" + pet.title});
+      text: pet.emoji, title: petNm + "：" + pet.title, "aria-label": petNm + "：" + pet.title});
     murmurDot.addEventListener("click", () => petModal(dateStr));
     murmurDot.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); petModal(dateStr); } });
     wrap.appendChild(el("div", {class: "murmur"},
       murmurDot,
+      el("span", {class: "murmur-name", text: petNm + "："}),
       el("span", {text: murmurText(dateStr)})));
 
     /* ===== 一键动作：高频操作不跳页（极简模式下不显示，尊重「只留三大件」） ===== */
@@ -789,25 +895,27 @@ WB.registerModule({
       el("div", {class: "small faint", style: {marginTop: "6px", fontStyle: "italic"}}, w.ex));
   },
 
-  /* ---------- 每日旧忆 ---------- */
+  /* ---------- 每日旧忆（第五轮批 2：跨年对比） ----------
+     同月同日的记录**按年份倒序全列**（最多 5 条，一年一行），而不是随机抽 3 条 ——
+     随机等于把"跨年"这件事打散了；要的是一眼看到同一个日子在几年里长成了什么样。
+     摘录放宽到 120 字并标出年份与原日期，点整行仍跳原文 */
   memoryCard(dateStr){
     const today = WB.parseDate(dateStr);
     const pool = [];
     const md = dateStr.slice(5); // MM-DD
+    const strip = t => (t || "").replace(/[#*`>\[\]]/g, "").replace(/\s+/g, " ").trim();
     WB.store.get("journals", []).forEach(j => {
-      if(j.date.slice(5) === md && j.date !== dateStr){
+      if((j.date || "").slice(5) === md && j.date !== dateStr){
         const years = today.getFullYear() - WB.parseDate(j.date).getFullYear();
         if(years >= 1) pool.push({years, text: j.free || j.done || "", from: "日志", date: j.date});
       }
     });
     WB.store.get("notes", []).forEach(n => {
-      if(n.createdAt){
-        const d = new Date(n.createdAt);
-        const ds = WB.dateStr(d);
-        if(ds.slice(5) === md && ds !== dateStr){
-          const years = today.getFullYear() - d.getFullYear();
-          if(years >= 1) pool.push({years, text: n.content, from: "笔记", date: ds});
-        }
+      if(!n.createdAt) return;
+      const ds = WB.dateStr(new Date(n.createdAt));
+      if(ds.slice(5) === md && ds !== dateStr){
+        const years = today.getFullYear() - WB.parseDate(ds).getFullYear();
+        if(years >= 1) pool.push({years, text: n.content, from: "笔记", date: ds});
       }
     });
     const card = el("div", {class: "card"},
@@ -817,13 +925,24 @@ WB.registerModule({
         text: "坚持记录，明年今天会收到一封来自过去的信 ✉"}));
       return card;
     }
-    WB.shuffle(pool).slice(0, 3).forEach(m => {
+    pool.sort((a, b) => (b.date || "").localeCompare(a.date || ""));   // 最近的一年排最前
+    pool.slice(0, 5).forEach(m => {
+      const body = strip(m.text) || "（这天没写正文）";
       card.appendChild(el("div", {style: {padding: "8px 0", borderBottom: "1px dashed var(--card-border)", cursor: "pointer"},
         onclick: () => WB.router.go(m.from === "日志" ? "journal" : "notes", m.date)},
-        el("div", {class: "small", style: {color: "var(--accent)"}, text: m.years + " 年前的今天 · " + m.from}),
+        el("div", {class: "row", style: {gap: "6px", alignItems: "baseline"}},
+          el("span", {class: "small", style: {color: "var(--accent)"},
+            text: (m.years === 1 ? "去年的今天" : m.years + " 年前的今天") + " · " + m.from}),
+          el("span", {class: "grow"}),
+          el("span", {class: "small faint", text: m.date + " 看全文 ↗"})),
         el("div", {class: "small muted", style: {marginTop: "3px"},
-          text: (m.text || "（空）").replace(/[#*`>\[\]]/g, "").slice(0, 60) + ((m.text || "").length > 60 ? "…" : "")})));
+          text: body.slice(0, 120) + (body.length > 120 ? "…" : "")})));
     });
+    const years = new Set(pool.map(m => (m.date || "").slice(0, 4)));
+    if(years.size >= 2){
+      card.appendChild(el("div", {class: "small faint", style: {padding: "8px 0 2px"},
+        text: "同一天，你在 " + years.size + " 个年份里留下过字迹。"}));
+    }
     return card;
   },
 
