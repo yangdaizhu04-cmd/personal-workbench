@@ -6,7 +6,7 @@ const { el, icon, esc } = WB;
 
 const DEFAULT_CARDS = [
   "big3", "todos", "habits", "mood", "pomodoro", "countdown",
-  "goals", "journal", "rate", "word", "memory", "quote", "koi", "term", "content", "rss",
+  "goals", "journal", "rate", "word", "memory", "quote", "koi", "term", "content", "rss", "datacare",
 ];
 const CARD_META = {
   big3:      {name: "今日三大件", icon: "target"},
@@ -25,6 +25,7 @@ const CARD_META = {
   term:      {name: "节气 · 月相", icon: "moon-star"},
   content:   {name: "今日看点", icon: "sparkle"},
   rss:       {name: "RSS 订阅", icon: "rss"},
+  datacare:  {name: "数据健康", icon: "shield"},
 };
 
 /* ---------- 今日页的番茄卡：秒级局部跟随 ----------
@@ -89,6 +90,45 @@ function setMinimal(v){
 function contentHidden(){
   return (WB.pomodoro && WB.pomodoro.isFocusing && WB.pomodoro.isFocusing()) ||
          (WB.store.get("offworkDone:" + WB.bizDate(), false));
+}
+
+/* ---------- 一键动作 / 数据健康 ---------- */
+/* 一键开始番茄：默认档时长、不绑对象；已在计时/待确认时不打扰，只带路 */
+function quickPomodoro(){
+  if(!WB.pomodoro || !WB.pomodoro.begin){ WB.router.go("pomodoro"); return; }
+  const st = WB.pomodoro.state();
+  if(st && (st.running || st.needConfirm)){ WB.router.go("pomodoro"); return; }
+  const min = WB.theme.get("pomodoroFocus") || 25;
+  WB.router.go("pomodoro");
+  WB.pomodoro.begin("focus", min);
+  WB.ui.toast("已开始 " + min + " 分钟专注，加油 ✦");
+}
+/* 一键备份：与设置页「导出 JSON」同一套数据与文件名口径 */
+function quickBackup(){
+  const data = WB.store.exportAll();
+  data.__meta = {app: "个人工作台", version: 1, exportedAt: new Date().toISOString()};
+  WB.downloadFile("个人工作台备份-" + WB.todayStr() + ".json", JSON.stringify(data, null, 2), "application/json");
+  WB.theme.set("lastExportTs", Date.now());
+  WB.ui.toast("备份已导出到下载");
+}
+/* localStorage 里 wb: 前缀的占用估算（字符数 ≈ UTF-16 字节数，取整 KB 足够） */
+function storageBytes(){
+  let n = 0;
+  try{
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(k && k.indexOf("wb:") === 0) n += k.length + (localStorage.getItem(k) || "").length;
+    }
+  }catch(e){}
+  return n;
+}
+function fmtBytes(n){
+  return n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+}
+function daysAgoCN(ts){
+  if(!ts) return "";
+  const d = Math.floor((Date.now() - ts) / 86400000);
+  return d <= 0 ? "今天" : d + " 天前";
 }
 
 /* ---------- 今日纪念卡：三大件全完成时生成一张可保存的 PNG（每天最多弹一次） ---------- */
@@ -178,8 +218,21 @@ WB.registerModule({
     /* ===== 顶部：日期 + 班休 + 天气 ===== */
     wrap.appendChild(this.dateCard(dateStr));
 
-    /* ===== 窗景入口（ThreeUI 场景页；单文件版自动隐藏） ===== */
+    /* ===== 一键动作：高频操作不跳页（极简模式下不显示，尊重「只留三大件」） ===== */
     const minimal = minimalOn();
+    if(!minimal){
+      wrap.appendChild(el("div", {class: "row", style: {gap: "8px", flexWrap: "wrap"}},
+        el("button", {class: "btn sm ghost", html: icon("timer", 14) + "<span>开始番茄</span>",
+          onclick: quickPomodoro}),
+        el("button", {class: "btn sm ghost", html: icon("book", 14) + "<span>写日志</span>",
+          onclick: () => { if(WB.journal && WB.journal.editor) WB.journal.editor(dateStr); }}),
+        el("button", {class: "btn sm ghost", html: icon("wallet", 14) + "<span>记一笔</span>",
+          onclick: () => { if(WB.ledger && WB.ledger.quickAdd) WB.ledger.quickAdd(); }}),
+        el("button", {class: "btn sm ghost", html: icon("download", 14) + "<span>备份数据</span>",
+          onclick: quickBackup})));
+    }
+
+    /* ===== 窗景入口（ThreeUI 场景页；单文件版自动隐藏） ===== */
     if(!minimal && WB.scenes && !window.WB_SINGLE_FILE){
       wrap.appendChild(el("div", {class: "row", style: {gap: "8px", flexWrap: "wrap"}},
         el("span", {class: "small faint", style: {alignSelf: "center"}, text: "窗外："}),
@@ -209,6 +262,7 @@ WB.registerModule({
       term: () => this.termCard(dateStr),
       content: () => this.contentCard(dateStr),
       rss: () => this.rssCard(),
+      datacare: () => this.datacareCard(),
     };
     const nodes = [];
     const expanded = cardsExpanded();
@@ -778,6 +832,47 @@ WB.registerModule({
   },
 
   /* ---------- RSS 订阅（rss2json 免费跨域通道，失败自动跳过） ---------- */
+  /* 数据健康卡：上次快照 / 上次导出 / 本机占用 / 同步通道，一眼确认数据安全 */
+  datacareCard(){
+    const card = el("div", {class: "card"},
+      el("div", {class: "card-title", html: icon("shield", 18) + "<span>数据健康</span><span class='card-sub'>去数据管理</span>",
+        onclick: () => WB.router.go("settings")}));
+    const body = el("div", {class: "col", style: {gap: "6px"}});
+    card.appendChild(body);
+
+    body.appendChild(el("div", {class: "small"},
+      el("span", {class: "faint"}, "本机占用　"), fmtBytes(storageBytes())));
+
+    const lastExp = WB.theme.get("lastExportTs");
+    body.appendChild(el("div", {class: "small"},
+      el("span", {class: "faint"}, "上次导出　"),
+      lastExp ? daysAgoCN(lastExp) : "还没有导出过"));
+    if(!lastExp || Date.now() - lastExp > 7 * 86400000){
+      body.appendChild(el("div", {class: "small", style: {color: "var(--accent)"}},
+        "数据只在本机浏览器里，建议导出一份 JSON 带走"));
+    }
+
+    const wd = WB.store.get("webdav", {});
+    const cloudOn = !!(window.WB_ENV && window.WB_ENV.cloudBaseUrl) && location.protocol !== "file:";
+    body.appendChild(el("div", {class: "small"},
+      el("span", {class: "faint"}, "同步通道　"),
+      cloudOn ? "云端已连接" : (wd.url ? "WebDAV 已配置" : "未配置（可选）")));
+
+    /* 快照在 IndexedDB，list() 是异步的：先占位，回来时先确认节点还活着（防重绘后写旧节点） */
+    const snapRow = el("div", {class: "small"},
+      el("span", {class: "faint"}, "每日快照　"), "…");
+    body.appendChild(snapRow);
+    if(WB.snapshots && WB.snapshots.list){
+      WB.snapshots.list().then(list => {
+        if(!snapRow.isConnected) return;
+        snapRow.lastChild.textContent = list.length
+          ? daysAgoCN(list[0].ts) + " · 留存 " + list.length + " 份"
+          : "还没有快照";
+      }).catch(() => {});
+    }
+    return card;
+  },
+
   rssCard(){
     const card = el("div", {class: "card"},
       el("div", {class: "card-title", html: icon("rss", 18) + "<span>RSS 订阅</span><span class='card-sub'>点此管理</span>",

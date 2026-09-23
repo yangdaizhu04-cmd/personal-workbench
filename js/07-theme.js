@@ -31,6 +31,7 @@ const DEFAULTS = {
   themeCustomBg: "",         // 自定义背景图 dataURL（可选）
   lastExportTs: 0,           // 上次导出 JSON 备份的时间（快照提醒用）
   firstSeenTs: 0,            // 首次使用时间：从未导出过时用它当提醒起点（免得从 1970 年算）
+  customCss: "",             // 自定义 CSS 注入（高级）：挂载点统一在 apply() → #wb-custom-css
 };
 
 function all(){
@@ -91,7 +92,22 @@ function apply(){
   // 只挂 toggleTheme 会让图标和实际主题脱节（亮色下显示太阳）
   const btn = WB.$("#btn-theme");
   if(btn && WB.ui && WB.ui.swapIcon) WB.ui.swapIcon(btn, "moon", "sun", cur === "dark");
+  applyCustomCss();
   applyWallpaper();
+}
+
+/* 自定义 CSS 注入：唯一挂载点。设置页输入、导入备份、首次启动都汇到 apply()，
+   派生状态不挂在具体入口上（踩坑 #040 同款教训） */
+function applyCustomCss(){
+  let tag = document.getElementById("wb-custom-css");
+  const css = get("customCss") || "";
+  if(!css){ if(tag) tag.remove(); return; }
+  if(!tag){
+    tag = document.createElement("style");
+    tag.id = "wb-custom-css";
+    document.head.appendChild(tag);
+  }
+  tag.textContent = css;   // textContent 不经 HTML 解析，无注入面
 }
 
 function bgMode(){

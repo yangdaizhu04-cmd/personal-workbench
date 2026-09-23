@@ -422,6 +422,16 @@ textarea.input{resize:vertical; min-height:90px; line-height:1.7;}
 .list-row.dragging{opacity:.4;}
 .list-row.picked{background:var(--accent-soft); border-radius:12px;}
 .list-row.drop-target{box-shadow:inset 0 2px 0 var(--accent);}
+/* 弹窗里可点选的行（聚焦习惯选择等）：button 版 list-row 去掉 UA 样式 */
+button.list-row{width:100%; background:none; border:none; border-bottom:1px dashed var(--card-border);
+  font:inherit; color:inherit; text-align:left; cursor:pointer; border-radius:10px;}
+button.list-row:hover{background:var(--accent-soft);}
+button.list-row:last-child{border-bottom:none;}
+
+/* 今日聚焦习惯行（习惯页顶部）：圈一个今天重点，打卡就在眼前 */
+.habit-focus{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px;}
+.habit-focus .hf-name{font-size:16.5px;}
+.habit-focus .grow{flex:1 1 12px; min-width:12px;}
 
 /* 空状态 */
 .empty{

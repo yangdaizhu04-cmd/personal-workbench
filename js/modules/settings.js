@@ -133,6 +133,7 @@ WB.registerModule({
         seg([["blobs", "光斑"], ["dynamic", "动态"], ["bing", "Bing"], ["custom", "自定义"]],
           WB.theme.bgMode(), v => WB.theme.set("bgMode", v))),
       row("自定义图片", "上传图片或用 Unsplash（需在下方 BYOK 填 Key），上传后自动启用", bgEditor()),
+      cssEditor(),
     ]));
 
     /* --- 番茄钟与提醒 --- */
@@ -427,6 +428,24 @@ WB.registerModule({
           el("div", {text: label, style: {fontSize: "14.5px"}}),
           hint ? el("div", {class: "small faint", text: hint}) : null),
         control);
+    }
+    /* 自定义 CSS：整行宽的 textarea，输入即时预览、停顿 700ms 自动落库。
+       落库走 theme.set → apply()（唯一挂载点），这里不做任何直接 DOM 注入。
+       不订阅重绘、不整页 render —— 输入框被重建等于焦点丢失（踩坑 #065） */
+    function cssEditor(){
+      const ta = el("textarea", {class: "input", rows: 4, spellcheck: false,
+        placeholder: "例如：.card{border-radius:28px}",
+        style: {width: "100%", resize: "vertical", fontFamily: "monospace", fontSize: "12.5px", marginTop: "8px"}});
+      ta.value = WB.theme.get("customCss") || "";
+      const save = WB.debounce(() => {
+        const v = ta.value;
+        if(v !== (WB.theme.get("customCss") || "")) WB.theme.set("customCss", v);
+      }, 700);
+      ta.addEventListener("input", save);
+      return el("div", {style: {padding: "9px 0", borderTop: "1px dashed var(--card-border)"}},
+        el("div", {text: "自定义 CSS", style: {fontSize: "14.5px"}}),
+        el("div", {class: "small faint", text: "高级：写 CSS 覆盖任意样式，输入即时生效，停顿后自动保存；清空即恢复原样"}),
+        ta);
     }
     function rowNum(label, val, onSet, min, max){
       const input = el("input", {type: "number", class: "input", value: val, min, max,

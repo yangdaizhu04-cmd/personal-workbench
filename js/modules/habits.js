@@ -134,6 +134,51 @@ function checkRow(h, dateStr, big){
   return wrap;
 }
 
+/* ---- 今日聚焦习惯：圈一个今天重点。check 型就地打卡（复用 quickCheck 的星光/币/结算）；
+   count 型多次计数留在下方列表，聚焦行只显示进度 ---- */
+function focusBand(h, dateStr){
+  const log = logOf(h.id, dateStr);
+  const band = el("div", {class: "card habit-focus"});
+  band.appendChild(el("span", {class: "chip", html: icon("star", 13) + "<span>今日聚焦</span>"}));
+  band.appendChild(el("b", {class: "hf-name", text: h.name}));
+  band.appendChild(el("span", {class: "small muted", text: "🔥 连续 " + streakOf(h.id) + " 天"}));
+  if(h.type === "count" && log){
+    band.appendChild(el("span", {class: "small muted", text: "今日 " + (log.count || 0) + "/" + (h.target || 1)}));
+  }
+  band.appendChild(el("span", {class: "grow"}));
+  if(h.type === "check"){
+    if(isDone(h, log)){
+      band.appendChild(el("span", {class: "small", style: {color: "var(--accent)"}, text: "今天已完成 ✓"}));
+    }else{
+      band.appendChild(el("button", {class: "btn sm primary", text: "打卡",
+        onclick: function(e){ quickCheck(h, e); }}));
+    }
+  }else{
+    band.appendChild(el("span", {class: "small faint", text: "在下方列表打卡"}));
+  }
+  band.appendChild(el("button", {class: "icon-btn", title: "更换聚焦", "aria-label": "更换聚焦习惯",
+    html: icon("edit", 15), onclick: pickFocus}));
+  band.appendChild(el("button", {class: "icon-btn", title: "取消聚焦", "aria-label": "取消聚焦习惯",
+    html: icon("close", 15), onclick: () => { WB.store.set("focusHabit", ""); WB.router.render(); }}));
+  return band;
+}
+function pickFocus(){
+  const hs = habits.all().filter(x => !x.archived);
+  if(!hs.length){ WB.ui.toast("先建一个习惯，再来设聚焦"); return; }
+  const list = el("div", {class: "list"});
+  hs.forEach(h => {
+    const row = el("button", {class: "list-row", style: {justifyContent: "space-between"}},
+      el("b", {text: h.name}),
+      el("span", {class: "small faint", text: h.type === "count" ? "次数型 ×" + (h.target || 1) : "打勾型"}));
+    row.addEventListener("click", () => {
+      WB.store.set("focusHabit", h.id);
+      if(m && m.close) m.close();   // 有 onClick 语义的动作自己关窗（踩坑 #042）
+    });
+    list.appendChild(row);
+  });
+  const m = WB.ui.modal({title: "选择今日聚焦", icon: "star", content: list, actions: [{label: "取消"}]});
+}
+
 WB.registerModule({
   id: "habits",
   title: "习惯打卡",
@@ -161,6 +206,16 @@ WB.registerModule({
       view.appendChild(el("div", {class: "card"}, WB.ui.emptyState("sprout", "种下第一个习惯",
         "建议从「小到不可能失败」开始：喝一杯水、读一页书。<br>打勾型每天一次，次数型可设每日目标（如喝水 ×8）。")));
       return;
+    }
+
+    /* 今日聚焦：从习惯里圈一个今天重点，打卡入口就在眼前（不做惩罚，只是陪伴） */
+    const focusH = hs.find(h => h.id === WB.store.get("focusHabit", "")) || null;
+    if(focusH){
+      view.appendChild(focusBand(focusH, dateStr));
+    }else{
+      view.appendChild(el("div", {class: "row", style: {marginBottom: "10px"}},
+        el("button", {class: "btn sm ghost", html: icon("star", 14) + "<span>设一个今日聚焦</span>",
+          onclick: pickFocus})));
     }
 
     const card = el("div", {class: "card"});
@@ -210,8 +265,8 @@ WB.registerModule({
   },
 });
 
-/* 供总览/统计调用 */
-WB.habits = {streakOf, totalOf, isDone, logOf, quickCheck(h, ev){
+/* 打卡入口：抽成模块级函数——WB.habits 对象字面量里的成员对模块内其他函数不可见（踩坑 #030 同款） */
+function quickCheck(h, ev){
   const dateStr = WB.bizDate();
   const log = logOf(h.id, dateStr);
   if(h.type === "check"){
@@ -227,5 +282,8 @@ WB.habits = {streakOf, totalOf, isDone, logOf, quickCheck(h, ev){
   }else{
     WB.router.go("habits");
   }
-}};
+}
+
+/* 供总览/统计调用 */
+WB.habits = {streakOf, totalOf, isDone, logOf, quickCheck};
 })();
