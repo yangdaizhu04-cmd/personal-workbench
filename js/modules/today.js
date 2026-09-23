@@ -146,6 +146,41 @@ const MURMURS = [
   {id: "empty",    test: c => c.pending === 0 && c.doneToday === 0 && c.overdue === 0, text: () => "今天是留白的一天，也挺好。"},
   {id: "calm",     test: () => true, text: () => "按自己的节奏来，就已经很好 ✦"},
 ];
+/* ---------- 宠物「小雾团」：絮语行的化身，状态跟着今天过得怎么样走 ----------
+   Finch 式情感绑定的温柔版：只陪伴不惩罚。四态——
+   蛋（还没开始）/ 飘（有一点动静）/ 发光（完成度高）/ 静静陪（心情低落日） */
+function petState(dateStr){
+  const todos = WB.store.get("todos", []);
+  const doneToday = todos.filter(t => t.done && t.date === dateStr).length;
+  const big3 = WB.store.get("bigThree:" + dateStr, []);
+  const big3All = big3.length > 0 && big3.every(i => i.done);
+  const pomoToday = WB.store.get("pomoLog", []).filter(l => l.date === dateStr && l.status === "done" && l.mode === "focus").length;
+  const overdue = todos.filter(t => !t.done && t.date && t.date < dateStr && !(t.repeat && t.repeat.type !== "none")).length;
+  const mood = WB.store.get("moods", []).find(m => m.date === dateStr);
+  const moved = doneToday > 0 || pomoToday > 0 ||
+    (WB.store.get("habitLogs", []).some(l => l.date === dateStr && l.count > 0));
+  const detail = "今日完成 " + doneToday + " 件 · 专注 " + pomoToday + " 个番茄" +
+    (big3.length ? " · 三大件 " + big3.filter(i => i.done).length + "/" + big3.length : "") +
+    (overdue ? " · 还有 " + overdue + " 件小事不急" : "");
+  if(mood && mood.level <= 2){
+    return {emoji: "🌙", title: "雾团今天安安静静地陪你，累了就歇歇", detail};
+  }
+  if(big3All || doneToday >= 5){
+    return {emoji: "☁️✨", title: "小雾团今天在发光——把日子过得亮亮的", detail};
+  }
+  if(moved){
+    return {emoji: "☁️", title: "小雾团轻轻飘着，陪你慢慢来", detail};
+  }
+  return {emoji: "🥚", title: "雾团里睡着一颗蛋——今天还没开始，不急", detail};
+}
+function petModal(dateStr){
+  const p = petState(dateStr);
+  const body = el("div", {class: "center col", style: {gap: "10px", padding: "8px 0 4px"}});
+  body.appendChild(el("div", {class: "pet-art breathe", text: p.emoji, style: {fontSize: "44px"}}));
+  body.appendChild(el("div", {style: {fontWeight: "600"}, text: p.title}));
+  body.appendChild(el("div", {class: "small faint", text: p.detail}));
+  WB.ui.modal({title: "小雾团", icon: "sparkle", content: body, actions: [{label: "去忙吧"}]});
+}
 function murmurText(dateStr){
   if(WB.habits && WB.habits.invalidateLogs) WB.habits.invalidateLogs();   // 外部改了打卡记录也能拿到最新连续天数
   const todos = WB.store.get("todos", []);
@@ -266,9 +301,15 @@ WB.registerModule({
     /* ===== 顶部：日期 + 班休 + 天气 ===== */
     wrap.appendChild(this.dateCard(dateStr));
 
-    /* ===== 晨雾絮语：规则式一行洞察（极简模式也保留，一行氛围小字） ===== */
+    /* ===== 晨雾絮语：规则式一行洞察（极简模式也保留，一行氛围小字） =====
+       行首的小雾团就是宠物：状态跟今天完成度/心情走，戳一下看详情 */
+    const pet = petState(dateStr);
+    const murmurDot = el("span", {class: "murmur-dot", role: "button", tabindex: "0",
+      text: pet.emoji, title: pet.title, "aria-label": "小雾团：" + pet.title});
+    murmurDot.addEventListener("click", () => petModal(dateStr));
+    murmurDot.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); petModal(dateStr); } });
     wrap.appendChild(el("div", {class: "murmur"},
-      el("span", {class: "murmur-dot", text: "✦"}),
+      murmurDot,
       el("span", {text: murmurText(dateStr)})));
 
     /* ===== 一键动作：高频操作不跳页（极简模式下不显示，尊重「只留三大件」） ===== */

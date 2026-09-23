@@ -433,10 +433,14 @@ button.list-row:last-child{border-bottom:none;}
 .habit-focus .hf-name{font-size:16.5px;}
 .habit-focus .grow{flex:1 1 12px; min-width:12px;}
 
-/* 晨雾絮语：总览顶部的规则式一行洞察（当天定基调，实时校验前提） */
+/* 晨雾絮语：总览顶部的规则式一行洞察（当天定基调，实时校验前提）。
+   行首 .murmur-dot 是宠物「小雾团」：状态跟今天完成度/心情走，可点开详情 */
 .murmur{display:flex; align-items:center; gap:7px; padding:0 4px;
   color:var(--ink-2); font-size:13.5px;}
-.murmur-dot{color:var(--accent); font-size:11px;}
+.murmur-dot{font-size:15px; line-height:1; cursor:pointer; user-select:none;
+  transition:transform var(--dur) var(--ease-std);}
+.murmur-dot:hover{transform:scale(1.18);}
+html.no-motion .murmur-dot{transition:none;}
 
 /* 空状态 */
 .empty{
