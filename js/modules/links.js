@@ -35,6 +35,35 @@ function linkModal(existing){
   setTimeout(() => name.focus(), 60);
 }
 
+/* 浏览器书签 HTML 导入（Chrome/Edge 导出的 netscape 格式）：递归收集 <a>，按 URL 去重 */
+function importBookmarks(){
+  const file = el("input", {type: "file", accept: ".html", style: {display: "none"}});
+  file.addEventListener("change", async () => {
+    const f = file.files[0]; if(!f) return;
+    try{
+      const doc = new DOMParser().parseFromString(await f.text(), "text/html");
+      const items = [];
+      const walk = node => {
+        [...node.children].forEach(ch => {
+          if(ch.tagName === "A"){
+            const url = (ch.getAttribute("href") || "").trim();
+            if(/^https?:\/\//i.test(url)) items.push({name: (ch.textContent || "").trim().slice(0, 40) || "书签", url});
+          }else walk(ch);
+        });
+      };
+      walk(doc.body);
+      const exist = new Set(links.all().map(x => x.url));
+      const fresh = items.filter(x => !exist.has(x.url));
+      if(!fresh.length){ WB.ui.toast("没有可导入的新书签（已按网址去重）", "warn"); return; }
+      if(!await WB.ui.confirmBox("发现 " + fresh.length + " 条新书签（共 " + items.length + " 条，重复跳过），导入？")) return;
+      fresh.forEach(x => links.add({name: x.name, url: x.url, folder: "书签导入"}));
+      WB.ui.toast("已导入 " + fresh.length + " 条书签");
+      WB.router.render();
+    }catch(err){ WB.ui.toast("导入失败：" + err.message, "warn"); }
+  });
+  file.click();
+}
+
 function textModal(existing){
   const isNew = !existing;
   const t = Object.assign({title: "", content: ""}, existing || {});
@@ -96,6 +125,8 @@ WB.registerModule({
       onclick: () => {}}));
     lcard.querySelector(".card-title").appendChild(el("button", {class: "btn sm primary", style: {marginLeft: "auto"},
       html: icon("plus", 13) + "<span>添加</span>", onclick: () => linkModal(null)}));
+    lcard.querySelector(".card-title").appendChild(el("button", {class: "btn sm", style: {marginLeft: "6px"},
+      html: icon("upload", 13) + "<span>导入书签</span>", onclick: importBookmarks}));
     if(!links.all().length){
       lcard.appendChild(WB.ui.emptyState("link", "收藏第一个网址", "常用的后台、文档、邮箱…一键直达，还能生成二维码手机打开"));
     }else{

@@ -128,10 +128,30 @@ WB.registerModule({
             WB.ui.toast("已导出 " + Object.keys(data).length + " 类数据");
           }})),
       row("恢复", "从 JSON 备份导入（合并或覆盖）", importBtn()),
+      row("配置分享", "导出外观偏好、清单与奖励商店等配置（不含日记账单），朋友导入即得同款框架",
+        el("button", {class: "btn sm", html: icon("share", 15) + "<span>导出配置</span>",
+          onclick: () => {
+            const s = WB.store.get("settings", {}), u = WB.store.get("uiPrefs", {});
+            const share = {__share: 1, exportedAt: new Date().toISOString(),
+              settings: {theme: s.theme, accent: s.accent, accentCustom: s.accentCustom, quoteSource: s.quoteSource,
+                currencies: s.currencies, weatherCity: s.weatherCity, offworkHour: s.offworkHour, birthdayAhead: s.birthdayAhead},
+              uiPrefs: {todayCards: u.todayCards, todayExpanded: u.todayExpanded, todayMinimal: u.todayMinimal},
+              coinRewards: WB.store.get("coinRewards", []),
+              rssSources: WB.store.get("rssSources", []),
+              todoLists: WB.store.get("todoLists", []),
+              ledgerCats: WB.store.get("ledgerCats", []),
+            };
+            WB.downloadFile("工作台配置-" + WB.todayStr() + ".json", JSON.stringify(share, null, 2), "application/json");
+            WB.ui.toast("配置已导出（不含私人数据）");
+          }})),
+      row("导入配置", "从分享的配置 JSON 合并导入（同 id 去重，不动日记/账单）", importShareBtn()),
       row("日志笔记", "导出为 Markdown 文件", el("button", {class: "btn sm", html: icon("download", 15) + "<span>导出 MD</span>",
         onclick: () => WB.exports && WB.exports.journals()})),
       row("账单", "导出为 CSV 表格", el("button", {class: "btn sm", html: icon("download", 15) + "<span>导出 CSV</span>",
         onclick: () => WB.exports && WB.exports.ledger()})),
+      row("Obsidian 库", "日志按日一篇 .md（带 frontmatter）+ 笔记 + 账单，zip 解压进 Obsidian 仓库即用",
+        el("button", {class: "btn sm", html: icon("download", 15) + "<span>导出 zip</span>",
+          onclick: () => WB.exports && WB.exports.obsidian()})),
     ]));
 
     /* --- 晨雾币 · 奖励商店 --- */
@@ -431,6 +451,26 @@ WB.registerModule({
         }
       });
       const btn = el("button", {class: "btn sm", html: icon("upload", 15) + "<span>导入 JSON</span>",
+        onclick: () => file.click()});
+      btn.appendChild(file);
+      return btn;
+    }
+    /* 配置分享导入：识别 __share 格式，合并模式走 importAll（数组按 id 去重、settings 浅合并），不动私人数据 */
+    function importShareBtn(){
+      const file = el("input", {type: "file", accept: ".json", style: {display: "none"}});
+      file.addEventListener("change", async () => {
+        const f = file.files[0]; if(!f) return;
+        try{
+          const data = JSON.parse(await f.text());
+          if(!data || data.__share !== 1) throw new Error("不是配置分享文件（请选择「导出配置」生成的 JSON）");
+          if(!await WB.ui.confirmBox("将把对方的配置合并进你的工作台（同 id 去重，不影响日记/账单），继续？")) return;
+          if(WB.snapshots){ try{ await WB.snapshots.take("导入配置前"); }catch(e){} }
+          WB.store.importAll(data, {merge: true});
+          WB.ui.toast("配置已导入，正在刷新…");
+          setTimeout(() => location.reload(), 900);
+        }catch(err){ WB.ui.toast("导入失败：" + err.message, "warn"); }
+      });
+      const btn = el("button", {class: "btn sm", html: icon("upload", 15) + "<span>导入配置</span>",
         onclick: () => file.click()});
       btn.appendChild(file);
       return btn;

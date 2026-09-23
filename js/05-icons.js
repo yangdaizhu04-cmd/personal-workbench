@@ -85,6 +85,8 @@ const P = {
   archive:'<rect x="3.5" y="4" width="17" height="4.5" rx="1.5"/><path d="M5 8.5v9A2 2 0 0 0 7 19.5h10a2 2 0 0 0 2-2v-9M10 12.5h4"/>',
   shield:'<path d="M12 3.5 5 6v5.5c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/><path d="m9 11.8 2.2 2.2 4-4.5"/>',
   alarm:'<circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 2M5.5 3.5 3 5.5M18.5 3.5 21 5.5"/>',
+  rss:'<circle cx="6.2" cy="17.8" r="1.9"/><path d="M4 11.2a8.8 8.8 0 0 1 8.8 8.8M4 4.2A15.8 15.8 0 0 1 19.8 20"/>',
+  share:'<circle cx="6" cy="12" r="2.6"/><circle cx="17.5" cy="5.5" r="2.6"/><circle cx="17.5" cy="18.5" r="2.6"/><path d="m8.4 10.8 6.8-4M8.4 13.2l6.8 4"/>',
 };
 
 function icon(name, size, cls){

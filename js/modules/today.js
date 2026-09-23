@@ -6,7 +6,7 @@ const { el, icon, esc } = WB;
 
 const DEFAULT_CARDS = [
   "big3", "todos", "habits", "mood", "pomodoro", "countdown",
-  "goals", "journal", "rate", "word", "memory", "quote", "koi", "term", "content",
+  "goals", "journal", "rate", "word", "memory", "quote", "koi", "term", "content", "rss",
 ];
 const CARD_META = {
   big3:      {name: "今日三大件", icon: "target"},
@@ -24,6 +24,7 @@ const CARD_META = {
   koi:       {name: "锦鲤引言", icon: "droplet"},
   term:      {name: "节气 · 月相", icon: "moon-star"},
   content:   {name: "今日看点", icon: "sparkle"},
+  rss:       {name: "RSS 订阅", icon: "rss"},
 };
 
 /* ---------- 今日页的番茄卡：秒级局部跟随 ----------
@@ -207,6 +208,7 @@ WB.registerModule({
       koi: () => this.koiCard(dateStr),
       term: () => this.termCard(dateStr),
       content: () => this.contentCard(dateStr),
+      rss: () => this.rssCard(),
     };
     const nodes = [];
     const expanded = cardsExpanded();
@@ -773,6 +775,84 @@ WB.registerModule({
         text: "热点日报 / 今日一书 / 播客推荐，将在内容模块就绪后出现在这里"}));
     }
     return card;
+  },
+
+  /* ---------- RSS 订阅（rss2json 免费跨域通道，失败自动跳过） ---------- */
+  rssCard(){
+    const card = el("div", {class: "card"},
+      el("div", {class: "card-title", html: icon("rss", 18) + "<span>RSS 订阅</span><span class='card-sub'>点此管理</span>",
+        onclick: () => this.rssManage()}));
+    const body = el("div", {class: "col", style: {gap: "8px"}});
+    card.appendChild(body);
+    const sources = WB.store.get("rssSources", []);
+    if(!sources.length){
+      body.appendChild(el("div", {class: "small faint", style: {padding: "4px 0"},
+        text: "还没有订阅源。点标题添加：博客、公众号 RSS、任何你常读的信息流。"}));
+      return card;
+    }
+    [0, 1, 2].forEach(() => body.appendChild(WB.ui.skLine("100%", "18px")));
+    const items = [];
+    let pending = sources.length;
+    const paint = () => {
+      if(--pending > 0) return;
+      body.innerHTML = "";
+      if(!items.length){
+        body.appendChild(el("div", {class: "small faint", style: {padding: "4px 0"},
+          text: "暂时拉不到更新（联网后自动恢复，失效的源可点标题删除）"}));
+        return;
+      }
+      items.sort((a, b) => b.ts - a.ts).slice(0, 5).forEach(it => {
+        body.appendChild(el("div", {class: "row", style: {cursor: "pointer", gap: "8px"},
+          onclick: () => { try{ window.open(it.link, "_blank"); }catch(e){} }},
+          el("span", {class: "chip plain", style: {flex: "none"}, text: it.src}),
+          el("span", {class: "grow small ellipsis", text: it.title})));
+      });
+    };
+    sources.forEach(s => {
+      WB.net.getJSON("https://api.rss2json.com/v1/api.json?count=8&rss_url=" + encodeURIComponent(s.url),
+        {cacheKey: "rss:" + s.id, cacheMs: 30 * 60000, timeout: 9000}).then(d => {
+          if(d && d.status === "ok" && Array.isArray(d.items)){
+            d.items.forEach(x => items.push({
+              src: (s.name || (d.feed && d.feed.title) || "RSS").slice(0, 6),
+              title: x.title || "（无标题）",
+              link: x.link || "",
+              ts: x.pubDate ? new Date(String(x.pubDate).replace(" ", "T") + "Z").getTime() || 0 : 0}));
+          }
+          paint();
+        });
+    });
+    return card;
+  },
+
+  rssManage(){
+    const body = el("div");
+    body.appendChild(el("div", {class: "small muted", style: {marginBottom: "8px"},
+      text: "贴 RSS 源地址（博客 / 公众号转出的 RSS 均可），总览卡显示最新文章。拉取走免费通道，失败自动跳过。"}));
+    const name = el("input", {class: "input", placeholder: "名称（如：阮一峰的博客）", style: {maxWidth: "210px"}});
+    const url = el("input", {class: "input", placeholder: "https://…/rss", style: {maxWidth: "270px"}});
+    const list = el("div", {class: "list"});
+    const paint = () => {
+      list.innerHTML = "";
+      WB.store.get("rssSources", []).forEach(s => {
+        list.appendChild(el("div", {class: "list-row"},
+          el("span", {class: "grow ellipsis", text: s.name}),
+          el("span", {class: "small faint ellipsis", text: s.url}),
+          el("button", {class: "icon-btn", html: icon("close", 14), "aria-label": "删除",
+            onclick: () => { WB.collection("rssSources").remove(s.id); paint(); WB.router.render(); }})));
+      });
+    };
+    paint();
+    body.appendChild(el("div", {class: "row", style: {gap: "8px", marginBottom: "10px", flexWrap: "wrap"}}, name, url,
+      el("button", {class: "btn sm primary", html: icon("plus", 14) + "<span>添加</span>",
+        onclick: () => {
+          const n = name.value.trim(), u = url.value.trim();
+          if(!n || !u){ (!n ? name : url).focus(); return; }
+          WB.collection("rssSources").add({name: n, url: /^https?:\/\//i.test(u) ? u : "https://" + u});
+          name.value = ""; url.value = ""; paint();
+        }})));
+    body.appendChild(list);
+    WB.ui.modal({title: "RSS 订阅管理", icon: "rss", content: body, wide: true,
+      actions: [{label: "完成", primary: true}]});
   },
 
   /* ---------- 卡片管理 ---------- */
