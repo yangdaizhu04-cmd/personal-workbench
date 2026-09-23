@@ -433,6 +433,11 @@ button.list-row:last-child{border-bottom:none;}
 .habit-focus .hf-name{font-size:16.5px;}
 .habit-focus .grow{flex:1 1 12px; min-width:12px;}
 
+/* 晨雾絮语：总览顶部的规则式一行洞察（当天定基调，实时校验前提） */
+.murmur{display:flex; align-items:center; gap:7px; padding:0 4px;
+  color:var(--ink-2); font-size:13.5px;}
+.murmur-dot{color:var(--accent); font-size:11px;}
+
 /* 空状态 */
 .empty{
   text-align:center; padding:46px 20px; color:var(--ink-3);

@@ -284,6 +284,6 @@ function quickCheck(h, ev){
   }
 }
 
-/* 供总览/统计调用 */
-WB.habits = {streakOf, totalOf, isDone, logOf, quickCheck};
+/* 供总览/统计调用；invalidateLogs 给总览絮语等外部读取方用（外部改了记录后失效快照） */
+WB.habits = {streakOf, totalOf, isDone, logOf, quickCheck, invalidateLogs};
 })();

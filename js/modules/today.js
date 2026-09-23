@@ -131,6 +131,54 @@ function daysAgoCN(ts){
   return d <= 0 ? "今天" : d + " 天前";
 }
 
+/* ---------- 晨雾絮语：规则式一行洞察（本地计算，零依赖） ----------
+   每天首次渲染时按优先级选定基调 id 存 `murmur:{date}`，一天不换（陪伴感）；
+   但渲染时实时校验前提（test），不成立就重选——不会说「心情还没记」这类过时话。
+   措辞一律温柔不催促：积极类在前，提醒类次之，兜底永远成立。 */
+const MURMURS = [
+  {id: "big3done", test: c => c.big3All, text: () => "今天的三大件都完成了，安心 ✦"},
+  {id: "doneN",    test: c => c.doneToday >= 3, text: c => "今天已经完成 " + c.doneToday + " 件事，节奏刚好。"},
+  {id: "streak",   test: c => c.bestStreak >= 3, text: c => "「" + c.bestHabit + "」已经陪你 " + c.bestStreak + " 天了。"},
+  {id: "pomo",     test: c => c.pomoToday >= 1, text: c => "今天已专注 " + c.pomoToday + " 个番茄，剩下的慢慢来。"},
+  {id: "mood",     test: c => !c.moodToday, text: () => "今天的心情还没落笔，顺手记一下？"},
+  {id: "overdue",  test: c => c.overdue > 0, text: c => "有 " + c.overdue + " 件事在等过去的你交代——不急，先从一件开始。"},
+  {id: "journal",  test: c => c.journalCount > 0 && c.daysNoJournal >= 3, text: () => "日志本有一些日子没翻了，写两句就好。"},
+  {id: "empty",    test: c => c.pending === 0 && c.doneToday === 0 && c.overdue === 0, text: () => "今天是留白的一天，也挺好。"},
+  {id: "calm",     test: () => true, text: () => "按自己的节奏来，就已经很好 ✦"},
+];
+function murmurText(dateStr){
+  if(WB.habits && WB.habits.invalidateLogs) WB.habits.invalidateLogs();   // 外部改了打卡记录也能拿到最新连续天数
+  const todos = WB.store.get("todos", []);
+  const big3 = WB.store.get("bigThree:" + dateStr, []);
+  const journals = WB.store.get("journals", []);
+  const lastJournal = journals.reduce((m, j) => ((j.date || "") > m ? j.date || "" : m), "");
+  let bestStreak = 0, bestHabit = "";
+  (WB.store.get("habits", [])).forEach(h => {
+    if(h.archived) return;
+    const s = WB.habits && WB.habits.streakOf ? WB.habits.streakOf(h.id) : 0;
+    if(s > bestStreak){ bestStreak = s; bestHabit = h.name; }
+  });
+  const ctx = {
+    doneToday: todos.filter(t => t.done && t.date === dateStr).length,
+    pending: todos.filter(t => !t.done && t.date === dateStr).length,
+    overdue: todos.filter(t => !t.done && t.date && t.date < dateStr && !(t.repeat && t.repeat.type !== "none")).length,
+    big3All: big3.length > 0 && big3.every(i => i.done),
+    pomoToday: WB.store.get("pomoLog", []).filter(l => l.date === dateStr && l.status === "done" && l.mode === "focus").length,
+    moodToday: WB.store.get("moods", []).some(m => m.date === dateStr),
+    journalCount: journals.length,
+    daysNoJournal: lastJournal ? Math.floor((Date.now() - WB.parseDate(lastJournal).getTime()) / 86400000) : 999,
+    bestStreak, bestHabit,
+  };
+  const key = "murmur:" + dateStr;
+  let id = WB.store.get(key, "");
+  let rule = MURMURS.find(r => r.id === id);
+  if(!rule || !rule.test(ctx)){        // 缓存缺失或前提失效 → 重选
+    rule = MURMURS.find(r => r.test(ctx));
+    WB.store.set(key, rule.id);
+  }
+  return rule.text(ctx);
+}
+
 /* ---------- 今日纪念卡：三大件全完成时生成一张可保存的 PNG（每天最多弹一次） ---------- */
 function showMemoryCard(dateStr, items){
   if(WB.store.get("memoryCard:" + dateStr, false)) return;
@@ -217,6 +265,11 @@ WB.registerModule({
 
     /* ===== 顶部：日期 + 班休 + 天气 ===== */
     wrap.appendChild(this.dateCard(dateStr));
+
+    /* ===== 晨雾絮语：规则式一行洞察（极简模式也保留，一行氛围小字） ===== */
+    wrap.appendChild(el("div", {class: "murmur"},
+      el("span", {class: "murmur-dot", text: "✦"}),
+      el("span", {text: murmurText(dateStr)})));
 
     /* ===== 一键动作：高频操作不跳页（极简模式下不显示，尊重「只留三大件」） ===== */
     const minimal = minimalOn();
