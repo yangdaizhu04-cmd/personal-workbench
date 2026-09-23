@@ -172,7 +172,7 @@ WB.registerModule({
             onclick: () => { WB.theme.set("ambienceAsked", true); WB.router.render(); }})));
       }
 
-      ambRows.push(row("跟随节律", "按时段自动编排下面的搭配；关掉就一切照旧，手动开关完全不受影响",
+      ambRows.push(row("跟随节律", "按时段自动编排下面的搭配（场景用在沉浸专注层：进专注后按 F）；关掉就一切照旧，手动开关完全不受影响",
         toggle(s.ambienceOn, v => {
           WB.theme.set("ambienceOn", v);
           if(v){ if(!s.ambienceAsked) WB.theme.set("ambienceAsked", true); AMB.apply(true); }

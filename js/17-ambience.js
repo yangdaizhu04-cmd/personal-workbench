@@ -60,9 +60,10 @@ function soundReady(){ return !!(WB.sound && WB.sound.unlocked && WB.sound.unloc
 
 let lastSeg = "";             // 已应用过的时段：同一个时段内绝不重复动手
 
-/* 应用一个时段。force=true 时无视门闩（启用开关、点「立即应用」、跨日回来看一眼）。
-   返回 null = 引擎没开；否则返回本次真正做了什么（供设置页与探针核对） */
-function apply(force){
+/* 应用一个时段。force=true 时无视门闩（启用开关、改当前时段、点「立即应用」）。
+   silent=true 时不弹提示（只在启动时用：那一秒里雾开、入卡动画、晨间仪式都在抢注意力）。
+   返回 null = 引擎没开或无需动作；否则返回本次真正做了什么（供设置页与探针核对） */
+function apply(force, silent){
   if(!WB.theme.get("ambienceOn")) return null;
   const seg = currentSeg();
   if(!force && seg.id === lastSeg) return null;
@@ -92,18 +93,23 @@ function apply(force){
       done.soundBlocked = !!want;
     }
   }
+  /* 让"生效了"这件事看得见：场景只在沉浸专注层里出现，切完不吭声等于什么都没发生。
+     静默只留给启动那一刻，其余（时段切换 / 启用 / 改搭配 / 点立即应用）都给一句轻提示 */
+  if(!silent && WB.ui && WB.ui.toast){
+    WB.ui.toast("✦ 跟着节律切到「" + seg.name + "」：" + describe(seg.id));
+  }
   return done;
 }
 
-/* 改某一格：就地重算 plan 落库。改的若是**当前**时段，清门闩让下一次检查重新对齐；
-   改的是别的时段就什么都不做（改"夜"不该在中午打断你） */
+/* 改某一格：就地重算 plan 落库。改的若是**当前**时段 → 立刻应用（用户改完就该看见结果，
+   等下一次检查最长 60 秒，体感就是"没生效"）；改的是别的时段则什么都做（大中午改「夜」不该打断你） */
 function setSeg(id, patch){
   if(!SEGS.some(s => s.id === id)) return;
   const raw = WB.store.get("settings", {}).ambiencePlan || {};
   const next = Object.assign({}, raw);
   next[id] = Object.assign({}, DEFAULT_PLAN[id], raw[id] || {}, patch);
   WB.theme.set("ambiencePlan", next);
-  if(id === currentSeg().id) lastSeg = "";
+  if(id === currentSeg().id) apply(true);
 }
 function resetPlan(){
   WB.theme.set("ambiencePlan", {});
@@ -123,8 +129,8 @@ function describe(id){
 
 function init(){
   if(!WB.theme.get("ambienceOn")) return;
-  /* 延后 1.4s：避开入场雾开与首屏卡片动画，也让 immersive/sound 两个模块都挂好 */
-  setTimeout(() => apply(true), 1400);
+  /* 延后 1.4s：避开入场雾开与首屏卡片动画，也让 immersive/sound 两个模块都挂好。静默应用 */
+  setTimeout(() => apply(true, true), 1400);
   setInterval(() => apply(), 60000);
   /* 休眠/切走回来最容易跨过时段分界：可见即检查一次（门闩保证不会重复动手） */
   document.addEventListener("visibilitychange", () => { if(!document.hidden) apply(); });
