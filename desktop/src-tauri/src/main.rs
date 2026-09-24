@@ -12,7 +12,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::collections::HashSet;
-use std::sync::Mutex;
+use std::sync::{mpsc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tauri::{
@@ -96,14 +96,31 @@ fn set_reminders(
 /// "没看到通知"这个反馈里最难查的就是"到底发出去没有、走的哪条路"
 #[tauri::command]
 async fn test_notify(app: AppHandle) -> Result<String, String> {
-    match notify(&app, "个人工作台 · 通知自检", "关掉窗口也能收到提醒 ✓（这条是自检）") {
-        Ok(ch) if ch == "system" => Ok("已通过系统通知发出（会进通知中心）".to_string()),
-        Ok(_) => Ok(if installed() {
+    let (ch, rx) = notify(
+        &app,
+        "个人工作台 · 通知自检",
+        "关掉窗口也能收到提醒 ✓（这条是自检）",
+        None,
+    )?;
+    if ch == "system" {
+        return Ok("已通过系统通知发出（会进通知中心）".to_string());
+    }
+    /* 提醒卡是异步建的：这里等它的**真实**结果再回话（最多 5 秒）。
+       本命令是 async 命令 → 跑在异步线程池上，等待不会自锁（踩坑 #081 炸的是同步命令）。
+       不等的话，窗口没建出来也会照答"已弹出提醒卡"，那是给排障挖坑 */
+    let waited: Option<Result<String, String>> =
+        rx.and_then(|r| r.recv_timeout(Duration::from_secs(5)).ok());
+    match waited {
+        Some(Ok(_)) => Ok(if installed() {
             "系统通知没发出去，已改弹提醒卡（右下角，9 秒后自动收起）".to_string()
         } else {
-            "已弹出工作台自己的提醒卡：右下角，9 秒后自动收起（若没看见，看 toast.log 那一行）".to_string()
+            "已弹出工作台自己的提醒卡：右下角，9 秒后自动收起".to_string()
         }),
-        Err(e) => Err(e),
+        Some(Err(e)) => Err(format!("提醒卡没弹出来：{e}（详见 toast.log）")),
+        None => Err(
+            "提醒卡已派发，但 5 秒内没等到窗口建好 —— 主线程可能被卡住，详见 toast.log"
+                .to_string(),
+        ),
     }
 }
 
@@ -150,18 +167,22 @@ fn installed() -> bool {
         .unwrap_or(false)
 }
 
-/// 提醒卡的内容：窗口是复用的，新窗口开出来后靠这条命令取当前该显示什么
+/// 提醒卡的内容 + **代次**：窗口是复用的，新窗口开出来后靠 `toast_payload` 取当前该显示什么。
+///
+/// **代次和内容必须放在同一把锁里一起写、一起读**（踩坑 #082）：分成两个变量存，就会出现
+/// "新内容配旧代次"的组合，前端按代次一比会把新内容当成旧的丢掉 —— 表现正是
+/// "同一轮里第 2 条及以后的提醒，内容永远显示不出来"。
+/// 代次还兼着自动收起的判断：9 秒内又来了新的（代次变了），旧的那条就不关窗，接着显示新的
 #[derive(Default)]
 struct ToastState {
-    last: Mutex<(String, String)>,
+    /// (代次, 标题, 正文)
+    last: Mutex<(u64, String, String)>,
 }
-
-static TOAST_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[tauri::command]
 fn toast_payload(state: tauri::State<'_, ToastState>) -> serde_json::Value {
     let g = state.last.lock().map(|v| v.clone()).unwrap_or_default();
-    serde_json::json!({"title": g.0, "body": g.1})
+    serde_json::json!({"gen": g.0, "title": g.1, "body": g.2})
 }
 
 /// 前端在窗口**可见**时把提醒交给这里，走同一条通道。
@@ -173,8 +194,9 @@ fn toast_payload(state: tauri::State<'_, ToastState>) -> serde_json::Value {
 async fn notify_now(app: AppHandle, title: String, body: String) -> Result<String, String> {
     /* async：命令跑在异步线程池上而不是主线程。**这条很关键** ——
        同步命令是在主线程上执行的，而 notify_card 内部要把建窗动作派发回主线程；
-       同步命令 + 派发就变成"主线程等自己"（踩坑 #081） */
-    notify(&app, &title, &body)
+       同步命令 + 派发就变成"主线程等自己"（踩坑 #081）。
+       这里不等提醒卡的结果（前端只关心"发成功了没"，卡片成不成它自己能看见） */
+    notify(&app, &title, &body, None).map(|(ch, _)| ch)
 }
 
 /// 点提醒卡 = 唤出主窗口
@@ -190,10 +212,16 @@ fn toast_click(app: AppHandle) {
     }
 }
 
-/// 贴到主屏右下角（让开任务栏）。换分辨率/多屏时每次弹都重新算一次，不记旧坐标
-fn place_bottom_right(app: &AppHandle, w: &tauri::WebviewWindow) {
-    /* 主屏拿不到就退到主窗口所在的那块屏：拿不到监视器时窗口会停在系统的默认位置
-       （左上角那一带的层叠位），这正是用户截图里"白框不在右下角"的原因 */
+/// 算出卡片该去的位置（逻辑坐标，主屏右下角、让开任务栏）以及那块屏的缩放：
+/// 调用方拿它先摆一次，显示后再核对一次。换分辨率/多屏时每次弹都重新算，不记旧坐标。
+/// 返回 `None` = 一块监视器都问不出来（窗口会停在系统层叠位，就是"白框不在右下角"的样子）
+fn bottom_right_pos(
+    app: &AppHandle,
+    w: &tauri::WebviewWindow,
+) -> Option<(tauri::LogicalPosition<f64>, f64)> {
+    /* 主屏 → 主窗口所在的那块屏 → 任意一块能问到的屏。
+       最后这层是有用的：提醒的触发前提就是主窗口已隐藏（见 spawn_reminder_loop），
+       而隐藏的窗口还能不能报出自己所在的监视器，要看平台实现 —— 不能只有它这一条退路 */
     let mon = app
         .primary_monitor()
         .ok()
@@ -201,18 +229,21 @@ fn place_bottom_right(app: &AppHandle, w: &tauri::WebviewWindow) {
         .or_else(|| {
             app.get_webview_window("main")
                 .and_then(|m| m.current_monitor().ok().flatten())
-        });
-    if let Some(mon) = mon {
-        let scale = mon.scale_factor();
-        let ms = mon.size().to_logical::<f64>(scale);
-        let ws = w
-            .outer_size()
-            .map(|s| s.to_logical::<f64>(scale))
-            .unwrap_or_else(|_| tauri::LogicalSize::new(360.0_f64, 138.0_f64));
-        let x = (ms.width - ws.width - 18.0).max(0.0);
-        let y = (ms.height - ws.height - 58.0).max(0.0);
-        let _ = w.set_position(tauri::LogicalPosition::new(x, y));
-    }
+        })
+        .or_else(|| app.available_monitors().ok().and_then(|ms| ms.into_iter().next()))?;
+    let scale = mon.scale_factor();
+    let ms = mon.size().to_logical::<f64>(scale);
+    let ws = w
+        .outer_size()
+        .map(|s| s.to_logical::<f64>(scale))
+        .unwrap_or_else(|_| tauri::LogicalSize::new(360.0_f64, 138.0_f64));
+    Some((
+        tauri::LogicalPosition::new(
+            (ms.width - ws.width - 18.0).max(0.0),
+            (ms.height - ws.height - 58.0).max(0.0),
+        ),
+        scale,
+    ))
 }
 
 /// 极简百分号编码：内容要放进 URL 片段，这样**页面首帧就能画出内容**，
@@ -226,12 +257,35 @@ fn enc(s: &str) -> String {
         .collect()
 }
 
-fn notify_card(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
-    use std::sync::atomic::Ordering;
-    if let Ok(mut g) = app.state::<ToastState>().last.lock() {
-        *g = (title.to_string(), body.to_string());
-    }
-    let gen = TOAST_GEN.fetch_add(1, Ordering::SeqCst) + 1;
+/// 派发一条提醒卡（自绘窗口，便携模式下代替系统通知）。
+///
+/// **这里是派发即返回**：建窗、显示都在主线程上做，返回时窗口还没出来。
+/// 真实结果（成功描述 / 失败原因）从返回的 receiver 里送出 —— `fired_id` 给定时，
+/// 也由那个闭包顺手把结果写进 `fired.log`：只有闭包自己知道窗口到底建出来没有，
+/// 在外层写只能写"已派发"，那是把失败也记成 ok（踩坑 #082）。
+fn notify_card(
+    app: &AppHandle,
+    title: &str,
+    body: &str,
+    fired_id: Option<String>,
+) -> Result<mpsc::Receiver<Result<String, String>>, String> {
+    let (tx, rx) = mpsc::channel::<Result<String, String>>();
+
+    /* 代次与内容一起写进 ToastState（同一把锁）：内容是"当前该显示什么"，
+       代次是"这是第几条" —— 前端两样都要，用来判断自己手上的是不是旧的。
+       写不进状态就直接失败：那种情况下卡片会显示上一条的内容，
+       与其发一条错的，不如让 fired.log 记下 err */
+    let gen = {
+        let state = app.state::<ToastState>();
+        let mut g = state
+            .last
+            .lock()
+            .map_err(|_| "提醒卡状态锁坏了".to_string())?;
+        g.0 += 1;
+        g.1 = title.to_string();
+        g.2 = body.to_string();
+        g.0
+    };
 
     /* **建窗/摆放/显示必须整段在主线程上做**：Windows 的窗口与消息循环属于创建它的线程，
        从别的线程建出来的窗口不会渲染、点不动，标题栏上写着「(未响应)」，内容一片白。
@@ -241,7 +295,8 @@ fn notify_card(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
        主线程就被自己锁住 → 6 秒超时返回错误 → 那个排队的闭包稍后照样执行（窗口建出来了、
        位置还没摆对），而"9 秒后自动收起"那段在超时后就没机会执行 →
        **屏幕上留下一个永远不消失的窗口**，日志里一个字都没有。
-       所以：整段（含写日志）都放进闭包里，调用方立刻返回，谁调都不会自锁。
+       所以：整段（含写日志）都放进闭包里，调用方立刻返回，谁调都不会自锁；
+       想知道结果就收那条 receiver（自检收，提醒循环不收）。
 
        日志要写在这里而不是外面：只有这个闭包真的跑了，才能说清窗口到底建成什么样 */
     let app2 = app.clone();
@@ -253,7 +308,8 @@ fn notify_card(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
                 None => WebviewWindowBuilder::new(
                     &app2,
                     "toast",
-                    WebviewUrl::App(format!("toast.html#{}|{}", enc(&t), enc(&b)).into()),
+                    /* 内容（连代次）放进 URL 片段：页面**第一帧**就能画出来，不依赖 IPC */
+                    WebviewUrl::App(format!("toast.html#{gen}|{}|{}", enc(&t), enc(&b)).into()),
                 )
                 .title("个人工作台 · 提醒")
                 .inner_size(360.0, 138.0)
@@ -265,10 +321,34 @@ fn notify_card(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
                 .build()
                 .map_err(|e| format!("建窗失败：{e}"))?,
             };
-            place_bottom_right(&app2, &win);
-            let _ = win.emit("toast:show", serde_json::json!({"title": t, "body": b}));
+            let want = bottom_right_pos(&app2, &win);
+            if let Some((p, _)) = want {
+                let _ = win.set_position(p);
+            }
+            /* 内容分两条路推给页面，因为**每条路都会在特定时序下失效**：
+               - `emit`：正规事件通道。但页面的 listen 是异步注册的，
+                 窗口刚建出来、页面还没跑起来时发的事件会被直接丢掉
+               - `eval`：Rust 直接往 WebView 注入脚本，不经过 IPC。
+                 页面脚本还没跑起来时是空操作（`window.__toastPaint` 还不存在）
+               两条都走一遍。真正兜底的是页面自己：它加载完会无条件拉一次 `toast_payload`
+               并按代次覆盖 —— 所以"同一轮里第 2 条内容永远不显示"那个漏洞不会再出现 */
+            let payload = serde_json::json!({"gen": gen, "title": t.as_str(), "body": b.as_str()});
+            let _ = win.emit("toast:show", payload.clone());
+            if let Ok(js) = serde_json::to_string(&payload) {
+                let _ = win.eval(format!("window.__toastPaint && window.__toastPaint({js})"));
+            }
             let _ = win.show();
-            place_bottom_right(&app2, &win); // 显示后再摆一次：显示前设的坐标有时会被系统忽略
+            /* 显示前设的坐标有时会被系统忽略（踩坑 #081 那次窗口就停在 156,156），
+               所以显示后核对一次 —— **只在真的偏了才纠偏**：每次都重设会让卡片先在
+               别处出现、再跳到右下角，那一跳比稍微歪一点更显眼 */
+            if let Some((p, scale)) = want {
+                if let Ok(cur) = win.outer_position() {
+                    let cur = cur.to_logical::<f64>(scale);
+                    if (cur.x - p.x).abs() > 2.0 || (cur.y - p.y).abs() > 2.0 {
+                        let _ = win.set_position(p);
+                    }
+                }
+            }
             /* 记下窗口的真实状态：有没有标题栏 / 多大 / 在哪 —— 出问题时这一行就是证据 */
             let sz = win
                 .outer_size()
@@ -286,19 +366,38 @@ fn notify_card(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
             ))
         })();
         match res {
-            Ok(desc) => append_log(&app2, "toast.log", &format!("ok | {t} | {desc}")),
-            Err(e) => append_log(&app2, "toast.log", &format!("err | {t} | {e}")),
+            Ok(desc) => {
+                append_log(&app2, "toast.log", &format!("ok | {t} | {desc}"));
+                /* fired.log 写在这层，因为**这里才知道真实结果**（外层在派发时就返回了）。
+                   末列写通道名，与 system 那条保持一致 */
+                if let Some(id) = &fired_id {
+                    append_log(&app2, "fired.log", &format!("{id} | ok | card | {desc}"));
+                }
+                let _ = tx.send(Ok(desc));
+            }
+            Err(e) => {
+                append_log(&app2, "toast.log", &format!("err | {t} | {e}"));
+                if let Some(id) = &fired_id {
+                    append_log(&app2, "fired.log", &format!("{id} | err | card: {e}"));
+                }
+                let _ = tx.send(Err(e));
+            }
         }
     })
     .map_err(|e| format!("回不到主线程：{e}"))?;
 
-    /* 自动收起**紧接着就安排**，不依赖上面的建窗成功与否 ——
+    /* 自动收起**在建窗请求发出后立刻安排**（注意上面那句 `?`：连派发都没成功时这里已经返回了，
+       那种情况没建出窗口，自然也无需收起）。安排它不依赖建窗成功与否 ——
        否则一旦前一步出了岔子，屏幕上就会留一个永不消失的窗口。
        9 秒后关窗（同样回主线程）；期间又来了一条（代次变了）就不关，接着显示新的 */
     let app3 = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(9));
-        if TOAST_GEN.load(Ordering::SeqCst) == gen {
+        let cur = {
+            let state = app3.state::<ToastState>();
+            state.last.lock().map(|g| g.0).unwrap_or(gen) // 锁坏了就当自己是最新的，照常收起
+        };
+        if cur == gen {
             let app4 = app3.clone();
             let _ = app3.run_on_main_thread(move || {
                 if let Some(w) = app4.get_webview_window("toast") {
@@ -307,7 +406,7 @@ fn notify_card(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
             });
         }
     });
-    Ok(())
+    Ok(rx)
 }
 
 /// 往应用数据目录里的某个日志追加一行（fired.log / toast.log 共用）
@@ -325,26 +424,39 @@ fn append_log(app: &AppHandle, file: &str, text: &str) {
     }
 }
 
-/// 发一条提醒。返回用掉的是哪条通道（写进 fired.log，排障时一看就知道）
-fn notify(app: &AppHandle, title: &str, body: &str) -> Result<String, String> {
+/// 发一条提醒。返回用掉的通道（system / card），card 那条另带回结果通道。
+///
+/// `fired_id` 给定时把结果写进 `fired.log`（应用数据目录）。排障时这一个文件就能分开
+/// 三种情况：没触发（没有行）/ 系统拒了（err）/ 系统收下了（ok）—— 关窗之后没有任何界面
+/// 可以看，没有这个日志就只剩猜。
+/// **写在哪儿取决于哪条通道**：system 是同步结果，这里直接写；card 要等主线程把窗建出来
+/// 才知道成败，所以由建窗闭包写、自检命令收那条 receiver 说真话
+fn notify(
+    app: &AppHandle,
+    title: &str,
+    body: &str,
+    fired_id: Option<String>,
+) -> Result<(String, Option<mpsc::Receiver<Result<String, String>>>), String> {
     if installed() {
         // 装过的应用有正经身份：系统通知能进通知中心、也尊重「专注助手」
         if app.notification().builder().title(title).body(body).show().is_ok() {
-            return Ok("system".to_string());
+            if let Some(id) = &fired_id {
+                append_log(app, "fired.log", &format!("{id} | ok | system"));
+            }
+            return Ok(("system".to_string(), None));
         }
     }
-    notify_card(app, title, body).map(|_| "card".to_string())
-}
-
-/// 每发一条通知追加一行到 `fired.log`（应用数据目录）。
-/// 排障时这一个文件就能分开三种情况：没触发（没有行）/ 系统拒了（err）/ 系统收下了（ok）。
-/// 关窗之后没有任何界面可以看，没有这个日志就只剩猜
-fn log_fired(app: &AppHandle, r: &Reminder, res: &Result<String, String>) {
-    let (tag, extra) = match res {
-        Ok(ch) => ("ok", ch.as_str()),      // 末列写通道：system（系统通知）/ card（自绘提醒卡）
-        Err(e) => ("err", e.as_str()),
-    };
-    append_log(app, "fired.log", &format!("{} | {} | {}", r.id, tag, extra));
+    match notify_card(app, title, body, fired_id.clone()) {
+        Ok(rx) => Ok(("card".to_string(), Some(rx))),
+        Err(e) => {
+            /* 连派发回主线程都没成功：这一条也要留痕，否则 fired.log 里一片空白，
+               会被读成"提醒根本没到点"（那是另一种问题，查法完全不同） */
+            if let Some(id) = &fired_id {
+                append_log(app, "fired.log", &format!("{id} | err | card: {e}"));
+            }
+            Err(format!("card: {e}"))
+        }
+    }
 }
 
 fn spawn_reminder_loop(app: AppHandle) {
@@ -379,8 +491,9 @@ fn spawn_reminder_loop(app: AppHandle) {
                     fired.clear(); // 去重表别无限长大（清空最坏只是重发一次当轮提醒）
                 }
             }
-            let res = notify(&app, &r.title, &r.body);
-            log_fired(&app, &r, &res);
+            /* 结果不在这里看：system 那条在 notify 内部就写了日志，
+               card 那条由建窗闭包写（这里是派发即返回，拿不到真实结果）。 */
+            let _ = notify(&app, &r.title, &r.body, Some(r.id.clone()));
         }
     });
 }
@@ -517,17 +630,43 @@ fn main() {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(Duration::from_secs(8));
-                    let r = notify(&h, "个人工作台 · 自检", "后台线程路径（定时提醒走这条）");
+                    let r = notify(&h, "个人工作台 · 自检", "后台线程路径（定时提醒走这条）", None);
                     eprintln!("[selftest] 后台线程 notify -> {r:?}");
                     std::thread::sleep(Duration::from_secs(10));
                     /* 再模拟一次前端那个命令：**在主线程上**调 notify ——
-                       这正是当初会自锁、把窗口永远留在屏幕上的那条路（踩坑 #081） */
-                    let h2 = h.clone();
-                    let h3 = h.clone();
-                    let _ = h2.run_on_main_thread(move || {
-                        let r = notify(&h3, "个人工作台 · 自检", "主线程路径（自检按钮走这条）");
-                        eprintln!("[selftest] 主线程 notify -> {r:?}");
-                    });
+                       这正是当初会自锁、把窗口永远留在屏幕上的那条路（踩坑 #081）。
+                       失败要留证据，别用 `let _ =` 吞掉 */
+                    if let Err(e) = h.clone().run_on_main_thread({
+                        let h = h.clone();
+                        move || {
+                            let r = notify(
+                                &h,
+                                "个人工作台 · 自检",
+                                "主线程路径（自检按钮走这条）",
+                                None,
+                            );
+                            eprintln!("[selftest] 主线程 notify -> {r:?}");
+                        }
+                    }) {
+                        eprintln!("[selftest] 回不到主线程：{e}");
+                    }
+                    std::thread::sleep(Duration::from_secs(10));
+                    /* 背靠背两条 = 同一个 20 秒 tick 里有两条到点，正是"第 2 条内容永不显示"
+                       那个 bug 的现场（踩坑 #082）：卡上应当出现**第 2 条**的内容
+                       （同一张卡显示最新一条，9 秒后自动收起），fired.log 里两行都该是 ok */
+                    let r1 = notify(
+                        &h,
+                        "个人工作台 · 自检 1/2",
+                        "背靠背第 1 条（这条不该停在卡上）",
+                        Some("selftest-1".to_string()),
+                    );
+                    let r2 = notify(
+                        &h,
+                        "个人工作台 · 自检 2/2",
+                        "背靠背第 2 条（卡片上应该是这条）",
+                        Some("selftest-2".to_string()),
+                    );
+                    eprintln!("[selftest] 背靠背两条 -> {r1:?} / {r2:?}");
                 });
             }
             Ok(())

@@ -8,11 +8,14 @@
      Windows 会静默丢掉 toast（notify-rust 会退回 PowerShell 的 AUMID，而新版 Windows
      已经没有那个快捷方式了）。这张卡由我们自己弹，不依赖系统通知开关。
 
-     两条硬约定（都是踩过坑才写下的，见开发踩坑 #078 / #079）：
+     三条硬约定（都是踩过坑才写下的，见开发踩坑 #078 / #079 / #082）：
      1. **内容从 URL 片段里读**，不靠 IPC 取 —— 拿不到内容时窗口会是一片空白，
         而"空白卡片"和"没弹出来"看起来一样，最难查。IPC 只用来在窗口复用时更新。
      2. **页面底色必须是奶油色**：窗口没开透明，CSS 写 transparent 会渲染成纯白，
         看起来像一个白框。底色跟卡片同色，整块才像一张卡片。
+     3. **加载完必须无条件问一次 Rust 并按「代次」覆盖**：窗口是复用的，而窗口刚建出来的
+        那一瞬间事件会丢（listen 是异步注册的），丢掉的那条内容就再也不会出现
+        （Rust 那边已经把它记进去重表、fired.log 都写过 ok 了）—— 内容更新的兜底只能在自己这儿。
      这一页不加载工作台的任何脚本，只显示两行字 + 点一下唤出主窗口 -->
 <style>
   @font-face{font-family:"lxgw";src:url("vendor/font/lxgw-wenkai-subset.woff2") format("woff2");font-display:swap;}
@@ -50,31 +53,46 @@
   "use strict";
   const api = window.__TAURI__ && window.__TAURI__.core;
   const T = document.getElementById("t"), B = document.getElementById("b"), C = document.getElementById("card");
-  let painted = false;
+  let painted = false, curGen = 0;
+  /* 画一条内容。**按代次判断新旧**：Rust 侧会同时用事件和注入两条路推同一代内容，
+     再加下面那次无条件拉取，可能连着来三份 —— 同一代只画一次，否则入场动画会重放
+     （卡片看起来像在抖）；更旧的一律丢掉，绝不把新的盖回去 */
   function paint(p){
     if(!p) return;
+    const g = Number(p.gen) || 0;
+    if(g && g < curGen) return;
+    const t = p.title || "个人工作台", b = p.body || "";
+    if(g && g === curGen && T.textContent === t && B.textContent === b) return;
+    curGen = Math.max(curGen, g);
     painted = true;
     C.classList.remove("bye", "empty");
-    T.textContent = p.title || "个人工作台";
-    B.textContent = p.body || "";
+    T.textContent = t;
+    B.textContent = b;
     void C.offsetWidth;                       // 重放进场动画
     C.style.animation = "in .34s cubic-bezier(.4,1.3,.5,1)";
   }
-  /* 首选：内容就在 URL 片段里（第一帧就能画出来，不依赖任何 IPC） */
+  window.__toastPaint = paint;                // 给 Rust 的 eval 直插用（见 main.rs 里推内容那两条路）
+  /* 首选：内容就在 URL 片段里（`代次|标题|正文`，第一帧就能画出来，不依赖任何 IPC）。
+     代次兼容缺省：老格式（只有 标题|正文）按 0 处理 */
   function fromHash(){
     const h = location.hash.slice(1);
     if(!h) return null;
-    const i = h.indexOf("|");
-    if(i < 0) return null;
-    try{ return {title: decodeURIComponent(h.slice(0, i)), body: decodeURIComponent(h.slice(i + 1))}; }
+    const seg = h.split("|");
+    let gen = 0, ti = 0;
+    if(seg.length >= 3 && /^\d+$/.test(seg[0])){ gen = Number(seg[0]); ti = 1; }
+    if(seg.length - ti < 2) return null;
+    try{ return {gen, title: decodeURIComponent(seg[ti]), body: decodeURIComponent(seg[ti + 1])}; }
     catch(e){ return null; }
   }
   paint(fromHash());
   /* 其次：窗口复用时 Rust 推事件过来 */
   if(window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen)
     window.__TAURI__.event.listen("toast:show", e => paint(e.payload));
-  /* 再其次：问一次 Rust（正常路径用不到，但 IPC 通了就多条路） */
-  if(api) api.invoke("toast_payload").then(p => { if(!painted) paint(p); }).catch(() => {});
+  /* 再其次，也是**最要紧的一层兜底**：问一次 Rust 当前最新的内容，按代次覆盖。
+     这层不能带 `if(!painted)` 条件 —— 页面首帧画的是 URL 片段，而窗口被复用时
+     那可能是上一条（第 1 条）；只有无条件比对代次，第 2 条及以后的内容才不会
+     "永远显示不出来"（它们当时已被写进 Rust 的去重表，不会再发一次。见踩坑 #082） */
+  if(api) api.invoke("toast_payload").then(p => paint(p)).catch(() => {});
   /* 兜底：1.5 秒后还是空的，别留一张看不懂的空白卡 */
   setTimeout(() => {
     if(painted) return;
