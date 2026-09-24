@@ -65,6 +65,27 @@ npx @tauri-apps/cli icon ../assets/icon.svg
 另：系统通知总开关（设置 → 系统 → 通知）关掉时**任何应用都弹不出**，应用侧无法感知 ——
 自检按钮会说明用的是哪条通道，`fired.log` 的末列也记（`ok | card` / `ok | system` / `err | …`）。
 
+## 前端不许自己 `new Notification()`
+
+**桌面版里浏览器的 `new Notification()` 不会显示任何东西** —— Tauri 用的是 WebView2，
+而 WebView2 需要宿主应用实现通知回调才会呈现（Tauri 没实现）：调用成功、权限显示已授权、
+屏幕上什么都没有。所以窗口可见时前端也把提醒交给 Rust：
+
+```js
+WB.notify(title, body)          // 网页版 → 浏览器通知；桌面版 → invoke("notify_now") → Rust 通道
+WB.desktop.notifyNow(title, body)// 只想走桌面通道时直接用
+```
+
+加新提醒时一律走 `WB.notify()`，别直接 `new Notification()`，否则"应用开着"时提醒是哑的（踩坑 #079）。
+
+## toast.html 的两条硬约定
+
+1. **内容放在 URL 的 `#` 片段里**（`toast.html#标题|正文`，逐段百分号编码）：首帧就能画出来，
+   不依赖 IPC。IPC（`toast_payload` / `toast:show` 事件）只用于窗口复用时的更新。
+   教训：内容靠异步取的时候，取不到就是一张**空白卡**，而空白卡和"没弹出来"长得一模一样。
+2. **页面底色给奶油色**，不要写 `transparent`：窗口没开透明，CSS 的 transparent 会渲染成纯白，
+   飘在别的窗口上就是一个白框。
+
 ## 排障用的两个文件（在 `%APPDATA%\com.personal.workbench\`）
 
 | 文件 | 看什么 |

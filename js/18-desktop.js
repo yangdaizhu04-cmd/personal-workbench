@@ -134,6 +134,17 @@ function autostartSet(on){
   return invoke(on ? "plugin:autostart|enable" : "plugin:autostart|disable")
     .then(() => true, err => { console.warn("[desktop] 开机自启设置失败", err); return false; });
 }
+/* 窗口可见时前端把提醒交给 Rust 走同一条通道。
+   前端**不能**自己 `new Notification()`：WebView2 里那个调用不会显示任何东西
+   （要宿主实现通知回调，Tauri 没实现），于是"应用开着"时提醒是静默的（踩坑 #079） */
+function notifyNow(title, body){
+  if(!inTauri) return Promise.resolve(false);
+  return invoke("notify_now", {title, body}).then(() => true, err => {
+    console.warn("[desktop] 提醒发送失败", err);
+    return false;
+  });
+}
+
 /* 自检：让 Rust 直接发一条通知，用来确认系统真的能弹出（比"理论上应该能"靠谱） */
 function testNotify(){
   return invoke("test_notify").then(msg => ({ok: true, msg}), err => ({ok: false, msg: String(err)}));
@@ -151,9 +162,12 @@ function inWindow(){
   buildList().forEach(r => {
     if(r.id.indexOf("todo:") === 0) return;
     if(r.at > now || now > r.until || fired.has(r.id)) return;
-    fired.add(r.id); changed = true;
     const shown = WB.notify(r.title, r.body);
-    if(!shown && WB.theme.all().remindToast) WB.ui.toast(r.title + " · " + r.body, "warn");
+    const fallback = !shown && WB.theme.all().remindToast;
+    if(fallback) WB.ui.toast(r.title + " · " + r.body, "warn");
+    /* 什么都没显示出来就不记账：通道哑掉时留一次机会给下一轮（踩坑 #079 顺带修的） */
+    if(!shown && !fallback) return;
+    fired.add(r.id); changed = true;
   });
   if(changed) WB.store.set(key, Array.from(fired));
 }
@@ -171,6 +185,6 @@ WB.desktop = {
   available: () => inTauri,
   /* 窗口是否被藏起来（关窗收进托盘 / 最小化）。用来决定"这条提醒谁发" */
   hidden: () => !inTauri || document.visibilityState !== "visible",
-  buildList, sync, schedule, inWindow, autostartGet, autostartSet, testNotify,
+  buildList, sync, schedule, inWindow, notifyNow, autostartGet, autostartSet, testNotify,
 };
 })();

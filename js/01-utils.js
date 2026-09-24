@@ -121,9 +121,21 @@ function pickDaily(list, dateKey){
   return list[h % list.length];
 }
 
-/* 通知 */
+/* 通知
+   桌面版（Tauri）交给 Rust 走「系统通知 / 自绘提醒卡」那条通道：
+   WebView2 里的 `new Notification()` **不会显示任何东西**（WebView2 要求宿主实现通知
+   回调，Tauri 没实现），于是应用开着的时候提醒是静默的 —— 而关掉窗口反倒能收到卡片，
+   同一件事两条路两种结果（踩坑 #079）。
+   网页版 / PWA / 扩展里没有这条桥，行为与以前完全一致（浏览器原生通知）。 */
 function notify(title, body, onClick){
   try{
+    if(window.WB && WB.desktop && WB.desktop.available && WB.desktop.available() && WB.desktop.notifyNow){
+      /* 桌面版：统一走 Rust 那条通道。后台提醒总开关关掉时桌面端保持安静，
+         退回页面内提示（remindToast），而不是继续弹卡片 */
+      if(WB.theme.all().desktopNotify === false) return false;
+      WB.desktop.notifyNow(title, body);
+      return true;
+    }
     if(!("Notification" in window)) return false;
     if(Notification.permission === "granted"){
       const n = new Notification(title, {body, silent: document.documentElement.classList.contains("no-motion")});

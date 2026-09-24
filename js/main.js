@@ -112,12 +112,14 @@ function checkReminders(){
     const target = h * 60 + m;
     const ahead = t.remindAhead ? {"0":0,"5":5,"10":10,"30":30}[t.remindAhead] ?? 0 : 0;
     if(nowMin >= target - ahead && nowMin <= target + 30 && !fired.has(t.id)){
-      fired.add(t.id); changed = true;
       const when = ahead ? "还有 " + ahead + " 分钟" : "现在";
       const shown = WB.notify("⏰ 待办提醒", when + "：" + t.title, () => WB.router.go("todos"));
       /* 页内提示有独立开关：以前借用「全屏提示动画」(pomoFlash)，
          关掉番茄动画的人会连带失去所有待办提醒，且界面上看不出为什么 */
       if(!shown && settings.remindToast) WB.ui.toast("⏰ " + when + "：" + t.title, "warn");
+      /* 只有**真的显示出来了**才算提醒过。原先"尝试过就记账"，一旦那条通道是哑的
+         （桌面版开着窗口时正是如此），这条待办当天再也不会提醒第二次（踩坑 #079） */
+      if(shown || settings.remindToast){ fired.add(t.id); changed = true; }
     }
   }
   if(changed) WB.store.set(firedKey, Array.from(fired));

@@ -164,6 +164,16 @@ fn toast_payload(state: tauri::State<'_, ToastState>) -> serde_json::Value {
     serde_json::json!({"title": g.0, "body": g.1})
 }
 
+/// 前端在窗口**可见**时把提醒交给这里，走同一条通道。
+/// 为什么不能让前端直接用浏览器的 Notification API：Tauri 用的是 WebView2，
+/// 而 WebView2 的 Notification 需要宿主实现回调才会显示 —— Tauri 没实现，
+/// 于是 `new Notification()` 会被**静默丢弃**：应用开着的时候什么也看不到，
+/// 关掉窗口反倒能收到卡片，同一件事两条路两种结果（踩坑 #079）
+#[tauri::command]
+fn notify_now(app: AppHandle, title: String, body: String) -> Result<String, String> {
+    notify(&app, &title, &body)
+}
+
 /// 点提醒卡 = 唤出主窗口
 #[tauri::command]
 fn toast_click(app: AppHandle) {
@@ -192,6 +202,17 @@ fn place_bottom_right(app: &AppHandle, w: &tauri::WebviewWindow) {
     }
 }
 
+/// 极简百分号编码：内容要放进 URL 片段，这样**页面首帧就能画出内容**，
+/// 不必等 IPC（IPC 一旦被权限/版本问题挡住，窗口会是一片空白 —— 那种失败最难查）
+fn enc(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
 fn notify_card(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
     use std::sync::atomic::Ordering;
     if let Ok(mut g) = app.state::<ToastState>().last.lock() {
@@ -200,16 +221,20 @@ fn notify_card(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
     let gen = TOAST_GEN.fetch_add(1, Ordering::SeqCst) + 1;
     let win = match app.get_webview_window("toast") {
         Some(w) => w,
-        None => WebviewWindowBuilder::new(app, "toast", WebviewUrl::App("toast.html".into()))
-            .title("个人工作台 · 提醒")
-            .inner_size(360.0, 138.0)
-            .decorations(false)
-            .always_on_top(true)
-            .skip_taskbar(true)
-            .resizable(false)
-            .focused(false)
-            .build()
-            .map_err(|e| format!("提醒卡窗口建不出来：{e}"))?,
+        None => WebviewWindowBuilder::new(
+            app,
+            "toast",
+            WebviewUrl::App(format!("toast.html#{}|{}", enc(title), enc(body)).into()),
+        )
+        .title("个人工作台 · 提醒")
+        .inner_size(360.0, 138.0)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .focused(false)
+        .build()
+        .map_err(|e| format!("提醒卡窗口建不出来：{e}"))?,
     };
     place_bottom_right(app, &win);
     let _ = win.emit("toast:show", serde_json::json!({"title": title, "body": body}));
@@ -352,6 +377,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             set_reminders,
             test_notify,
+            notify_now,
             toast_payload,
             toast_click
         ])
