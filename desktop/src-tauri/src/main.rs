@@ -95,13 +95,13 @@ fn set_reminders(
 /// 自检：立刻发一条，并**说清用的是哪条通道** ——
 /// "没看到通知"这个反馈里最难查的就是"到底发出去没有、走的哪条路"
 #[tauri::command]
-fn test_notify(app: AppHandle) -> Result<String, String> {
+async fn test_notify(app: AppHandle) -> Result<String, String> {
     match notify(&app, "个人工作台 · 通知自检", "关掉窗口也能收到提醒 ✓（这条是自检）") {
         Ok(ch) if ch == "system" => Ok("已通过系统通知发出（会进通知中心）".to_string()),
         Ok(_) => Ok(if installed() {
-            "系统通知没发出去，已改弹提醒卡".to_string()
+            "系统通知没发出去，已改弹提醒卡（右下角，9 秒后自动收起）".to_string()
         } else {
-            "已弹出工作台自己的提醒卡（便携版不走系统通知，所以不受系统通知开关影响）".to_string()
+            "已弹出工作台自己的提醒卡：右下角，9 秒后自动收起（若没看见，看 toast.log 那一行）".to_string()
         }),
         Err(e) => Err(e),
     }
@@ -170,7 +170,10 @@ fn toast_payload(state: tauri::State<'_, ToastState>) -> serde_json::Value {
 /// 于是 `new Notification()` 会被**静默丢弃**：应用开着的时候什么也看不到，
 /// 关掉窗口反倒能收到卡片，同一件事两条路两种结果（踩坑 #079）
 #[tauri::command]
-fn notify_now(app: AppHandle, title: String, body: String) -> Result<String, String> {
+async fn notify_now(app: AppHandle, title: String, body: String) -> Result<String, String> {
+    /* async：命令跑在异步线程池上而不是主线程。**这条很关键** ——
+       同步命令是在主线程上执行的，而 notify_card 内部要把建窗动作派发回主线程；
+       同步命令 + 派发就变成"主线程等自己"（踩坑 #081） */
     notify(&app, &title, &body)
 }
 
@@ -189,7 +192,17 @@ fn toast_click(app: AppHandle) {
 
 /// 贴到主屏右下角（让开任务栏）。换分辨率/多屏时每次弹都重新算一次，不记旧坐标
 fn place_bottom_right(app: &AppHandle, w: &tauri::WebviewWindow) {
-    if let Ok(Some(mon)) = app.primary_monitor() {
+    /* 主屏拿不到就退到主窗口所在的那块屏：拿不到监视器时窗口会停在系统的默认位置
+       （左上角那一带的层叠位），这正是用户截图里"白框不在右下角"的原因 */
+    let mon = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| {
+            app.get_webview_window("main")
+                .and_then(|m| m.current_monitor().ok().flatten())
+        });
+    if let Some(mon) = mon {
         let scale = mon.scale_factor();
         let ms = mon.size().to_logical::<f64>(scale);
         let ws = w
@@ -220,13 +233,17 @@ fn notify_card(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
     }
     let gen = TOAST_GEN.fetch_add(1, Ordering::SeqCst) + 1;
 
-    /* **建窗/摆放/显示必须整段在主线程上做。**
-       Windows 的窗口与消息循环属于创建它的那个线程：从后台线程建出来的窗口
-       不会渲染、点不动，标题栏上写着「(未响应)」，内容一片白 —— 而
-       "没弹出来"和"弹了一个卡死的白窗口"是两回事，后者更糟（用户截图里就是它）。
-       这里用 run_on_main_thread 把整段搬到主线程，并等结果（带 6 秒超时），
-       成功与失败都写进 toast.log，出问题时那行字比任何猜测都有用 */
-    let (tx, rx) = std::sync::mpsc::channel::<Result<String, String>>();
+    /* **建窗/摆放/显示必须整段在主线程上做**：Windows 的窗口与消息循环属于创建它的线程，
+       从别的线程建出来的窗口不会渲染、点不动，标题栏上写着「(未响应)」，内容一片白。
+
+       但**绝不能在这里阻塞等结果**（第一版就是这么写的，踩坑 #081）：
+       `test_notify` 是同步命令、本身就跑在主线程上，它一调 run_on_main_thread 再等，
+       主线程就被自己锁住 → 6 秒超时返回错误 → 那个排队的闭包稍后照样执行（窗口建出来了、
+       位置还没摆对），而"9 秒后自动收起"那段在超时后就没机会执行 →
+       **屏幕上留下一个永远不消失的窗口**，日志里一个字都没有。
+       所以：整段（含写日志）都放进闭包里，调用方立刻返回，谁调都不会自锁。
+
+       日志要写在这里而不是外面：只有这个闭包真的跑了，才能说清窗口到底建成什么样 */
     let app2 = app.clone();
     let (t, b) = (title.to_string(), body.to_string());
     app.run_on_main_thread(move || {
@@ -251,7 +268,8 @@ fn notify_card(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
             place_bottom_right(&app2, &win);
             let _ = win.emit("toast:show", serde_json::json!({"title": t, "body": b}));
             let _ = win.show();
-            /* 记下窗口的真实状态：有没有标题栏 / 多大 / 在哪 —— 自检时一看就知道对不对 */
+            place_bottom_right(&app2, &win); // 显示后再摆一次：显示前设的坐标有时会被系统忽略
+            /* 记下窗口的真实状态：有没有标题栏 / 多大 / 在哪 —— 出问题时这一行就是证据 */
             let sz = win
                 .outer_size()
                 .map(|s| format!("{}x{}", s.width, s.height))
@@ -267,24 +285,16 @@ fn notify_card(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
                 pos
             ))
         })();
-        let _ = tx.send(res);
+        match res {
+            Ok(desc) => append_log(&app2, "toast.log", &format!("ok | {t} | {desc}")),
+            Err(e) => append_log(&app2, "toast.log", &format!("err | {t} | {e}")),
+        }
     })
     .map_err(|e| format!("回不到主线程：{e}"))?;
 
-    match rx.recv_timeout(Duration::from_secs(6)) {
-        Ok(Ok(desc)) => append_log(app, "toast.log", &format!("ok | {title} | {desc}")),
-        Ok(Err(e)) => {
-            append_log(app, "toast.log", &format!("err | {title} | {e}"));
-            return Err(e);
-        }
-        Err(_) => {
-            let e = "建窗超时（主线程 6 秒没有响应）".to_string();
-            append_log(app, "toast.log", &format!("err | {title} | {e}"));
-            return Err(e);
-        }
-    }
-
-    /* 9 秒后自己收掉（关窗同样回主线程）。期间又来了一条（代次变了）就不关，接着显示新的 */
+    /* 自动收起**紧接着就安排**，不依赖上面的建窗成功与否 ——
+       否则一旦前一步出了岔子，屏幕上就会留一个永不消失的窗口。
+       9 秒后关窗（同样回主线程）；期间又来了一条（代次变了）就不关，接着显示新的 */
     let app3 = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(9));
@@ -507,8 +517,17 @@ fn main() {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(Duration::from_secs(8));
-                    let r = notify(&h, "个人工作台 · 自检", "这是自动发出的一条测试提醒");
-                    eprintln!("[selftest] notify -> {r:?}");
+                    let r = notify(&h, "个人工作台 · 自检", "后台线程路径（定时提醒走这条）");
+                    eprintln!("[selftest] 后台线程 notify -> {r:?}");
+                    std::thread::sleep(Duration::from_secs(10));
+                    /* 再模拟一次前端那个命令：**在主线程上**调 notify ——
+                       这正是当初会自锁、把窗口永远留在屏幕上的那条路（踩坑 #081） */
+                    let h2 = h.clone();
+                    let h3 = h.clone();
+                    let _ = h2.run_on_main_thread(move || {
+                        let r = notify(&h3, "个人工作台 · 自检", "主线程路径（自检按钮走这条）");
+                        eprintln!("[selftest] 主线程 notify -> {r:?}");
+                    });
                 });
             }
             Ok(())
