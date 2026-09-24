@@ -140,4 +140,8 @@ WB.registerModule({
     view.appendChild(grid);
   },
 });
+
+/* targetOf 要对外：桌面版后台提醒要算「下一个生日/纪念日是哪天」，
+   农历换算与每年重复的规则只能有一份（复制一份出来两边迟早不一致） */
+WB.countdown = {targetOf};
 })();

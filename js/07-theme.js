@@ -24,6 +24,10 @@ const DEFAULTS = {
   pomoImmersiveVideo: true,      // 沉浸层的循环视频背景（vendor/video，4.5MB，仅沉浸时加载）
   pomoSoundDuck: true,           // 专注运行中把环境音压到约 55%
   offworkHour: 18, birthdayAhead: 7,
+  morningHour: 8,                // 晨间提醒时刻（只被桌面版后台提醒用；网页版的晨间仪式仍是"当天首次打开"触发）
+  /* 桌面版（Tauri）：关窗后由 Rust 后台线程继续发系统通知，见 js/18-desktop.js。
+     网页版/PWA 里这项无意义（没有后台线程），设置页只在桌面版显示这一行 */
+  desktopNotify: true,
   weatherCity: "",           // 手动城市（空=IP 定位）
   currencies: ["USD", "EUR", "JPY", "HKD"],
   aiEnabled: true,

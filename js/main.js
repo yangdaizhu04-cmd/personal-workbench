@@ -95,6 +95,9 @@ function initShortcuts(){
 
 /* ---------- 时刻提醒调度 ---------- */
 function checkReminders(){
+  /* 桌面版把窗口收进托盘/最小化之后，系统通知交给 Rust 的后台线程发（js/18-desktop.js）：
+     这里直接让位，否则同一条提醒会被前后端各响一次 */
+  if(WB.desktop && WB.desktop.available() && WB.desktop.hidden()) return;
   const today = WB.bizDate();
   const todos = WB.store.get("todos", []).filter(t =>
     !t.done && t.date === today && t.time);
@@ -118,6 +121,9 @@ function checkReminders(){
     }
   }
   if(changed) WB.store.set(firedKey, Array.from(fired));
+  /* 桌面版：倒数日/生日/晨间/收工也走同一份清单（待办已在上面的循环里处理过）。
+     网页版不调 —— 那些提醒的时刻在网页版没有设置入口 */
+  if(WB.desktop && WB.desktop.available() && WB.desktop.inWindow) WB.desktop.inWindow();
 }
 
 /* ---------- 跨业务日换日 ----------

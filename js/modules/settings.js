@@ -484,6 +484,43 @@ WB.registerModule({
       row("浏览器通知", "待办到点提醒（页面开着时生效）", notifyBtn()),
     ]));
 
+    /* --- 桌面版（只在 Tauri 壳里出现；网页版 / PWA / 单文件版本块整块不显示） --- */
+    if(WB.desktop && WB.desktop.available()){
+      const testBtn = el("button", {class: "btn sm", html: icon("bell", 14) + "<span>发一条试试</span>",
+        onclick: async () => {
+          const r = await WB.desktop.testNotify();
+          WB.ui.toast(r.ok ? "已发出 · 看屏幕右下角" : "没能发出：" + r.msg, r.ok ? "" : "warn");
+        }});
+      const autoSw = toggle(false, v => {
+        WB.desktop.autostartSet(v).then(ok => {
+          if(!ok){ WB.ui.toast("开机自启没设成功（可能被系统拦了）", "warn"); return; }
+          WB.ui.toast(v ? "已开启：开机自动在托盘待命" : "已关闭开机自启");
+        });
+      });
+      WB.desktop.autostartGet().then(on => { if(on !== null) autoSw.querySelector("input").checked = on; });
+      const mhIn = el("input", {type: "number", class: "input", value: WB.theme.get("morningHour"),
+        min: 0, max: 23, style: {width: "86px", textAlign: "center"}});
+      mhIn.addEventListener("change", () => {
+        const v = WB.clamp(parseInt(mhIn.value) || 0, 0, 23);
+        mhIn.value = v;
+        WB.theme.set("morningHour", v);
+        WB.desktop.sync(true);
+      });
+      wrap.appendChild(sectionCard("alarm", "桌面版", [
+        row("后台提醒", "关掉窗口后仍在托盘里按点提醒：待办到点 · 倒数日与生日 · 晨间 · 收工",
+          toggle(WB.theme.get("desktopNotify") !== false, v => {
+            WB.theme.set("desktopNotify", v);
+            WB.desktop.sync(true);
+            WB.ui.toast(v ? "后台提醒已开：关窗也会提醒" : "后台提醒已关：关窗后不再提醒");
+          })),
+        row("晨间提醒时刻", "每天这个点提醒你做晨间仪式（网页版的晨间仪式仍是「当天首次打开」触发）", mhIn),
+        row("开机自启", "开机后自动在托盘待命，不用手动打开", autoSw),
+        row("通知自检", "让桌面端直接发一条系统通知，确认这台机器真的弹得出来", testBtn),
+        row("关闭窗口", "点 × 是收进托盘（不退出），提醒照常；要真正退出请用托盘右键「退出」",
+          el("span", {class: "small faint", text: "常驻托盘"})),
+      ]));
+    }
+
     /* --- 快捷键 --- */
     wrap.appendChild(sectionCard("zap", "键盘快捷键", [
       hotkeyRow("Ctrl + K", "万能命令面板（捕捉/跳转/翻译/搜索）"),
