@@ -233,7 +233,11 @@ html[data-skin="hc"]{              /* 高对比：白底黑字（正文 21:1，A
   --card-2:#f7f7f7;
   --card-border:#000000;
   --ink:#000000; --ink-2:#1a1a1a; --ink-3:#333333;
-  --accent:#00408f; --accent-2:#5a2d82; --accent-ink:#ffffff;
+  --accent:#00408f; --accent-2:#5a2d82;
+  /* --accent-ink 在本项目里是「淡底（--accent-soft）上的文字」，不是「实底上的文字」：
+     这里必须给深色 —— 给白色会让 chip / 徽标 / 日历点上的白字消失在 12% 淡蓝上（实测 1.06:1）。
+     实底上的白字走下面 .chip.clickable 那条专门规则 */
+  --accent-ink:#062a5c;
   --accent-soft:rgba(0,64,143,.12);
   --accent2-soft:rgba(90,45,130,.12);
   --danger:#a10000; --ok:#00602c; --warn:#6b4200;
@@ -247,6 +251,12 @@ html[data-skin="hc"]{              /* 高对比：白底黑字（正文 21:1，A
   --pri-mask:transparent;
   --wp-tint:255 255 255;
 }
+
+/* 高对比主题的「选中」态：12% 淡底配深字虽然达标，但一眼看不出来，与这个主题的诉求不符 ——
+   把选中的 chip 直接填成实色、白字（#fff on #00408f = 9.3:1）。
+   只作用于可点击的**选择类** chip（主题 / 点缀色 / 清单 / 标签 / 音源 / 星期…），
+   信息类 chip（"假期""本月读完 3 部"）保持淡底深字 */
+html[data-skin="hc"] .chip.clickable:not(.plain){background:var(--accent); color:#fff;}
 
 /* 三套点缀色预设（奶油框架不变） */
 html[data-accent="peach"]{ --accent:#dd9a84; --accent-2:#d9bc72; --accent-ink:#6e4a3c;
@@ -373,14 +383,14 @@ body.wallpaper-on{
 /* 壁纸蒙层：亮/暗各一层，切主题只交叉 opacity；透明度由 3.5 按壁纸亮度写 --wp-veil */
 body.wallpaper-on::before{
   content: ""; position: fixed; inset: 0; z-index: var(--z-bg);
-  background-color: rgb(var(--wp-tint) / var(--wp-veil,.72));
+  background-color: rgb(var(--wp-tint, 246 241 231) / var(--wp-veil,.72));
   pointer-events: none;
   transition: opacity var(--dur-scene) var(--ease-cross),
               background-color var(--dur-scene) var(--ease-cross);
 }
 body.wallpaper-on::after{
   content: ""; position: fixed; inset: 0; z-index: var(--z-bg);
-  background: linear-gradient(180deg, rgb(var(--wp-tint) / .78), rgb(var(--wp-tint) / .88));
+  background: linear-gradient(180deg, rgb(var(--wp-tint, 29 29 48) / .78), rgb(var(--wp-tint, 29 29 48) / .88));
   opacity: 0; pointer-events: none; transition: opacity var(--dur-scene) var(--ease-cross);
 }
 html[data-theme="dark"] body.wallpaper-on::before{opacity:0;}
@@ -829,6 +839,11 @@ body.scrim-open #sidebar{backdrop-filter:none; -webkit-backdrop-filter:none;}
 @media (max-width: 860px){
   .amb-row{flex-wrap:wrap;}
   .amb-row > .grow{flex:1 0 100%;}
+  /* 通例（踩坑 #069）：控件宽度 ≥ 两个按钮的行，窄屏一律假定"标签与控件不同行"。
+     420px 实测：不加这条，`.grow` 标签列会被压到 min-content —— 中文就是**一字一行**，
+     整张卡被拉成一根竖条。主题行从 4 项分段控件换成 10 项 chip 后就是被这条绊住的 */
+  .stack-row{flex-wrap:wrap;}
+  .stack-row > .grow{flex:1 0 100%;}
 }
 @media (min-width: 861px) and (max-width: 1100px){
   .grid-3{grid-template-columns:repeat(2,1fr);}

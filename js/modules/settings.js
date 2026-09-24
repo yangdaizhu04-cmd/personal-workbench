@@ -134,16 +134,24 @@ WB.registerModule({
       }));
     });
 
+    /* 控件本身就宽的四行 → stack-row：窄屏下标签与控件各占一行。
+       不加的话标签列会被控件挤到 min-content（中文一字一行），整张卡变竖条（踩坑 #069 / #085） */
+    const rowTheme = row("主题", "九套配色 + 跟随系统；快捷键 D 在亮暗之间切（会记住你上次用的那套亮色）",
+      themeRow);
+    const rowAccent = row("点缀色", "三套预设 + 自定义强调色", accentRow);
+    const rowBg = row("背景", "光斑 / 动态晨露夜雾 / Bing 每日 / 自定义图片",
+      seg([["blobs", "光斑"], ["dynamic", "动态"], ["bing", "Bing"], ["custom", "自定义"]],
+        WB.theme.bgMode(), v => WB.theme.set("bgMode", v)));
+    const rowBgImg = row("自定义图片", "上传图片或用 Unsplash（需在下方 BYOK 填 Key），上传后自动启用", bgEditor());
+    [rowTheme, rowAccent, rowBg, rowBgImg].forEach(r => r.classList.add("stack-row"));
+
     wrap.appendChild(sectionCard("palette", "外观", [
-      row("主题", "九套配色 + 跟随系统；快捷键 D 在亮暗之间切（会记住你上次用的那套亮色）",
-        themeRow),
-      row("点缀色", "三套预设 + 自定义强调色", accentRow),
+      rowTheme,
+      rowAccent,
       row("静音动效", "一键关闭所有动画与音效",
         toggle(s.motion, v => WB.theme.set("motion", v))),
-      row("背景", "光斑 / 动态晨露夜雾 / Bing 每日 / 自定义图片",
-        seg([["blobs", "光斑"], ["dynamic", "动态"], ["bing", "Bing"], ["custom", "自定义"]],
-          WB.theme.bgMode(), v => WB.theme.set("bgMode", v))),
-      row("自定义图片", "上传图片或用 Unsplash（需在下方 BYOK 填 Key），上传后自动启用", bgEditor()),
+      rowBg,
+      rowBgImg,
       cssEditor(),
     ]));
 

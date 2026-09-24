@@ -265,6 +265,9 @@ const nodes = SCENES.map(sc => {
   const fig = document.createElement("figure");
   const cv = document.createElement("canvas");
   cv.width = W; cv.height = H;
+  /* 固定 id：导出脚本（tools/export-test-photos.mjs）按 id 取图，
+     DOM 顺序变了会当场报错，而不是张冠李戴地把别的图写进 test-night.jpg */
+  cv.id = "cv-" + sc.id;
   const cap = document.createElement("figcaption");
   const title = document.createElement("b"); title.textContent = sc.name;
   const hint = document.createElement("span"); hint.textContent = sc.hint;

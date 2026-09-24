@@ -53,9 +53,14 @@ await page.evaluate(t => {
 const stats = await page.evaluate(() => window.__stats);
 const ids = ["highlight", "night", "muted"];
 const written = [];
-for(const [i, id] of ids.entries()){
-  const dataUrl = await page.evaluate(n =>
-    document.querySelectorAll("canvas")[n].toDataURL("image/jpeg", .9), i);
+for(const id of ids){
+  /* 按 canvas 的固定 id 取图（生成器里 cv-<id>）：DOM 顺序变了会拿到 null 当场报错，
+     不会把别的图静默写成 test-night.jpg */
+  const dataUrl = await page.evaluate(cid => {
+    const cv = document.getElementById("cv-" + cid);
+    return cv ? cv.toDataURL("image/jpeg", .9) : null;
+  }, id);
+  if(!dataUrl){ console.error("✗ 生成器页里找不到 #cv-" + id + "（页面结构被改过？）"); process.exit(1); }
   const file = path.join(outDir, "test-" + id + ".jpg");
   fs.writeFileSync(file, Buffer.from(dataUrl.split(",")[1], "base64"));
   const a = stats[id];

@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer-core";
+import themeBase from "./theme-base.js";   // CommonJS 助手：首帧档位表的唯一生成处
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, ".tmp/smoke");
@@ -16,6 +17,25 @@ const CHROME_CANDIDATES = [
 ].filter(Boolean);
 const chromePath = CHROME_CANDIDATES.find(p => fs.existsSync(p));
 if(!chromePath){ console.error("✗ 未找到 Chrome，设 CHROME_PATH 环境变量后重试"); process.exit(2); }
+
+/* 首帧档位表一致性守卫（生成逻辑见 tools/theme-base.js）：
+   index.html 里那份是构建期从 THEMES 表注入的，改了主题表却没跑构建 → 该主题每次启动闪一下米白。
+   这类"只闪一下、功能正常"的漏改最难自查（踩坑 #072），所以在回归入口就拦下来 */
+{
+  const bootSrc = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const m = /var BASE = \/\*__WB_THEME_BASE__\*\/\{([^}]*)\}/.exec(bootSrc);
+  const want = themeBase.readThemeBase().map;
+  const got = m ? JSON.parse("{" + m[1] + "}") : null;
+  const norm = o => JSON.stringify(Object.keys(o || {}).sort().map(k => k + "=" + o[k]));
+  if(norm(got) !== norm(want)){
+    console.error("✗ index.html 的首帧档位表与 js/07-theme.js 的 THEMES 表不一致：");
+    console.error("    index.html: " + norm(got));
+    console.error("    THEMES    : " + norm(want));
+    console.error("  → 跑一次 node build.js（构建期会自动注入并同步回 index.html）");
+    process.exit(1);
+  }
+  console.log("✓ 首帧档位表与 THEMES 表一致（" + Object.keys(want).length + " 套主题）");
+}
 
 const fast = process.argv.includes("--fast");
 const targets = [

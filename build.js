@@ -44,6 +44,19 @@ function inlineCSS(css){
 
 let html = read("index.html");
 
+/* 0. 首帧档位表：从 js/07-theme.js 的 THEMES 表注入（唯一来源），并把结果同步回根 index.html ——
+   文件夹版、Tauri 版、扩展版都直接吃根 index.html，不同步就等于只有单文件版是对的 */
+const {injectThemeBase} = require("./tools/theme-base.js");
+html = injectThemeBase(html);
+{
+  const src = read("index.html");
+  const synced = injectThemeBase(src);
+  if(synced !== src){
+    fs.writeFileSync(safePath("index.html"), synced);
+    console.log("🔁 首帧档位表已随 THEMES 表更新（已写回 index.html）");
+  }
+}
+
 /* 0. 若本地有 ThreeUI 仓库则先重建 islands（否则用已提交产物） */
 try{
   require("child_process").execSync("node tools/build-islands.mjs", {cwd: ROOT, stdio: "inherit"});
