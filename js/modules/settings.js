@@ -268,6 +268,73 @@ WB.registerModule({
 
     /* --- 数据管理 --- */
     const snapBox = el("div", {class: "col", style: {gap: "6px", width: "100%"}});
+    /* 差异预览：先看清"这份快照会让哪些模块变、变成几条"，再决定整份恢复还是只恢复某几块。
+       以前只有日期和"恢复"按钮，等于让你闭着眼睛覆盖 */
+    const previewModal = async sn => {
+      const d = await WB.snapshots.diff(sn.key);
+      if(!d){ WB.ui.toast("这份快照读不出来", "warn"); return; }
+      if(!d.rows.length){
+        WB.ui.modal({title: "和现在一样", icon: "check",
+          content: el("div", {class: "small muted", text: "这份快照里所有模块的内容都和现在一致，恢复它不会改变任何东西。"}),
+          actions: [{label: "知道了", primary: true}]});
+        return;
+      }
+      const picks = new Set();
+      /* 弹窗的 actions 是静态数组（文案定死、改不了），所以"已勾选几项"只能放在正文里，
+         同时勾选框默认全不选 —— 选择性恢复点错一格只影响一格，不会整份覆盖 */
+      const pickInfo = el("span", {class: "small faint", text: "已勾选 0 项"});
+      const list = el("div", {class: "col", style: {gap: "0", width: "100%", maxHeight: "46vh", overflow: "auto"}});
+      const boxes = [];
+      const sync = () => {
+        pickInfo.textContent = picks.size ? "已勾选 " + picks.size + " 个模块" : "已勾选 0 项（勾上想恢复的模块）";
+      };
+      d.rows.forEach(r => {
+        const cb = el("input", {type: "checkbox"});
+        boxes.push({cb, group: r.group});
+        cb.addEventListener("change", () => { cb.checked ? picks.add(r.group) : picks.delete(r.group); sync(); });
+        /* 快照里压根没有这一块时（当天首次打开那一刻还没建过它），
+           "会少掉 1 条"看不出后果 —— 直接说清"会回到默认" */
+        const note = r.missingNow
+            ? (WB.snapshots.isConfig(r.group) ? "快照里没有 → 回到默认" : "快照里没有 → 会被清空")
+          : r.delta === 0 ? "内容有改动"
+          : r.delta > 0 ? "会多出 " + r.delta + " 条" : "会少掉 " + (-r.delta) + " 条";
+        list.appendChild(el("label", {class: "row", style: {gap: "8px", padding: "7px 0",
+          borderTop: "1px dashed var(--card-border)", cursor: "pointer", alignItems: "center"}},
+          cb,
+          el("span", {class: "grow", style: {fontSize: "14px"}, text: r.name}),
+          el("span", {class: "small faint", text: r.now + " → " + r.then}),
+          el("span", {class: "small", style: {minWidth: "84px", textAlign: "right",
+            color: r.delta > 0 ? "var(--accent)" : r.missingNow ? "var(--warn)" : ""}, text: note})));
+      });
+      const selBtn = el("button", {class: "btn sm ghost", text: "全选", onclick: () => {
+        const all = picks.size < boxes.length;
+        boxes.forEach(b => { b.cb.checked = all; all ? picks.add(b.group) : picks.delete(b.group); });
+        selBtn.textContent = all ? "清空" : "全选";
+        sync();
+      }});
+      const when = sn.date + (sn.time ? " " + sn.time.slice(0, 2) + ":" + sn.time.slice(2, 4) : "");
+      const m = WB.ui.modal({title: "预览差异 · " + when + (sn.label === "auto" ? " · 自动" : " · " + sn.label), icon: "eye", wide: true,
+        content: el("div", {class: "col", style: {gap: "8px", width: "100%"}},
+          el("div", {class: "row", style: {gap: "8px"}},
+            el("span", {class: "small muted", style: {lineHeight: "1.7"}, html:
+              "左边是现在，右边是这份快照（共 " + d.totalGroups + " 个模块，" + d.rows.length + " 个不一样）。"}),
+            el("span", {class: "grow"}),
+            pickInfo, selBtn),
+          list,
+          el("div", {class: "small faint", text: "恢复前会自动拍一张「恢复前」快照，反悔了还能再退回来；快照不含涂鸦 / 上传的音乐 / 影视封面这些大文件。"})),
+        actions: [
+          {label: "取消", onClick: () => m.close()},
+          {label: "全部恢复（覆盖整份）", onClick: async () => {
+            m.close();
+            if(await WB.snapshots.restore(sn.key)) WB.ui.toast("正在恢复…");
+          }},
+          {label: "只恢复勾选的", primary: true, onClick: async () => {
+            if(!picks.size){ WB.ui.toast("先勾上要恢复的模块", "warn"); return; }
+            m.close();
+            if(await WB.snapshots.restore(sn.key, Array.from(picks))) WB.ui.toast("正在恢复勾选的模块…");
+          }},
+        ]});
+    };
     const paintSnaps = async () => {
       snapBox.innerHTML = "";
       const snaps = WB.snapshots ? await WB.snapshots.list() : [];
@@ -276,24 +343,29 @@ WB.registerModule({
         return;
       }
       snaps.forEach(sn => {
-        snapBox.appendChild(el("div", {class: "row", style: {gap: "6px"}},
-          el("span", {class: "small", text: sn.date}),
-          el("span", {class: "small faint", text: (sn.label === "auto" ? "自动" : sn.label) + " · " + (sn.bytes / 1024).toFixed(0) + " KB"}),
+        const when = sn.date + (sn.time ? " " + sn.time.slice(0, 2) + ":" + sn.time.slice(2, 4) : "");
+        snapBox.appendChild(el("div", {class: "row", style: {gap: "6px", flexWrap: "wrap"}},
+          el("span", {class: "small", text: when}),
+          el("span", {class: "small faint", text: (sn.label === "auto" ? "自动 · 当天首次打开" : sn.label) +
+            " · " + (sn.bytes / 1024).toFixed(0) + " KB"}),
           el("span", {class: "grow"}),
-          el("button", {class: "btn sm", text: "恢复", onclick: async () => {
-            if(await WB.snapshots.restore(sn.key)) WB.ui.toast("正在恢复…");
-          }}),
+          el("button", {class: "btn sm", html: icon("eye", 14) + "<span>预览</span>", onclick: () => previewModal(sn)}),
           el("button", {class: "btn sm ghost", text: "删除", onclick: async () => {
-            if(await WB.ui.confirmBox("删除 " + sn.date + " 的快照？", {danger: true, okLabel: "删除"})){
+            if(await WB.ui.confirmBox("删除 " + when + " 的快照？", {danger: true, okLabel: "删除"})){
               await WB.snapshots.remove(sn.key); paintSnaps();
             }}})));
       });
+      const big = await WB.snapshots.bigFiles();
+      if(big) snapBox.appendChild(el("div", {class: "small faint",
+        text: "另有 " + big + " 个大文件（涂鸦 / 音乐 / 封面）存在 IndexedDB 里，快照不含它们 —— 恢复不会动它们，也不会丢。"}));
     };
     paintSnaps();
     wrap.appendChild(sectionCard("archive", "数据管理", [
-      row("本机快照", "每日自动拍全量快照存 IndexedDB（保留 7 份）；换浏览器/清缓存后可从此恢复",
+      row("本机快照", "每日自动拍一份（保留 10 份）；手动与「恢复前」会另存一份，不会顶掉当天的自动快照",
         el("button", {class: "btn sm", html: icon("archive", 15) + "<span>立即快照</span>",
           onclick: async () => { const r = await WB.snapshots.take("手动"); WB.ui.toast("快照完成（" + (r.bytes / 1024).toFixed(0) + " KB）"); paintSnaps(); }})),
+      row("恢复", "先「预览」看清哪个模块会变多少，再决定整份恢复还是只恢复某几块；每次恢复前都会自动拍一张「恢复前」兜底",
+        el("span", {class: "small faint", text: "可选模块"})),
       el("div", {class: "row", style: {alignItems: "flex-start"}}, snapBox),
       row("备份", "导出全部数据为 JSON 文件（快照只在浏览器里，文件备份才是双保险）",
         el("button", {class: "btn sm", html: icon("download", 15) + "<span>导出 JSON</span>",
