@@ -35,6 +35,11 @@ function esc(s){
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function debounce(fn, ms){ let t; return function(...a){ clearTimeout(t); t = setTimeout(() => fn.apply(this, a), ms); }; }
 function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+/* 待办提醒的两个常量：**只此一份**。js/18-desktop.js（关窗后的后台提醒清单）
+   与 js/main.js（窗口可见时的提醒调度）都读这里 —— 复制成两份就会漂，
+   表现是"开窗与关窗两种状态下提前量/有效期不一致" */
+const REMIND_AHEAD = {"0": 0, "5": 5, "10": 10, "30": 30};   // 提前多少分钟
+const TODO_WINDOW_MIN = 30;                                   // 到点后多久之内还算数
 function copyText(text){
   if(navigator.clipboard && window.isSecureContext !== false){
     return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
@@ -152,7 +157,7 @@ function ensureNotifyPermission(){
 }
 
 Object.assign(WB, {
-  $, $$, el, esc, uid, debounce, clamp, copyText, downloadFile,
+  $, $$, el, esc, uid, debounce, clamp, copyText, downloadFile, REMIND_AHEAD, TODO_WINDOW_MIN,
   dateStr, parseDate, addDays, addDaysStr, todayStr, bizDate, bizNow,
   WEEK_CN, weekdayCN, fmtDateCN, daysBetween, relDayLabel, fmtTime, fmtMonth, monthStr,
   hexToRgba, shuffle, pickDaily, notify, ensureNotifyPermission,

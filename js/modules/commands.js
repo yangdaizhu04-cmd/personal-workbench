@@ -152,12 +152,12 @@ function buildItems(q){
   if(t && WB.sheets && /纸|打印|pdf|一页|月历|海报|季刊|年刊|周页/i.test(t)){
     const today = WB.bizDate();
     const yr = today.slice(0, 4);
-    const q = Math.floor((Number(today.slice(5, 7)) - 1) / 3) + 1;
+    const qn = Math.floor((Number(today.slice(5, 7)) - 1) / 3) + 1;   // 季度（参数 q 是查询词，别重名）
     [
       ["一页纸 · 今天", "feather", () => WB.sheets.open("day", today)],
       ["周页 · 本周", "timer", () => WB.sheets.open("week")],
       ["月历海报 · 本月", "calendar", () => WB.sheets.open("month")],
-      ["季刊页 · 本季", "trend-up", () => WB.sheets.open("quarter", Number(yr), q)],
+      ["季刊页 · 本季", "trend-up", () => WB.sheets.open("quarter", Number(yr), qn)],
       ["年刊 · 今年", "sparkle", () => WB.sheets.open("year", yr)],
     ].forEach(([label, ic, run]) =>
       out.push({group: "纸", icon: ic, label, hint: "预览并打印 / 存 PDF", exec: run}));

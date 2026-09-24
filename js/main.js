@@ -110,8 +110,9 @@ function checkReminders(){
   for(const t of todos){
     const [h, m] = t.time.split(":").map(Number);
     const target = h * 60 + m;
-    const ahead = t.remindAhead ? {"0":0,"5":5,"10":10,"30":30}[t.remindAhead] ?? 0 : 0;
-    if(nowMin >= target - ahead && nowMin <= target + 30 && !fired.has(t.id)){
+    /* 提前量与"到点后多久还算数"都读 js/01-utils.js 那一份（18-desktop.js 的清单用同一份） */
+    const ahead = t.remindAhead ? WB.REMIND_AHEAD[t.remindAhead] ?? 0 : 0;
+    if(nowMin >= target - ahead && nowMin <= target + WB.TODO_WINDOW_MIN && !fired.has(t.id)){
       const when = ahead ? "还有 " + ahead + " 分钟" : "现在";
       const shown = WB.notify("⏰ 待办提醒", when + "：" + t.title, () => WB.router.go("todos"));
       /* 页内提示有独立开关：以前借用「全屏提示动画」(pomoFlash)，

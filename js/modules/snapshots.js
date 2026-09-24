@@ -78,7 +78,10 @@ async function take(label){
   }
   const data = collect();
   const json = JSON.stringify({__meta: {app: "个人工作台", kind: "snapshot", date, takenAt: Date.now(), label: label || "auto"}, data});
-  await WB.idb.put(key, json, {type: "snapshot", bytes: json.length, label: label || "auto", ts: Date.now()});
+  /* put 失败只返回 false（不抛错，见 js/03-idb.js）—— 不检查的话 take 永远不会失败：
+     连「恢复前」那张兜底都会"看起来拍好了"，其实没有。宁可返回 null 让调用方说清楚 */
+  const wrote = await WB.idb.put(key, json, {type: "snapshot", bytes: json.length, label: label || "auto", ts: Date.now()});
+  if(wrote === false){ console.error("[snapshots] 快照写入失败", key); return null; }
   await prune();
   return {key, bytes: json.length};
 }
@@ -148,32 +151,48 @@ async function restore(key, picks){
   const parsed = await read(key);
   if(!parsed){ WB.ui.toast("快照不存在或已损坏", "warn"); return false; }
   const snap = parsed.data || {};
-  const only = picks && picks.length ? new Set(picks) : null;
+  /* null/undefined = 整份恢复；**给了数组就按数组来** ——
+     空数组绝不能当成"没传参"，否则"只恢复勾选的"在勾选为空时会变成整份覆盖 */
+  const only = picks == null ? null : new Set(picks);
+  if(only && !only.size){ WB.ui.toast("没有勾选任何模块，什么也没恢复"); return false; }
   const label = key.slice(PREFIX.length);
   const what = only ? "只恢复勾选的 " + only.size + " 个模块（其余保持不动）"
     : "把本机数据覆盖为 " + label + " 的快照（快照之后产生的新数据会丢失）";
   const ok = await WB.ui.confirmBox(what + "<br><br>恢复前会先自动拍一张「恢复前」快照，万一不对可以再退回来。确定恢复？",
     {danger: true, okLabel: only ? "恢复勾选的" : "全部覆盖恢复"});
   if(!ok) return false;
-  /* ① 先兜底：这一步是这次改动的核心。其他覆盖入口早就这么做了，只有恢复自己没有 */
-  await take("恢复前");
-  if(!only){
-    for(let i = localStorage.length - 1; i >= 0; i--){
-      const k = localStorage.key(i);
-      if(isData(k) && !(k in snap)) localStorage.removeItem(k);
-    }
-    Object.keys(snap).forEach(k => localStorage.setItem(k, snap[k]));
-  }else{
-    /* 选择性恢复的语义 = "把勾选的这几块退回快照时的状态"：
-       快照里有 → 写回来；现在有而快照里没有 → 删掉（否则"退回那一刻"就不成立）；
-       没勾的组一律不碰 */
-    for(let i = localStorage.length - 1; i >= 0; i--){
-      const k = localStorage.key(i);
-      if(isData(k) && only.has(groupOf(k)) && !(k in snap)) localStorage.removeItem(k);
-    }
-    Object.keys(snap).forEach(k => { if(only.has(groupOf(k))) localStorage.setItem(k, snap[k]); });
+  /* ① 先兜底：这一步是这次改动的核心。其他覆盖入口早就这么做了，只有恢复自己没有。
+     **兜底没拍成就别恢复** —— 没有退路就不做覆盖（take 写入失败会返回 null） */
+  if(!await take("恢复前")){
+    WB.ui.toast("「恢复前」的兜底快照没拍成（本机存储写入失败），为安全起见没有恢复。可先导出 JSON 备份再试", "warn");
+    return false;
   }
-  localStorage.setItem("wb:settings", localStorage.getItem("wb:settings") || "{}");
+  const before = collect();     // 写回中途失败时用来退回原状（尽力而为）
+  try{
+    if(!only){
+      for(let i = localStorage.length - 1; i >= 0; i--){
+        const k = localStorage.key(i);
+        if(isData(k) && !(k in snap)) localStorage.removeItem(k);
+      }
+      Object.keys(snap).forEach(k => localStorage.setItem(k, snap[k]));
+    }else{
+      /* 选择性恢复的语义 = "把勾选的这几块退回快照时的状态"：
+         快照里有 → 写回来；现在有而快照里没有 → 删掉（否则"退回那一刻"就不成立）；
+         没勾的组一律不碰 */
+      for(let i = localStorage.length - 1; i >= 0; i--){
+        const k = localStorage.key(i);
+        if(isData(k) && only.has(groupOf(k)) && !(k in snap)) localStorage.removeItem(k);
+      }
+      Object.keys(snap).forEach(k => { if(only.has(groupOf(k))) localStorage.setItem(k, snap[k]); });
+    }
+    localStorage.setItem("wb:settings", localStorage.getItem("wb:settings") || "{}");
+  }catch(e){
+    /* 只写了一半就炸（配额等）比不恢复更糟：先尽力退回原状，再明说，不 reload（让用户看清状态） */
+    console.error("[snapshots] 恢复写入失败，尝试回滚", e);
+    Object.entries(before).forEach(([k, v]) => { try{ localStorage.setItem(k, v); }catch(_){} });
+    WB.ui.toast("恢复中途写入失败（本机存储可能已满），已尽量退回原状 —— 建议先导出 JSON 备份再试", "warn");
+    return false;
+  }
   location.reload();
   return true;
 }
@@ -198,7 +217,8 @@ async function maybeDaily(){
   try{
     const today = WB.bizDate();
     const has = (await WB.idb.allKeys(PREFIX)).includes(PREFIX + today);
-    if(!has) await take("auto");
+    /* 写失败（take 返回 null）就留到下次打开再拍：这一天至少还会再进一次工作台 */
+    if(!has && !await take("auto")) console.warn("[snapshots] 每日自动快照写入失败，下次打开再试");
     const s = WB.theme.all();
     /* 从未导出过时以「首次使用」为起点算天数：lastExportTs 默认 0 是 1970 年，
        直接算会弹出「已经 20719 天没有导出」这种荒谬文案（新用户第一天就撞上） */

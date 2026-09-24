@@ -477,6 +477,13 @@ fn spawn_reminder_loop(app: AppHandle) {
                 .collect(),
             Err(_) => continue,
         };
+        /* 去重表要清理，但**不能清空**：清空会把"仍在有效期内"（晨间 4h、收工 5h）的 id
+           一起丢掉，下一轮扫描就会把今天已经响过的提醒再弹一遍。只保留"清单里还在的" id ——
+           已经从清单里消失的，说明那条提醒不会再触发，这才是可以安全丢的 */
+        let live: HashSet<String> = match state.list.lock() {
+            Ok(l) => l.iter().map(|r| r.id.clone()).collect(),
+            Err(_) => continue,
+        };
         for r in due {
             {
                 let mut fired = match state.fired.lock() {
@@ -488,7 +495,7 @@ fn spawn_reminder_loop(app: AppHandle) {
                 }
                 fired.insert(r.id.clone());
                 if fired.len() > 400 {
-                    fired.clear(); // 去重表别无限长大（清空最坏只是重发一次当轮提醒）
+                    fired.retain(|id| live.contains(id));
                 }
             }
             /* 结果不在这里看：system 那条在 notify 内部就写了日志，

@@ -267,6 +267,16 @@ WB.registerModule({
     ]));
 
     /* --- 数据管理 --- */
+    /* 恢复是唯一"会把数据退回去"的动作：失败必须冒出来。restore 内部大多已提示，
+       这里再兜一层未预期的异常，别让按钮点下去静默没反应 */
+    const runRestore = async (key, picks) => {
+      try{
+        if(await WB.snapshots.restore(key, picks)) WB.ui.toast("正在恢复…");
+      }catch(e){
+        console.error("[settings] 恢复失败", e);
+        WB.ui.toast("恢复没做成：本机存储可能有问题，建议先导出 JSON 备份", "warn");
+      }
+    };
     const snapBox = el("div", {class: "col", style: {gap: "6px", width: "100%"}});
     /* 差异预览：先看清"这份快照会让哪些模块变、变成几条"，再决定整份恢复还是只恢复某几块。
        以前只有日期和"恢复"按钮，等于让你闭着眼睛覆盖 */
@@ -326,12 +336,12 @@ WB.registerModule({
           {label: "取消", onClick: () => m.close()},
           {label: "全部恢复（覆盖整份）", onClick: async () => {
             m.close();
-            if(await WB.snapshots.restore(sn.key)) WB.ui.toast("正在恢复…");
+            await runRestore(sn.key);
           }},
           {label: "只恢复勾选的", primary: true, onClick: async () => {
             if(!picks.size){ WB.ui.toast("先勾上要恢复的模块", "warn"); return; }
             m.close();
-            if(await WB.snapshots.restore(sn.key, Array.from(picks))) WB.ui.toast("正在恢复勾选的模块…");
+            await runRestore(sn.key, Array.from(picks));
           }},
         ]});
     };
@@ -363,7 +373,11 @@ WB.registerModule({
     wrap.appendChild(sectionCard("archive", "数据管理", [
       row("本机快照", "每日自动拍一份（保留 10 份）；手动与「恢复前」会另存一份，不会顶掉当天的自动快照",
         el("button", {class: "btn sm", html: icon("archive", 15) + "<span>立即快照</span>",
-          onclick: async () => { const r = await WB.snapshots.take("手动"); WB.ui.toast("快照完成（" + (r.bytes / 1024).toFixed(0) + " KB）"); paintSnaps(); }})),
+          onclick: async () => {
+            const r = await WB.snapshots.take("手动");
+            if(!r){ WB.ui.toast("快照没拍成：本机存储写入失败，建议先导出 JSON 备份", "warn"); return; }
+            WB.ui.toast("快照完成（" + (r.bytes / 1024).toFixed(0) + " KB）"); paintSnaps();
+          }})),
       row("恢复", "先「预览」看清哪个模块会变多少，再决定整份恢复还是只恢复某几块；每次恢复前都会自动拍一张「恢复前」兜底",
         el("span", {class: "small faint", text: "可选模块"})),
       el("div", {class: "row", style: {alignItems: "flex-start"}}, snapBox),

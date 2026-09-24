@@ -19,7 +19,10 @@ const WB = (window.WB = window.WB || {});
 const core = (window.__TAURI__ && window.__TAURI__.core) || null;
 const inTauri = !!(window.__TAURI_INTERNALS__ || core);
 const HORIZON = 7;            // 往后算几天：够撑过一整夜加一个周末
-const MAX_ITEMS = 60;
+/* 清单上限。**必须一次装得下整个窗口**：被裁掉的那些在关窗后永远不会响，而裁剪是静默的
+   （实测：7 天窗口里每天 7 条有时刻的待办就会撞上） */
+const MAX_ITEMS = 200;
+let truncated = 0;            // 上一次 buildList 被裁掉的条数（给 sync 提示用）
 const DAY_AT_HOUR = 9;        // 倒数日/生日当天的提醒时刻
 
 function invoke(cmd, args){
@@ -33,8 +36,10 @@ function atOf(dateStr, h, m){
   const d = new Date(dateStr + "T" + pad2(h) + ":" + pad2(m) + ":00");
   return isNaN(d.getTime()) ? 0 : d.getTime();
 }
-/* 待办「提前几分钟」与 main.js/checkReminders 必须同一张表 */
-const AHEAD = {"0": 0, "5": 5, "10": 10, "30": 30};
+/* 提前量表与「到点后多久还算数」都只有一份，定义在 js/01-utils.js
+   （WB.REMIND_AHEAD / WB.TODO_WINDOW_MIN）：main.js 的 checkReminders 读同一处 ——
+   复制成两份就会漂，表现是开窗与关窗两种状态下提前量/有效期不一致 */
+const AHEAD = WB.REMIND_AHEAD;
 
 function buildList(){
   const out = [];
@@ -51,7 +56,7 @@ function buildList(){
   const dayEnd = d => atOf(d, 23, 59);
 
   /* ① 待办到点：只取未来 HORIZON 天里有时刻、未完成的。
-     有效期与网页版 checkReminders 的窗口对齐（到点后 30 分钟内算数），
+     有效期与网页版 checkReminders 的窗口对齐（到点后 WB.TODO_WINDOW_MIN 分钟内算数），
      否则关窗与开窗两种状态下"该不该提醒"会不一致 */
   WB.store.get("todos", []).forEach(t => {
     if(t.done || !t.time || !t.date) return;
@@ -60,7 +65,7 @@ function buildList(){
     const parts = String(t.time).split(":");
     const ahead = AHEAD[t.remindAhead] || 0;
     const onTime = atOf(t.date, Number(parts[0]), Number(parts[1]));
-    add("todo:" + t.id + ":" + t.date, onTime - ahead * 60000, onTime + 30 * 60000,
+    add("todo:" + t.id + ":" + t.date, onTime - ahead * 60000, onTime + WB.TODO_WINDOW_MIN * 60000,
       "⏰ 待办提醒", (ahead ? "还有 " + ahead + " 分钟" : "现在") + "：" + t.title);
   });
 
@@ -93,13 +98,34 @@ function buildList(){
         "🌙 该收工了", "今天到这儿，剩下的明天再说");
   }
 
-  return out.sort((a, b) => a.at - b.at).slice(0, MAX_ITEMS);
+  const sorted = out.sort((a, b) => a.at - b.at);
+  /* 裁掉的部分在关窗状态下永远不会响，而裁剪本来是静默的 → 记下条数，由 sync 在界面上说一次 */
+  truncated = Math.max(0, sorted.length - MAX_ITEMS);
+  return sorted.slice(0, MAX_ITEMS);
+}
+
+/* 前端已经发过的那些 id（窗口可见时 main.js 的 checkReminders 与下面的 inWindow 记的账）。
+   推送前必须把它们排掉：Rust 只认自己那张**进程内**去重表（重启即清零），也不知道前端发过；
+   不排的话就会"窗口可见时响过 → 关窗或重启 → Rust 在有效期内又响一次"。
+   待办记账存的是 t.id，而清单里的 id 形如 todo:<id>:<date>，这里补成同一种形状 */
+function firedIds(){
+  const today = WB.bizDate();
+  const s = new Set(WB.store.get("firedDesktop:" + today, []));
+  WB.store.get("firedReminders:" + today, []).forEach(id => s.add("todo:" + id + ":" + today));
+  return s;
 }
 
 /* ---------- 推送（防抖：数据一动就推，但别每敲一个字推一次） ---------- */
 let debounce = null;
 let lastJson = "";
 let fails = 0;
+let truncatedNoted = 0;   // 已经提示过的截断条数（相同就不再刷屏）
+function noteTruncated(){
+  if(!truncated || truncated === truncatedNoted) return;
+  truncatedNoted = truncated;
+  WB.ui.toast("后台提醒清单已满（上限 " + MAX_ITEMS + " 条），另有 " + truncated +
+    " 条在关窗后不会提醒 —— 可到设置里把提醒时刻精简一下", "warn");
+}
 function sync(force){
   if(!inTauri) return Promise.resolve(0);
   if(WB.theme.all().desktopNotify === false){
@@ -107,7 +133,9 @@ function sync(force){
     lastJson = "[]";
     return invoke("set_reminders", {list: []}).catch(() => 0);
   }
-  const list = buildList();
+  const done = firedIds();
+  const list = buildList().filter(r => !done.has(r.id));
+  noteTruncated();
   const json = JSON.stringify(list);
   if(!force && json === lastJson) return Promise.resolve(list.length);
   lastJson = json;
@@ -137,10 +165,17 @@ function autostartSet(on){
 /* 窗口可见时前端把提醒交给 Rust 走同一条通道。
    前端**不能**自己 `new Notification()`：WebView2 里那个调用不会显示任何东西
    （要宿主实现通知回调，Tauri 没实现），于是"应用开着"时提醒是静默的（踩坑 #079） */
+let notifyFailAt = 0;
 function notifyNow(title, body){
   if(!inTauri) return Promise.resolve(false);
   return invoke("notify_now", {title, body}).then(() => true, err => {
     console.warn("[desktop] 提醒发送失败", err);
+    /* 窗口可见时这条提醒只走应用内（#079 的纪律：失败必须看得见）。前端拿的是同步布尔值，
+       拿不到这里的结果，所以失败至少要自己冒一声；60 秒内只冒一次，别刷屏 */
+    if(Date.now() - notifyFailAt > 60000){
+      notifyFailAt = Date.now();
+      if(WB.ui && WB.ui.toast) WB.ui.toast("这条提醒没能弹出来（桌面通道没接上，详见 fired.log）", "warn");
+    }
     return false;
   });
 }
