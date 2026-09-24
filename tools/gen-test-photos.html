@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>测试图生成器 · 高亮 / 夜景 / 低饱和</title>
+<style>
+:root{color-scheme:light}
+body{margin:0;padding:22px;background:#f6f1e7;color:#3a3630;
+  font:14px/1.7 system-ui,"Microsoft YaHei",sans-serif}
+h1{font-size:18px;margin:0 0 6px}
+p.lead{margin:0 0 16px;color:#6b6459;max-width:920px}
+.bar{position:sticky;top:0;z-index:5;background:#fffdf8;border:1px solid #e6ded0;
+  border-radius:12px;padding:11px 16px;display:flex;gap:22px;flex-wrap:wrap;
+  align-items:center;box-shadow:0 2px 10px rgba(0,0,0,.05)}
+label{display:flex;gap:8px;align-items:center;white-space:nowrap}
+input[type=range]{width:140px}
+output{width:40px;text-align:right;font-variant-numeric:tabular-nums;color:#8a8175}
+button{font:inherit;padding:6px 14px;border:1px solid #d9cfbd;background:#fff;
+  border-radius:8px;cursor:pointer}
+button:hover{background:#f3ece0}
+.grid{display:grid;gap:24px;margin-top:20px}
+figure{margin:0;background:#fffdf8;border:1px solid #e6ded0;border-radius:14px;
+  padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.05)}
+canvas{display:block;width:100%;height:auto;border-radius:8px;background:#ddd}
+figcaption{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:13px;color:#5c554b}
+figcaption b{font-weight:600;color:#3a3630}
+.stat{font-variant-numeric:tabular-nums;background:#f2ece0;border-radius:6px;padding:2px 8px}
+code{background:#f0e9dc;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>测试图生成器 · 高亮 / 夜景 / 低饱和</h1>
+<p class="lead">
+  三张图全部由 Canvas 代码现场绘制，<b>不加载任何外部图片</b>；种子固定，每次打开结果完全一致（可复现的测试夹具）。
+  尺寸 1600×1000，与「自定义主题」压缩目标（长边 1600 / JPEG q0.8）一致。
+  用途：喂给取色算法做三类极端样本 —— 过曝高亮、暗夜低照度、低饱和雾灰。
+  用法：调好参数 → 逐张「保存 JPG」→ 工作台 <code>设置 → 外观 → 自定义图片（上传）</code>；
+  「我的主题」上线后在 <code>我的主题 → 新建</code> 里导入同一批图。
+</p>
+
+<div class="bar">
+  <label>亮度 <input id="b" type="range" min="0.6" max="1.4" step="0.01" value="1"><output id="bv">1.00</output></label>
+  <label>对比度 <input id="c" type="range" min="0.6" max="1.4" step="0.01" value="1"><output id="cv">1.00</output></label>
+  <label>饱和度 <input id="s" type="range" min="0" max="1.4" step="0.01" value="1"><output id="sv">1.00</output></label>
+  <button id="reset">恢复默认</button>
+  <span style="color:#8a8175;font-size:12px">改动即时重绘三张图（参数同时作用于三张，便于横向比较）</span>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+"use strict";
+const W = 1600, H = 1000;
+/* 取色算法（方案 §4）里会用到的三个常数，这里提前用来做客观统计 */
+const F_LUM_HI = .93, F_LUM_LO = .07, F_SAT = .12, BASE_LINE = .42;
+
+/* ---------- 工具 ---------- */
+/* 固定种子伪随机：同一张图每次生成完全一致 */
+function makeRand(seed){
+  let a = seed >>> 0;
+  return function(){
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const lerp = (a, b, t) => a + (b - a) * t;
+const hsl = (h, s, l, a) => "hsla(" + h + "," + s + "%," + l + "%," + (a == null ? 1 : a) + ")";
+
+function vgrad(ctx, stops, y0, y1){
+  y0 = y0 == null ? 0 : y0; y1 = y1 == null ? H : y1;
+  const g = ctx.createLinearGradient(0, y0, 0, y1);
+  stops.forEach(([p, c]) => g.addColorStop(p, c));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, y0, W, y1 - y0);
+}
+function rad(ctx, x, y, r, stops){
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  stops.forEach(([p, c]) => g.addColorStop(p, c));
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+}
+/* 山脊：三条正弦谐波叠加，避免噪声山看起来像锯齿 */
+function ridgePath(ctx, rand, y, amp){
+  const p1 = rand() * 6.283, p2 = rand() * 6.283, p3 = rand() * 6.283;
+  ctx.beginPath(); ctx.moveTo(0, H);
+  for(let i = 0; i <= 96; i++){
+    const t = i / 96;
+    const yy = y + Math.sin(t * 6.283 + p1) * amp
+                 + Math.sin(t * 15.7 + p2) * amp * .42
+                 + Math.sin(t * 28.3 + p3) * amp * .16;
+    ctx.lineTo(t * W, yy);
+  }
+  ctx.lineTo(W, H); ctx.closePath();
+}
+function vignette(ctx, amt){
+  const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .35, W / 2, H / 2, Math.max(W, H) * .72);
+  g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0," + amt + ")");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+function grain(ctx, rand, amt){
+  const img = ctx.getImageData(0, 0, W, H), d = img.data;
+  for(let i = 0; i < d.length; i += 4){
+    const n = (rand() - .5) * amt * 2;
+    d[i] += n; d[i + 1] += n; d[i + 2] += n;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/* ---------- 图一：高亮（过曝 / high-key）---------- */
+function drawHighlight(ctx, rand){
+  vgrad(ctx, [[0, "#dfeefb"], [.45, "#f2f8fd"], [.62, "#fffaf2"]]);
+  // 大光晕把整幅抬进高亮区间（高亮图的核心特征：亮部占比极高、对比度低）
+  rad(ctx, .66 * W, .30 * H, 620, [[0, "rgba(255,253,246,.98)"], [.45, "rgba(255,250,238,.55)"], [1, "rgba(255,250,238,0)"]]);
+  rad(ctx, .66 * W, .30 * H, 150, [[0, "rgba(255,255,255,1)"], [1, "rgba(255,255,255,0)"]]);
+  for(let i = 0; i < 26; i++){
+    ctx.fillStyle = "rgba(255,255,255," + (.22 + rand() * .30).toFixed(2) + ")";
+    ctx.beginPath();
+    ctx.ellipse(rand() * W, (.08 + rand() * .36) * H, 140 + rand() * 420, 10 + rand() * 26, 0, 0, 7);
+    ctx.fill();
+  }
+  // 远山三层：越远越白，刻意低对比
+  ["rgba(226,237,246,.95)", "rgba(213,228,241,.95)", "rgba(199,218,235,.95)"].forEach((col, i) => {
+    ridgePath(ctx, rand, (.585 + i * .05) * H, 18 + i * 10);
+    ctx.fillStyle = col; ctx.fill();
+  });
+  vgrad(ctx, [[0, "#d3e3ef"], [1, "#eef6fb"]], .70 * H);
+  // 水面日光带：横向亮条，越远越细越亮
+  for(let i = 0; i < 72; i++){
+    const t = i / 72, y = (.70 + t * .30) * H;
+    const w = lerp(60, 520, t) * (.6 + rand() * .8);
+    ctx.fillStyle = "rgba(255,255,252," + lerp(.5, .16, t).toFixed(2) + ")";
+    ctx.fillRect(.66 * W - w / 2 + (rand() - .5) * 70, y, w, 3 + rand() * 4);
+  }
+  vignette(ctx, .05);
+  grain(ctx, rand, 2.4);
+}
+
+/* ---------- 图二：夜景（低照度 / low-key）---------- */
+function drawNight(ctx, rand){
+  vgrad(ctx, [[0, "#060a18"], [.42, "#111a30"], [.66, "#232a45"]]);
+  for(let i = 0; i < 460; i++){
+    const warm = rand() < .12;
+    ctx.fillStyle = (warm ? "rgba(255,232,196," : "rgba(230,238,255,") + (.25 + rand() * .75).toFixed(2) + ")";
+    ctx.beginPath(); ctx.arc(rand() * W, rand() * .64 * H, .5 + rand() * 1.3, 0, 7); ctx.fill();
+  }
+  rad(ctx, .24 * W, .19 * H, 330, [[0, "rgba(198,216,255,.20)"], [1, "rgba(198,216,255,0)"]]);
+  rad(ctx, .24 * W, .19 * H, 62, [[0, "rgba(255,255,255,1)"], [.55, "rgba(240,245,255,.95)"], [1, "rgba(240,245,255,0)"]]);
+  for(let i = 0; i < 7; i++){
+    ctx.fillStyle = "rgba(16,22,42," + (.5 + rand() * .35).toFixed(2) + ")";
+    ctx.beginPath();
+    ctx.ellipse(rand() * W, (.10 + rand() * .22) * H, 220 + rand() * 380, 14 + rand() * 26, 0, 0, 7);
+    ctx.fill();
+  }
+  // 城市光污染：给取色算法一个"合法"的暖色候选（否则全图只有夜空蓝）
+  rad(ctx, .62 * W, .70 * H, 900, [[0, "rgba(255,142,74,.34)"], [.5, "rgba(255,120,60,.14)"], [1, "rgba(255,120,60,0)"]]);
+  const baseY = .68 * H;
+  let x = -30;
+  while(x < W){
+    const w = 34 + rand() * 96, h = 46 + rand() * 250;
+    ctx.fillStyle = "#04060c";
+    ctx.fillRect(x, baseY - h, w, h + 6);
+    const cols = Math.max(1, Math.floor(w / 13)), rows = Math.max(1, Math.floor(h / 17));
+    for(let cx = 0; cx < cols; cx++){
+      for(let cy = 0; cy < rows; cy++){
+        const lit = rand();
+        if(lit > .38) continue;
+        ctx.fillStyle = lit < .26 ? "rgba(255,196,107,.92)" : "rgba(120,102,70,.5)";
+        ctx.fillRect(x + 5 + cx * 13, baseY - h + 7 + cy * 17, 4, 6);
+      }
+    }
+    x += w + 3 + rand() * 10;
+  }
+  vgrad(ctx, [[0, "#0d1528"], [1, "#05080f"]], baseY);
+  // 倒影：月光柱 + 城市暖光条
+  for(let i = 0; i < 58; i++){
+    const t = i / 58, y = baseY + t * (H - baseY);
+    const w = lerp(70, 460, t) * (.5 + rand() * .9);
+    ctx.fillStyle = "rgba(206,222,255," + lerp(.22, .03, t).toFixed(3) + ")";
+    ctx.fillRect(.24 * W - w / 2 + (rand() - .5) * 60, y, w, 2 + rand() * 3);
+    ctx.fillStyle = "rgba(255,160,90," + lerp(.16, .02, t).toFixed(3) + ")";
+    ctx.fillRect(.62 * W - w * .7 + (rand() - .5) * 120, y, w * 1.4, 2 + rand() * 3);
+  }
+  vignette(ctx, .34);
+  grain(ctx, rand, 5);
+}
+
+/* ---------- 图三：低饱和（雾灰 / desaturated）----------
+   全图 HSL 饱和度压在 5~9%，换成的 HSV 饱和度正好卡在 F_SAT(.12) 阈值附近 ——
+   这是刻意造的最难样本：若过滤后没有候选像素，算法必须走兜底（按基底给中性强调色），
+   不得从噪声里随机取色。 */
+function drawMuted(ctx, rand){
+  vgrad(ctx, [[0, hsl(200, 9, 86)], [.55, hsl(199, 7, 90)], [.70, hsl(198, 6, 92)]]);
+  for(let i = 0; i < 16; i++){
+    ctx.fillStyle = hsl(200, 5, 96, .28 + rand() * .20);
+    ctx.beginPath();
+    ctx.ellipse(rand() * W, (.20 + rand() * .45) * H, 260 + rand() * 520, 10 + rand() * 22, 0, 0, 7);
+    ctx.fill();
+  }
+  [80, 71, 61, 50, 40].forEach((l, i) => {
+    ridgePath(ctx, rand, (.50 + i * .075) * H, 22 - i * 2);
+    ctx.fillStyle = hsl(201, 6 + i, l); ctx.fill();
+  });
+  vgrad(ctx, [[0, hsl(199, 6, 88)], [1, hsl(199, 5, 80)]], .88 * H);
+  for(let i = 0; i < 40; i++){
+    ctx.fillStyle = hsl(200, 4, 96, .25);
+    ctx.fillRect(rand() * W, (.88 + rand() * .12) * H, 60 + rand() * 260, 1 + rand() * 2);
+  }
+  for(let i = 0; i < 22; i++){
+    const x = rand() * W, h2 = 70 + rand() * 200, w2 = 12 + rand() * 20;
+    ctx.fillStyle = hsl(198, 8, 26 + rand() * 6);
+    ctx.beginPath(); ctx.moveTo(x, H - h2); ctx.lineTo(x - w2 / 2, H); ctx.lineTo(x + w2 / 2, H); ctx.closePath(); ctx.fill();
+  }
+  vignette(ctx, .16);
+  grain(ctx, rand, 1.6);   // 颗粒刻意极小：颗粒本身就是高频饱和度噪声，会污染"低饱和"这个测试点
+}
+
+/* ---------- 后处理：三个滑杆同时作用于三张图 ---------- */
+function postProcess(ctx, b, c, s){
+  if(b === 1 && c === 1 && s === 1) return;
+  const img = ctx.getImageData(0, 0, W, H), d = img.data;
+  for(let i = 0; i < d.length; i += 4){
+    let r = d[i], g = d[i + 1], bl = d[i + 2];
+    if(s !== 1){
+      const lum = .2126 * r + .7152 * g + .0722 * bl;
+      r = lum + (r - lum) * s; g = lum + (g - lum) * s; bl = lum + (bl - lum) * s;
+    }
+    if(c !== 1){
+      r = (r - 128) * c + 128; g = (g - 128) * c + 128; bl = (bl - 128) * c + 128;
+    }
+    d[i] = Math.max(0, Math.min(255, r * b));
+    d[i + 1] = Math.max(0, Math.min(255, g * b));
+    d[i + 2] = Math.max(0, Math.min(255, bl * b));
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/* ---------- 客观统计：亮度 / 饱和度 / 过滤后候选占比 / 建议基底 ---------- */
+function analyze(cv){
+  const d = cv.getContext("2d", {willReadFrequently: true}).getImageData(0, 0, W, H).data;
+  const n = d.length / 4;
+  let lumSum = 0, satSum = 0, pass = 0;
+  for(let i = 0; i < d.length; i += 4){
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    const lum = (.2126 * r + .7152 * g + .0722 * b) / 255;   // 与 07-theme.js:180 的 adaptVeil 同式
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    const sat = mx ? (mx - mn) / mx : 0;                      // HSV 饱和度
+    lumSum += lum; satSum += sat;
+    if(lum <= F_LUM_HI && lum >= F_LUM_LO && sat >= F_SAT) pass++;
+  }
+  return {lum: lumSum / n, sat: satSum / n, pass: pass / n, base: lumSum / n < BASE_LINE ? "dark" : "light"};
+}
+
+/* ---------- 场景表 ---------- */
+const SCENES = [
+  {id: "highlight", seed: 20260924, name: "高亮风格", hint: "过曝高亮 · 亮部占比极高、对比度低", draw: drawHighlight},
+  {id: "night", seed: 19710416, name: "夜景风格", hint: "低照度暗夜 · 面积蓝 + 小面积暖窗光", draw: drawNight},
+  {id: "muted", seed: 31415926, name: "低饱和风格", hint: "雾灰低饱和 · 饱和度卡在过滤阈值附近", draw: drawMuted},
+];
+
+const grid = document.getElementById("grid");
+const nodes = SCENES.map(sc => {
+  const fig = document.createElement("figure");
+  const cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
+  const cap = document.createElement("figcaption");
+  const title = document.createElement("b"); title.textContent = sc.name;
+  const hint = document.createElement("span"); hint.textContent = sc.hint;
+  const stat = document.createElement("span"); stat.className = "stat";
+  const btn = document.createElement("button"); btn.textContent = "保存 JPG";
+  const file = "test-" + sc.id + ".jpg";
+  btn.addEventListener("click", () => cv.toBlob(blob => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = file;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }, "image/jpeg", .9));
+  cap.append(title, hint, stat, btn);
+  fig.append(cv, cap);
+  grid.append(fig);
+  return {cv, stat, sc};
+});
+
+function render(){
+  const b = +document.getElementById("b").value;
+  const c = +document.getElementById("c").value;
+  const s = +document.getElementById("s").value;
+  document.getElementById("bv").textContent = b.toFixed(2);
+  document.getElementById("cv").textContent = c.toFixed(2);
+  document.getElementById("sv").textContent = s.toFixed(2);
+  window.__stats = {};
+  nodes.forEach(({cv, stat, sc}) => {
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    sc.draw(ctx, makeRand(sc.seed));      // 每次都从固定种子重画 → 调参数不会累积误差
+    postProcess(ctx, b, c, s);
+    const a = analyze(cv);
+    window.__stats[sc.id] = a;
+    stat.textContent = "亮度 " + a.lum.toFixed(3)
+      + " · 饱和度 " + a.sat.toFixed(3)
+      + " · 候选像素 " + (a.pass * 100).toFixed(1) + "%"
+      + " · 建议基底 " + (a.base === "dark" ? "深色" : "浅色")
+      + (a.pass < .02 ? "（候选不足，须走兜底）" : "");
+  });
+  window.__ready = true;
+}
+
+["b", "c", "s"].forEach(id => document.getElementById(id).addEventListener("input", render));
+document.getElementById("reset").addEventListener("click", () => {
+  ["b", "c", "s"].forEach(id => { document.getElementById(id).value = 1; });
+  render();
+});
+render();
+</script>
+</body>
+</html>
