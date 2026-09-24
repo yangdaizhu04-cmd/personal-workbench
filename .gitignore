@@ -6,6 +6,8 @@
 Thumbs.db
 desktop/node_modules/
 node_modules/
+# 提交信息临时文件（git commit -F 用；曾经被误提交过，加进来免得再犯）
+.commitmsg.tmp
 
 # 编辑器
 .vscode/

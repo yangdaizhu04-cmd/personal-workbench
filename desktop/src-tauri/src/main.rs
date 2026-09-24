@@ -18,7 +18,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder},
-    AppHandle, Manager,
+    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
 use tauri_plugin_global_shortcut::ShortcutState;
 use tauri_plugin_notification::NotificationExt;
@@ -92,16 +92,19 @@ fn set_reminders(
     n
 }
 
-/// 自检：立刻发一条通知，让用户确认系统真的能弹出来（比"理论上应该能"靠谱）
+/// 自检：立刻发一条，并**说清用的是哪条通道** ——
+/// "没看到通知"这个反馈里最难查的就是"到底发出去没有、走的哪条路"
 #[tauri::command]
 fn test_notify(app: AppHandle) -> Result<String, String> {
-    app.notification()
-        .builder()
-        .title("个人工作台")
-        .body("通知是通的 —— 关掉窗口也能收到提醒 ✓")
-        .show()
-        .map(|_| "已发出，看看屏幕右下角".to_string())
-        .map_err(|e| format!("系统没让发：{e}"))
+    match notify(&app, "个人工作台 · 通知自检", "关掉窗口也能收到提醒 ✓（这条是自检）") {
+        Ok(ch) if ch == "system" => Ok("已通过系统通知发出（会进通知中心）".to_string()),
+        Ok(_) => Ok(if installed() {
+            "系统通知没发出去，已改弹提醒卡".to_string()
+        } else {
+            "已弹出工作台自己的提醒卡（便携版不走系统通知，所以不受系统通知开关影响）".to_string()
+        }),
+        Err(e) => Err(e),
+    }
 }
 
 /// 前端是否在"看得见"的状态：可见且未最小化才算看得见。
@@ -112,20 +115,141 @@ fn front_visible(app: &AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+/* ---------- 提醒通道 ----------
+   一个反直觉的事实：**"能发通知"和"能看见通知"是两件事**。
+   Windows 的系统通知（toast）要求程序有一个带 AUMID 的身份：装过的应用由安装包建快捷方式，
+   所以能弹；而直接跑 target\release 里的 exe（便携版）没有这层身份 ——
+   tauri-plugin-notification 也认得这点，它在便携模式下**故意不设置 app_id**，
+   于是 notify-rust 退回用 `Toast::POWERSHELL_APP_ID` 发，而新版 Windows 已经没有
+   「Windows PowerShell」快捷方式了，通知就被系统静默丢掉（`show()` 仍返回 Ok）。
+   结论：便携模式不赌系统通知，改弹工作台自己的提醒卡 —— 一定能看见，且是自家的样子。 */
+
+/// 是否在跑编译产物（便携模式）：装了之后 exe 在 %LOCALAPPDATA%\... 下，不再是 target\release
+fn portable() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_string_lossy().replace('/', "\\").to_lowercase()))
+        .map(|d| d.ends_with("\\target\\release") || d.ends_with("\\target\\debug"))
+        .unwrap_or(false)
+}
+
+/// 是否**真的装过**（决定能不能用系统通知）。
+/// 光看"不在 target\release"不够：把 exe 拷到 D:\tools\ 也不是便携、更没装过，
+/// 那种情况下系统通知照样被静默丢掉。装过就会在开始菜单留一个快捷方式，以它为准
+fn installed() -> bool {
+    if portable() {
+        return false;
+    }
+    std::env::var("APPDATA")
+        .ok()
+        .map(|d| {
+            std::path::Path::new(&d)
+                .join("Microsoft\\Windows\\Start Menu\\Programs\\个人工作台.lnk")
+                .exists()
+        })
+        .unwrap_or(false)
+}
+
+/// 提醒卡的内容：窗口是复用的，新窗口开出来后靠这条命令取当前该显示什么
+#[derive(Default)]
+struct ToastState {
+    last: Mutex<(String, String)>,
+}
+
+static TOAST_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+#[tauri::command]
+fn toast_payload(state: tauri::State<'_, ToastState>) -> serde_json::Value {
+    let g = state.last.lock().map(|v| v.clone()).unwrap_or_default();
+    serde_json::json!({"title": g.0, "body": g.1})
+}
+
+/// 点提醒卡 = 唤出主窗口
+#[tauri::command]
+fn toast_click(app: AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
+    if let Some(t) = app.get_webview_window("toast") {
+        let _ = t.close();
+    }
+}
+
+/// 贴到主屏右下角（让开任务栏）。换分辨率/多屏时每次弹都重新算一次，不记旧坐标
+fn place_bottom_right(app: &AppHandle, w: &tauri::WebviewWindow) {
+    if let Ok(Some(mon)) = app.primary_monitor() {
+        let scale = mon.scale_factor();
+        let ms = mon.size().to_logical::<f64>(scale);
+        let ws = w
+            .outer_size()
+            .map(|s| s.to_logical::<f64>(scale))
+            .unwrap_or_else(|_| tauri::LogicalSize::new(360.0_f64, 138.0_f64));
+        let x = (ms.width - ws.width - 18.0).max(0.0);
+        let y = (ms.height - ws.height - 58.0).max(0.0);
+        let _ = w.set_position(tauri::LogicalPosition::new(x, y));
+    }
+}
+
+fn notify_card(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
+    use std::sync::atomic::Ordering;
+    if let Ok(mut g) = app.state::<ToastState>().last.lock() {
+        *g = (title.to_string(), body.to_string());
+    }
+    let gen = TOAST_GEN.fetch_add(1, Ordering::SeqCst) + 1;
+    let win = match app.get_webview_window("toast") {
+        Some(w) => w,
+        None => WebviewWindowBuilder::new(app, "toast", WebviewUrl::App("toast.html".into()))
+            .title("个人工作台 · 提醒")
+            .inner_size(360.0, 138.0)
+            .decorations(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .focused(false)
+            .build()
+            .map_err(|e| format!("提醒卡窗口建不出来：{e}"))?,
+    };
+    place_bottom_right(app, &win);
+    let _ = win.emit("toast:show", serde_json::json!({"title": title, "body": body}));
+    let _ = win.show();
+    /* 9 秒后自己收掉。期间又来了一条（代次变了）就不关，让它接着显示新的那条 */
+    let app2 = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(9));
+        if TOAST_GEN.load(Ordering::SeqCst) == gen {
+            if let Some(w) = app2.get_webview_window("toast") {
+                let _ = w.close();
+            }
+        }
+    });
+    Ok(())
+}
+
+/// 发一条提醒。返回用掉的是哪条通道（写进 fired.log，排障时一看就知道）
+fn notify(app: &AppHandle, title: &str, body: &str) -> Result<String, String> {
+    if installed() {
+        // 装过的应用有正经身份：系统通知能进通知中心、也尊重「专注助手」
+        if app.notification().builder().title(title).body(body).show().is_ok() {
+            return Ok("system".to_string());
+        }
+    }
+    notify_card(app, title, body).map(|_| "card".to_string())
+}
+
 /// 每发一条通知追加一行到 `fired.log`（应用数据目录）。
 /// 排障时这一个文件就能分开三种情况：没触发（没有行）/ 系统拒了（err）/ 系统收下了（ok）。
 /// 关窗之后没有任何界面可以看，没有这个日志就只剩猜
-fn log_fired(app: &AppHandle, r: &Reminder, err: Option<String>) {
+fn log_fired(app: &AppHandle, r: &Reminder, res: &Result<String, String>) {
     use std::io::Write;
     if let Ok(dir) = app.path().app_data_dir() {
         let _ = std::fs::create_dir_all(&dir);
-        let line = format!(
-            "{} | {} | {} | {}\n",
-            now_ms(),
-            r.id,
-            if err.is_none() { "ok" } else { "err" },
-            err.unwrap_or_default()
-        );
+        let (tag, extra) = match res {
+            Ok(ch) => ("ok", ch.as_str()),      // 末列写通道：system（系统通知）/ card（自绘提醒卡）
+            Err(e) => ("err", e.as_str()),
+        };
+        let line = format!("{} | {} | {} | {}\n", now_ms(), r.id, tag, extra);
         if let Ok(mut f) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -168,15 +292,8 @@ fn spawn_reminder_loop(app: AppHandle) {
                     fired.clear(); // 去重表别无限长大（清空最坏只是重发一次当轮提醒）
                 }
             }
-            let sent = app
-                .notification()
-                .builder()
-                .title(&r.title)
-                .body(&r.body)
-                .show()
-                .map(|_| ())
-                .map_err(|e| e.to_string());
-            log_fired(&app, &r, sent.err());
+            let res = notify(&app, &r.title, &r.body);
+            log_fired(&app, &r, &res);
         }
     });
 }
@@ -197,6 +314,17 @@ fn toggle_autostart(app: &AppHandle) {
 fn main() {
     tauri::Builder::default()
         .manage(ReminderState::default())
+        .manage(ToastState::default())
+        /* 单实例必须第一个注册：再开一个的时候把已有窗口叫到前面，
+           而不是多出一个托盘图标、多起一条提醒线程（那会让同一条提醒弹两次）。
+           开机自启 + 手动双击同时发生是很常见的场景 */
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -221,7 +349,12 @@ fn main() {
                 })
                 .build(),
         )
-        .invoke_handler(tauri::generate_handler![set_reminders, test_notify])
+        .invoke_handler(tauri::generate_handler![
+            set_reminders,
+            test_notify,
+            toast_payload,
+            toast_click
+        ])
         .setup(|app| {
             // 托盘右键菜单。左键仍然是"显示/隐藏"（见下面 on_tray_icon_event）
             let show_item = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;

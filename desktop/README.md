@@ -10,13 +10,14 @@
 ```
 desktop/
 ├── dist/                     # 前端产物（node build.js --tauri 生成，已 gitignore）
+├── toast.html                # 提醒卡（便携模式下代替系统通知；由 build.js --tauri 拷进 dist）
 └── src-tauri/
     ├── tauri.conf.json       # 窗口 / 托盘 / withGlobalTauri / 前端目录指向 ../dist
     ├── capabilities/
-    │   └── default.json      # Tauri 2 权限：core + notification + autostart
-    ├── Cargo.toml            # tauri 2 + global-shortcut + autostart + notification
+    │   └── default.json      # Tauri 2 权限：core + notification + autostart（windows: main + toast）
+    ├── Cargo.toml            # tauri 2 + global-shortcut + autostart + notification + single-instance
     ├── build.rs
-    └── src/main.rs           # 托盘 + 快捷键 + 关窗收托盘 + 后台提醒线程 + 两个命令
+    └── src/main.rs           # 托盘 + 快捷键 + 关窗收托盘 + 后台提醒线程 + 提醒通道 + 四个命令
 ```
 
 ## 打包步骤（本机已装 Rust 1.98 / Node 20+）
@@ -44,6 +45,25 @@ npx @tauri-apps/cli icon ../assets/icon.svg
 | 开机自启 | 托盘右键「切换开机自启」或设置页「桌面版」分区开关（`tauri-plugin-autostart`） |
 | 后台提醒 | 前端把「提醒清单」推给 Rust（`set_reminders` 命令），后台线程每 20 秒扫一次；**窗口可见且未最小化时不发**（那时前端自己会发，避免一条提醒响两次） |
 | 前端↔Rust 分工 | 待办到点 / 倒数日与生日 / 晨间 / 收工：可见时前端发、隐藏时 Rust 发；番茄结束始终归前端 |
+| 单实例 | 重复启动只会把已有窗口叫到前面（`tauri-plugin-single-instance`）——否则开机自启 + 手动双击会变成两个托盘 + 同一条提醒弹两次 |
+
+## 提醒走哪条通道（重要，别改错）
+
+**"能发通知"不等于"能看见通知"。** Windows 的系统通知要求程序有 AUMID 身份，那通常由安装包建的
+开始菜单快捷方式提供；直接跑 `target\release` 的 exe 没有它，`tauri-plugin-notification` 会因此
+**故意不设置 app_id**，`notify-rust` 退回用 `Toast::POWERSHELL_APP_ID` 发送，而新版 Windows 已经没有
+「Windows PowerShell」快捷方式了 → **通知被系统静默丢掉，而 `show()` 仍返回 Ok**。
+
+所以：
+
+| 情况 | 通道 |
+|---|---|
+| 便携运行（在 `target\release` 里跑） | **提醒卡**（`toast.html`：360×138 无边框置顶，右下角，9 秒自动收，点一下唤出主窗口） |
+| 真的装过（开始菜单有 `个人工作台.lnk`） | 系统通知（进通知中心、尊重「专注助手」），发不出去才回落提醒卡 |
+| 只是把 exe 拷到别处 | 提醒卡（`installed()` 找不到快捷方式） |
+
+另：系统通知总开关（设置 → 系统 → 通知）关掉时**任何应用都弹不出**，应用侧无法感知 ——
+自检按钮会说明用的是哪条通道，`fired.log` 的末列也记（`ok | card` / `ok | system` / `err | …`）。
 
 ## 排障用的两个文件（在 `%APPDATA%\com.personal.workbench\`）
 
@@ -58,6 +78,10 @@ npx @tauri-apps/cli icon ../assets/icon.svg
   不会同步前端。不重跑的下场是跑着旧 JS，而且前后端版本错开时提醒会静默失效（踩坑 #076）。
 - Windows 通知对**未安装**的程序有时不显示（没有开始菜单快捷方式时，toast 可能被系统忽略）。
   用设置页「桌面版 → 通知自检」立刻验证一次；不显示就 `npx tauri build` 出安装包装一遍。
-- 提示音/焦点助手：专注助手开启时通知会被静音，这属于系统行为。
+- 提示音/焦点助手：专注助手开启时通知会被静音，这属于系统行为；提醒卡不受专注助手影响（这是取舍）。
+- **托盘出现"幽灵图标"**：用 `Stop-Process -Force` 强杀的进程，Windows 不会回收它的托盘图标
+  （鼠标划过或重启资源管理器才消失）。遇到"图标多了"先 `Get-Process personal-workbench` 数进程，别急着改代码。
+- 重新编译前**先退出正在运行的实例**（托盘右键 → 退出），否则 `cargo build` 会报
+  `failed to remove file ... 拒绝访问`。
 - Electron 备选方案：把 `desktop/src-tauri` 换成 Electron 主进程脚本加载 `desktop/dist/index.html`
   即可，业务代码零改动。

@@ -112,5 +112,8 @@ if(process.argv.includes("--tauri")){
   fs.copyFileSync("index.html", path.join(dir, "index.html"));
   fs.copyFileSync("manifest.webmanifest", path.join(dir, "manifest.webmanifest"));
   for(const d of ["css", "js", "vendor"]) fs.cpSync(d, path.join(dir, d), {recursive: true});
+  /* 桌面版提醒卡：Rust 侧用 WebviewWindow 加载它（便携模式下代替系统通知）。
+     只在桌面产物里，网页版 / 单文件 / 云端都不带 —— 它也不加载工作台的任何脚本 */
+  fs.copyFileSync("desktop/toast.html", path.join(dir, "toast.html"));
   console.log("✅ Tauri 完整目录产物已写入 desktop/dist/（与文件夹版同一份资源）");
 }
