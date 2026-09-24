@@ -219,37 +219,100 @@ fn notify_card(app: &AppHandle, title: &str, body: &str) -> Result<(), String> {
         *g = (title.to_string(), body.to_string());
     }
     let gen = TOAST_GEN.fetch_add(1, Ordering::SeqCst) + 1;
-    let win = match app.get_webview_window("toast") {
-        Some(w) => w,
-        None => WebviewWindowBuilder::new(
-            app,
-            "toast",
-            WebviewUrl::App(format!("toast.html#{}|{}", enc(title), enc(body)).into()),
-        )
-        .title("个人工作台 · 提醒")
-        .inner_size(360.0, 138.0)
-        .decorations(false)
-        .always_on_top(true)
-        .skip_taskbar(true)
-        .resizable(false)
-        .focused(false)
-        .build()
-        .map_err(|e| format!("提醒卡窗口建不出来：{e}"))?,
-    };
-    place_bottom_right(app, &win);
-    let _ = win.emit("toast:show", serde_json::json!({"title": title, "body": body}));
-    let _ = win.show();
-    /* 9 秒后自己收掉。期间又来了一条（代次变了）就不关，让它接着显示新的那条 */
+
+    /* **建窗/摆放/显示必须整段在主线程上做。**
+       Windows 的窗口与消息循环属于创建它的那个线程：从后台线程建出来的窗口
+       不会渲染、点不动，标题栏上写着「(未响应)」，内容一片白 —— 而
+       "没弹出来"和"弹了一个卡死的白窗口"是两回事，后者更糟（用户截图里就是它）。
+       这里用 run_on_main_thread 把整段搬到主线程，并等结果（带 6 秒超时），
+       成功与失败都写进 toast.log，出问题时那行字比任何猜测都有用 */
+    let (tx, rx) = std::sync::mpsc::channel::<Result<String, String>>();
     let app2 = app.clone();
+    let (t, b) = (title.to_string(), body.to_string());
+    app.run_on_main_thread(move || {
+        let res = (|| -> Result<String, String> {
+            let win = match app2.get_webview_window("toast") {
+                Some(w) => w,
+                None => WebviewWindowBuilder::new(
+                    &app2,
+                    "toast",
+                    WebviewUrl::App(format!("toast.html#{}|{}", enc(&t), enc(&b)).into()),
+                )
+                .title("个人工作台 · 提醒")
+                .inner_size(360.0, 138.0)
+                .decorations(false)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .resizable(false)
+                .focused(false)
+                .build()
+                .map_err(|e| format!("建窗失败：{e}"))?,
+            };
+            place_bottom_right(&app2, &win);
+            let _ = win.emit("toast:show", serde_json::json!({"title": t, "body": b}));
+            let _ = win.show();
+            /* 记下窗口的真实状态：有没有标题栏 / 多大 / 在哪 —— 自检时一看就知道对不对 */
+            let sz = win
+                .outer_size()
+                .map(|s| format!("{}x{}", s.width, s.height))
+                .unwrap_or_else(|_| "?".into());
+            let pos = win
+                .outer_position()
+                .map(|p| format!("{},{}", p.x, p.y))
+                .unwrap_or_else(|_| "?".into());
+            Ok(format!(
+                "装饰={} {} @ {}",
+                win.is_decorated().unwrap_or(true),
+                sz,
+                pos
+            ))
+        })();
+        let _ = tx.send(res);
+    })
+    .map_err(|e| format!("回不到主线程：{e}"))?;
+
+    match rx.recv_timeout(Duration::from_secs(6)) {
+        Ok(Ok(desc)) => append_log(app, "toast.log", &format!("ok | {title} | {desc}")),
+        Ok(Err(e)) => {
+            append_log(app, "toast.log", &format!("err | {title} | {e}"));
+            return Err(e);
+        }
+        Err(_) => {
+            let e = "建窗超时（主线程 6 秒没有响应）".to_string();
+            append_log(app, "toast.log", &format!("err | {title} | {e}"));
+            return Err(e);
+        }
+    }
+
+    /* 9 秒后自己收掉（关窗同样回主线程）。期间又来了一条（代次变了）就不关，接着显示新的 */
+    let app3 = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(9));
         if TOAST_GEN.load(Ordering::SeqCst) == gen {
-            if let Some(w) = app2.get_webview_window("toast") {
-                let _ = w.close();
-            }
+            let app4 = app3.clone();
+            let _ = app3.run_on_main_thread(move || {
+                if let Some(w) = app4.get_webview_window("toast") {
+                    let _ = w.close();
+                }
+            });
         }
     });
     Ok(())
+}
+
+/// 往应用数据目录里的某个日志追加一行（fired.log / toast.log 共用）
+fn append_log(app: &AppHandle, file: &str, text: &str) {
+    use std::io::Write;
+    if let Ok(dir) = app.path().app_data_dir() {
+        let _ = std::fs::create_dir_all(&dir);
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(dir.join(file))
+        {
+            let _ = f.write_all(format!("{} | {}\n", now_ms(), text).as_bytes());
+        }
+    }
 }
 
 /// 发一条提醒。返回用掉的是哪条通道（写进 fired.log，排障时一看就知道）
@@ -267,22 +330,11 @@ fn notify(app: &AppHandle, title: &str, body: &str) -> Result<String, String> {
 /// 排障时这一个文件就能分开三种情况：没触发（没有行）/ 系统拒了（err）/ 系统收下了（ok）。
 /// 关窗之后没有任何界面可以看，没有这个日志就只剩猜
 fn log_fired(app: &AppHandle, r: &Reminder, res: &Result<String, String>) {
-    use std::io::Write;
-    if let Ok(dir) = app.path().app_data_dir() {
-        let _ = std::fs::create_dir_all(&dir);
-        let (tag, extra) = match res {
-            Ok(ch) => ("ok", ch.as_str()),      // 末列写通道：system（系统通知）/ card（自绘提醒卡）
-            Err(e) => ("err", e.as_str()),
-        };
-        let line = format!("{} | {} | {} | {}\n", now_ms(), r.id, tag, extra);
-        if let Ok(mut f) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(dir.join("fired.log"))
-        {
-            let _ = f.write_all(line.as_bytes());
-        }
-    }
+    let (tag, extra) = match res {
+        Ok(ch) => ("ok", ch.as_str()),      // 末列写通道：system（系统通知）/ card（自绘提醒卡）
+        Err(e) => ("err", e.as_str()),
+    };
+    append_log(app, "fired.log", &format!("{} | {} | {}", r.id, tag, extra));
 }
 
 fn spawn_reminder_loop(app: AppHandle) {
@@ -447,6 +499,18 @@ fn main() {
             }
 
             spawn_reminder_loop(app.handle().clone());
+
+            /* 调试钩子：`WB_SELFTEST_NOTIFY=1` 启动，8 秒后自动发一条提醒。
+               用途是不用手点设置页的「通知自检」就能验证通道（尤其给自动化用）。
+               平时不设这个环境变量，这里完全不执行 */
+            if std::env::var("WB_SELFTEST_NOTIFY").is_ok() {
+                let h = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_secs(8));
+                    let r = notify(&h, "个人工作台 · 自检", "这是自动发出的一条测试提醒");
+                    eprintln!("[selftest] notify -> {r:?}");
+                });
+            }
             Ok(())
         })
         .run(tauri::generate_context!())
