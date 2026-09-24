@@ -1,7 +1,10 @@
 /* ============================================================
    个人工作台 · 晨雾奶油 Cream Reverie
    设计系统：米白奶油底 / 雾蓝淡紫点缀 / 大圆角 / 柔和大弥散阴影
-   主题：data-theme="light|dark|rose"   点缀色：data-accent="mist|peach|mint|custom"
+   主题：9 套 = data-theme="light|dark|rose" 三套自成一档，
+         外加 data-skin="spring|sea|maple|snow|ink|hc" 六套（见下方「新增主题」一节，
+         它们复用 light/dark 的整套框架，只覆盖颜色变量）
+   点缀色：data-accent="mist|peach|mint|custom"
    动效开关：html.no-motion
    ============================================================ */
 
@@ -49,6 +52,7 @@ html[data-theme="light"]{
   --glass-line-b:rgba(255,255,255,.15);
   --glass-line-c:rgba(255,255,255,0);
   --pri-mask:transparent;   /* 主按钮渐变叠层：亮色不需要压暗 */
+  --wp-tint:246 241 231;    /* 壁纸蒙层底色（rgb 三通道写法，配合 --wp-veil 一起用） */
 }
 html[data-theme="dark"]{
   --bg:#232339;
@@ -72,6 +76,7 @@ html[data-theme="dark"]{
   --glass-line-b:rgba(206,206,246,.09);
   --glass-line-c:rgba(206,206,246,0);
   --pri-mask:rgba(12,12,30,.22);   /* 暗色下把主按钮渐变压下去一档 */
+  --wp-tint:29 29 48;       /* 壁纸蒙层底色：与 ::after 的深蓝紫一致 */
 }
 /* 暮霞粉：用户在看氛围层「暮」那档配色时点名的第三个主题。
    口径仍是低饱和（不是粉色少女风）：只把色相往玫瑰偏，饱和度压到与晨雾奶油同一档，
@@ -96,10 +101,152 @@ html[data-theme="rose"]{
   --glass-line-b:rgba(255,255,255,.15);
   --glass-line-c:rgba(255,255,255,0);
   --pri-mask:transparent;
+  --wp-tint:249 239 233;
 }
 /* 侧栏玻璃与第一团光斑跟着偏暖：粉色底上浮一层冷奶油会显脏 */
 html[data-theme="rose"] #sidebar::before{background:linear-gradient(180deg, rgba(255,250,246,.64), rgba(255,244,238,.36));}
 html[data-theme="rose"] .blob-a{background:radial-gradient(circle, rgba(228,180,190,.5), transparent 62%);}
+
+/* ---------- 新增主题：data-skin 调色块（2026-09-24 扩到 9 套）----------
+   为什么挂在 data-skin 而不是 data-theme：整套框架（暗色专属阴影、壁纸蒙层、玻璃描边等
+   47 处 data-theme 选择器）是按亮/暗两档设计的。新主题只要声明"我属于哪一档"，
+   就自动继承那一档的全部框架，不必回来逐个枚举主题名（加第 10 套时尤其省事）。
+   于是 apply() 写的是 html[data-theme="light|dark"] + html[data-skin="新主题id"]。
+   位置必须在下面「点缀色预设」之前：点缀色要能盖掉主题自带的 --accent。
+   每个色块的配色参照 theme-factory 的现成色板，对比度口径与晨雾奶油一致：
+   --ink ≈9:1（正文 AAA）、--ink-2 ≈4.6:1、--ink-3 ≈3.4:1（底 = --bg） */
+html[data-skin="spring"]{          /* 春芽：嫩绿浅色，取自 botanical-garden 的蕨绿 + 金盏 */
+  --bg:#f2f5ea;
+  --bg-2:#e8eeda;
+  --card:#fbfdf5;
+  --card-2:#f1f5e6;
+  --card-border:rgba(122,140,86,.16);
+  --ink:#3d4534; --ink-2:#67715b; --ink-3:#7f8874;
+  --accent:#6f9550; --accent-2:#c29a58; --accent-ink:#2f4722;
+  --accent-soft:rgba(111,149,80,.15);
+  --accent2-soft:rgba(194,154,88,.16);
+  --danger:#c9745f; --ok:#6fa87f; --warn:#c0973f;
+  --shadow:0 10px 34px rgba(126,140,92,.13), 0 2px 8px rgba(126,140,92,.07);
+  --shadow-s:0 4px 16px rgba(126,140,92,.10);
+  --veil:rgba(242,245,234,.96);
+  --scrim:rgba(62,72,48,.30);
+  --glass-bg:rgba(252,254,247,.52);
+  --glass-line-a:rgba(255,255,255,.55);
+  --glass-line-b:rgba(255,255,255,.15);
+  --glass-line-c:rgba(255,255,255,0);
+  --pri-mask:transparent;
+  --wp-tint:242 245 234;
+}
+html[data-skin="sea"]{             /* 夏海：清透蓝，取自 ocean-depths 的海沫青 */
+  --bg:#edf4f7;
+  --bg-2:#e2eef3;
+  --card:#f9fcfe;
+  --card-2:#eff6fa;
+  --card-border:rgba(104,140,158,.16);
+  --ink:#2f4049; --ink-2:#5b6f7a; --ink-3:#748893;
+  --accent:#4a8fae; --accent-2:#7a9fc4; --accent-ink:#1f4757;
+  --accent-soft:rgba(74,143,174,.15);
+  --accent2-soft:rgba(122,159,196,.16);
+  --danger:#c97b6e; --ok:#6fae92; --warn:#c9a15f;
+  --shadow:0 10px 34px rgba(96,124,140,.14), 0 2px 8px rgba(96,124,140,.08);
+  --shadow-s:0 4px 16px rgba(96,124,140,.11);
+  --veil:rgba(237,244,247,.96);
+  --scrim:rgba(40,60,70,.30);
+  --glass-bg:rgba(250,253,255,.52);
+  --glass-line-a:rgba(255,255,255,.55);
+  --glass-line-b:rgba(255,255,255,.15);
+  --glass-line-c:rgba(255,255,255,0);
+  --pri-mask:transparent;
+  --wp-tint:237 244 247;
+}
+html[data-skin="maple"]{           /* 秋枫：暖橙棕，取自 golden-hour 的芥黄 + 陶土 */
+  --bg:#f7f0e8;
+  --bg-2:#f0e6da;
+  --card:#fdf9f3;
+  --card-2:#f7ece1;
+  --card-border:rgba(168,128,96,.18);
+  --ink:#453a30; --ink-2:#746454; --ink-3:#8d7d6c;
+  --accent:#b97748; --accent-2:#c9a05a; --accent-ink:#5a3a22;
+  --accent-soft:rgba(185,119,72,.15);
+  --accent2-soft:rgba(201,160,90,.16);
+  --danger:#c26f5a; --ok:#7fae8e; --warn:#c9924f;
+  --shadow:0 10px 34px rgba(160,120,80,.14), 0 2px 8px rgba(160,120,80,.08);
+  --shadow-s:0 4px 16px rgba(160,120,80,.11);
+  --veil:rgba(247,240,232,.96);
+  --scrim:rgba(80,60,45,.32);
+  --glass-bg:rgba(255,251,246,.52);
+  --glass-line-a:rgba(255,255,255,.55);
+  --glass-line-b:rgba(255,255,255,.15);
+  --glass-line-c:rgba(255,255,255,0);
+  --pri-mask:transparent;
+  --wp-tint:247 240 232;
+}
+html[data-skin="snow"]{            /* 冬雪：低饱和冷灰，取自 arctic-frost / modern-minimalist —— 同时充当"中性"档 */
+  --bg:#f4f5f7;
+  --bg-2:#e9ebef;
+  --card:#fbfcfd;
+  --card-2:#f1f3f6;
+  --card-border:rgba(130,140,155,.18);
+  --ink:#363b43; --ink-2:#656d78; --ink-3:#7e8691;
+  --accent:#7d8899; --accent-2:#a3aebd; --accent-ink:#414a57;
+  --accent-soft:rgba(125,136,153,.15);
+  --accent2-soft:rgba(163,174,189,.16);
+  --danger:#c07b78; --ok:#7fa89a; --warn:#c4a06a;
+  --shadow:0 10px 34px rgba(120,130,145,.14), 0 2px 8px rgba(120,130,145,.08);
+  --shadow-s:0 4px 16px rgba(120,130,145,.11);
+  --veil:rgba(244,245,247,.96);
+  --scrim:rgba(50,58,68,.30);
+  --glass-bg:rgba(252,253,254,.54);
+  --glass-line-a:rgba(255,255,255,.55);
+  --glass-line-b:rgba(255,255,255,.15);
+  --glass-line-c:rgba(255,255,255,0);
+  --pri-mask:transparent;
+  --wp-tint:244 245 247;
+}
+html[data-skin="ink"]{             /* 墨岩：中性深炭灰（深色档第二套），刻意不偏紫，与夜雾一眼可区分 */
+  --bg:#24282e;
+  --bg-2:#1d2026;
+  --card:#2c3138;
+  --card-2:#262a30;
+  --card-border:rgba(150,160,175,.14);
+  --ink:#e8ebef; --ink-2:#a8b0bb; --ink-3:#858d99;
+  --accent:#8fa0b5; --accent-2:#a9a294; --accent-ink:#f2f6fa;
+  --accent-soft:rgba(143,160,181,.18);
+  --accent2-soft:rgba(169,162,148,.18);
+  --danger:#d99a8c; --ok:#8fc2a0; --warn:#d4b076;
+  --shadow:0 12px 36px rgba(0,0,0,.38), 0 2px 10px rgba(0,0,0,.24);
+  --shadow-s:0 6px 18px rgba(0,0,0,.28);
+  --veil:rgba(36,40,46,.97);
+  --scrim:rgba(12,14,18,.52);
+  --glass-bg:rgba(46,52,60,.56);
+  --glass-line-a:rgba(210,218,228,.20);
+  --glass-line-b:rgba(210,218,228,.08);
+  --glass-line-c:rgba(210,218,228,0);
+  --pri-mask:rgba(12,14,18,.22);
+  --wp-tint:36 40 46;
+}
+html[data-skin="hc"]{              /* 高对比：白底黑字（正文 21:1，AAA）——
+   与其它主题不同，它刻意牺牲柔和度：卡片靠纯黑描边立起来，去掉全部弥散阴影 */
+  --bg:#ffffff;
+  --bg-2:#f2f2f2;
+  --card:#ffffff;
+  --card-2:#f7f7f7;
+  --card-border:#000000;
+  --ink:#000000; --ink-2:#1a1a1a; --ink-3:#333333;
+  --accent:#00408f; --accent-2:#5a2d82; --accent-ink:#ffffff;
+  --accent-soft:rgba(0,64,143,.12);
+  --accent2-soft:rgba(90,45,130,.12);
+  --danger:#a10000; --ok:#00602c; --warn:#6b4200;
+  --shadow:none; --shadow-s:none;
+  --veil:rgba(255,255,255,.99);
+  --scrim:rgba(0,0,0,.62);
+  --glass-bg:rgba(255,255,255,.90);
+  --glass-line-a:rgba(0,0,0,.35);
+  --glass-line-b:rgba(0,0,0,.18);
+  --glass-line-c:rgba(0,0,0,0);
+  --pri-mask:transparent;
+  --wp-tint:255 255 255;
+}
 
 /* 三套点缀色预设（奶油框架不变） */
 html[data-accent="peach"]{ --accent:#dd9a84; --accent-2:#d9bc72; --accent-ink:#6e4a3c;
@@ -226,14 +373,14 @@ body.wallpaper-on{
 /* 壁纸蒙层：亮/暗各一层，切主题只交叉 opacity；透明度由 3.5 按壁纸亮度写 --wp-veil */
 body.wallpaper-on::before{
   content: ""; position: fixed; inset: 0; z-index: var(--z-bg);
-  background-color: rgb(246 241 231 / var(--wp-veil,.72));
+  background-color: rgb(var(--wp-tint) / var(--wp-veil,.72));
   pointer-events: none;
   transition: opacity var(--dur-scene) var(--ease-cross),
               background-color var(--dur-scene) var(--ease-cross);
 }
 body.wallpaper-on::after{
   content: ""; position: fixed; inset: 0; z-index: var(--z-bg);
-  background: linear-gradient(180deg, rgb(29 29 48 / .78), rgb(29 29 48 / .88));
+  background: linear-gradient(180deg, rgb(var(--wp-tint) / .78), rgb(var(--wp-tint) / .88));
   opacity: 0; pointer-events: none; transition: opacity var(--dur-scene) var(--ease-cross);
 }
 html[data-theme="dark"] body.wallpaper-on::before{opacity:0;}

@@ -123,10 +123,20 @@ WB.registerModule({
     colorInput.addEventListener("change", () => WB.router.render());
     accentRow.appendChild(colorInput);
 
+    /* 主题：9 套 + 跟随系统。10 项塞进分段控件在窄屏会挤爆，改用与「点缀色」同款的 chip；
+       名单与顺序一律取自 WB.theme.THEMES —— 以后加主题不用回来改这里 */
+    const themeRow = el("div", {class: "row", style: {gap: "6px", flexWrap: "wrap"}});
+    WB.theme.THEMES.map(t => [t.id, t.cn]).concat([["auto", "跟随系统"]]).forEach(([id, label]) => {
+      themeRow.appendChild(el("button", {
+        class: "chip clickable" + (s.theme === id ? "" : " plain"),
+        text: label,
+        onclick: () => { WB.theme.set("theme", id); WB.router.render(); },
+      }));
+    });
+
     wrap.appendChild(sectionCard("palette", "外观", [
-      row("主题", "三套配色 + 跟随系统；快捷键 D 在亮暗之间切（会记住你上次用的那套亮色）",
-        seg([["light", "晨雾奶油"], ["dark", "夜雾"], ["rose", "暮霞粉"], ["auto", "跟随系统"]],
-          s.theme, v => WB.theme.set("theme", v))),
+      row("主题", "九套配色 + 跟随系统；快捷键 D 在亮暗之间切（会记住你上次用的那套亮色）",
+        themeRow),
       row("点缀色", "三套预设 + 自定义强调色", accentRow),
       row("静音动效", "一键关闭所有动画与音效",
         toggle(s.motion, v => WB.theme.set("motion", v))),
@@ -158,7 +168,7 @@ WB.registerModule({
         (WB.immersive && WB.immersive.order ? WB.immersive.order : [])
           .map(id => [id, WB.immersive.scenes[id]]));
       const soundOpts = [["off", "无"]].concat(AMB.SOUND_KEYS);
-      const themeOpts = [["light", "晨雾奶油"], ["dark", "夜雾"], ["rose", "暮霞粉"], ["auto", "跟随系统"]];
+      const themeOpts = WB.theme.THEMES.map(t => [t.id, t.cn]).concat([["auto", "跟随系统"]]);
       const accentOpts = [["off", "不干预"]].concat(AMB.ACCENT_KEYS);
       /* 单文件版不含窗景页（构建时剥离），那一格就不出现 */
       const windowOpts = [["off", "不干预"]].concat(

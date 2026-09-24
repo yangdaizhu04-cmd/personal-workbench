@@ -17,7 +17,16 @@
     var t = s.theme;
     if(t === "auto") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     var html = document.documentElement;
-    if(t === "dark" || t === "light" || t === "rose") html.dataset.theme = t;
+    /* 主题 id → 亮/暗档 的最简映射。与 07-theme.js 的 THEMES 表同源，加主题时两处一起加：
+       这段必须跑在样式表之前，共享不了那时的代码，所以只能再抄一份最短的表。
+       漏一项的代价 = 该主题每次启动闪一下米白，功能不受影响 */
+    var BASE = {light:"light", dark:"dark", rose:"rose",
+                spring:"light", sea:"light", maple:"light", snow:"light", ink:"dark", hc:"light"};
+    var base = BASE[t];
+    if(base){
+      html.dataset.theme = base;
+      if(base !== t) html.dataset.skin = t;   // 新主题的色块挂在 data-skin 上
+    }
     if(s.accent) html.dataset.accent = s.accent === "custom" ? "mist" : s.accent;
     if(s.accent === "custom" && s.accentCustom) html.style.setProperty("--accent", s.accentCustom);
     if(s.motion === false) html.classList.add("no-motion");   // 动效关掉时首帧就别播入场

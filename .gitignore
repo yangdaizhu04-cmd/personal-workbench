@@ -18,3 +18,6 @@ extension/dist/
 desktop/dist/
 desktop/src-tauri/target/
 *.crx
+
+# 测试图生成器（tools/export-test-photos.mjs）的产物：随时可由代码重建，不入库
+tools/test-photos/

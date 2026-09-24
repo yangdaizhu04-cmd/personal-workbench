@@ -22,8 +22,8 @@ const targets = [
   {name: "folder", url: "file:///" + encodeURI(ROOT.replace(/\\/g, "/")) + "/index.html"},
   ...(fast ? [] : [{name: "single", url: "file:///" + encodeURI(ROOT.replace(/\\/g, "/")) + "/" + encodeURI("个人工作台.html")}]),
 ];
-/* 三套主题都要过：暮霞粉是 2026-09-23 新增的第三套，只测亮暗会让它长期无人看守 */
-const THEMES = fast ? ["light"] : ["light", "dark", "rose"];
+/* 九套主题都要过：只测亮暗会让新主题长期无人看守（2026-09-24 从三套扩到九套） */
+const THEMES = fast ? ["light"] : ["light", "dark", "rose", "spring", "sea", "maple", "snow", "ink", "hc"];
 
 const browser = await puppeteer.launch({
   executablePath: chromePath,
