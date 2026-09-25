@@ -21,10 +21,27 @@
        改完 THEMES 跑一次 node build.js 即可；漏跑会被 tools/test-smoke.mjs 的一致性断言挡住。
        之所以要"注入"而不是运行时读表：这段必须跑在样式表之前，那时还没有 WB.theme */
     var BASE = /*__WB_THEME_BASE__*/{"light":"light","dark":"dark","rose":"rose","spring":"light","sea":"light","maple":"light","snow":"light","ink":"dark","hc":"light"};
-    var base = BASE[t];
+    var base = BASE[t], vars = null;
+    /* 照片主题 custom:<id>：要"配色不闪"就得在首帧同步拿到色值 —— 所以记录（含派生好的 token）
+       整份放 localStorage，照片本身在 IDB（异步，首帧挂不上，有淡入可接受）。
+       记录找不到（换设备 / 清过 localStorage）= 降级：保持 html 上的静态 light，07-theme.js 会再提示一次 */
+    if(!base && t && t.slice(0, 7) === "custom:"){
+      try{
+        var list = JSON.parse(localStorage.getItem("wb:customThemes") || "[]");
+        for(var i = 0; i < list.length; i++){
+          if(list[i].id === t.slice(7)){ base = list[i].base; vars = list[i].vars; break; }
+        }
+      }catch(e2){}
+    }
     if(base){
       html.dataset.theme = base;
-      if(base !== t) html.dataset.skin = t;   // 新主题的色块挂在 data-skin 上
+      if(vars){
+        for(var k in vars) html.style.setProperty(k, vars[k]);
+        var mt = document.querySelector('meta[name="theme-color"]');
+        if(mt && vars["--bg"]) mt.content = vars["--bg"];
+      }else if(base !== t){
+        html.dataset.skin = t;   // 新主题的色块挂在 data-skin 上
+      }
     }
     if(s.accent) html.dataset.accent = s.accent === "custom" ? "mist" : s.accent;
     if(s.accent === "custom" && s.accentCustom) html.style.setProperty("--accent", s.accentCustom);
@@ -121,6 +138,7 @@
 <script src="js/05-icons.js"></script>
 <script src="js/06-ui.js"></script>
 <script src="js/07-theme.js"></script>
+<script src="js/07b-custom-theme.js"></script>
 <script src="js/08-network.js"></script>
 <script src="js/09-router.js"></script>
 <script src="js/10-markdown.js"></script>

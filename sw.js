@@ -1,6 +1,6 @@
 /* Service Worker —— 云端版专用（本地 file:// 双击版自动跳过注册）
    策略：静态资源 cache-first + 后台更新；API 请求不缓存 */
-const CACHE = "wb-cache-v6";   // 主题扩到九套（main.css 新增 data-skin 色块、index.html 首帧脚本换档映射）→ 升版让老 PWA 用户拿到新壳
+const CACHE = "wb-cache-v7";   // 照片自定义主题（新增 js/07b、设置页「我的主题」、index.html 首帧支持 custom:<id>）→ 升版让老 PWA 用户拿到新壳
 const SHELL = [
   "./",
   "./index.html",

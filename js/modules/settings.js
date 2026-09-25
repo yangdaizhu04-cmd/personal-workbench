@@ -136,10 +136,15 @@ WB.registerModule({
 
     /* 控件本身就宽的四行 → stack-row：窄屏下标签与控件各占一行。
        不加的话标签列会被控件挤到 min-content（中文一字一行），整张卡变竖条（踩坑 #069 / #085） */
-    const rowTheme = row("主题", "九套配色 + 跟随系统；快捷键 D 在亮暗之间切（会记住你上次用的那套亮色）",
+    const customOn = String(s.theme || "").startsWith("custom:");   // 当前用的是照片主题
+    const rowTheme = row("主题", "九套配色 + 跟随系统 + 下面「我的主题」里的照片主题；快捷键 D 在亮暗之间切（会记住你上次用的那套亮色）",
       themeRow);
-    const rowAccent = row("点缀色", "三套预设 + 自定义强调色", accentRow);
-    const rowBg = row("背景", "光斑 / 动态晨露夜雾 / Bing 每日 / 自定义图片",
+    const rowAccent = row("点缀色", customOn
+      ? "照片主题自带强调色（由照片派生），这里的三套预设只作用于内置主题"
+      : "三套预设 + 自定义强调色", accentRow);
+    const rowBg = row("背景", customOn
+      ? "光斑 / 动态晨露夜雾 / Bing 每日 / 自定义图片 —— 照片主题生效时由那套主题的照片接管"
+      : "光斑 / 动态晨露夜雾 / Bing 每日 / 自定义图片",
       seg([["blobs", "光斑"], ["dynamic", "动态"], ["bing", "Bing"], ["custom", "自定义"]],
         WB.theme.bgMode(), v => WB.theme.set("bgMode", v)));
     const rowBgImg = row("自定义图片", "上传图片或用 Unsplash（需在下方 BYOK 填 Key），上传后自动启用", bgEditor());
@@ -148,6 +153,9 @@ WB.registerModule({
     wrap.appendChild(sectionCard("palette", "外观", [
       rowTheme,
       rowAccent,
+      WB.customTheme.manageBlock(),
+      row("D 键轮换照片主题", "关着时 D 只在亮暗之间切内置主题 —— 投屏或共享屏幕时不会跳出私人照片；打开后 D 会在亮暗两档里各自记住最近用过的那套照片主题",
+        toggle(s.customInD, v => WB.theme.set("customInD", v))),
       row("静音动效", "一键关闭所有动画与音效",
         toggle(s.motion, v => WB.theme.set("motion", v))),
       rowBg,
@@ -176,7 +184,10 @@ WB.registerModule({
         (WB.immersive && WB.immersive.order ? WB.immersive.order : [])
           .map(id => [id, WB.immersive.scenes[id]]));
       const soundOpts = [["off", "无"]].concat(AMB.SOUND_KEYS);
-      const themeOpts = WB.theme.THEMES.map(t => [t.id, t.cn]).concat([["auto", "跟随系统"]]);
+      /* 主题下拉：内置九套 + 我的照片主题（允许手动选入编排，但默认编排里不含 —— 方案 §10-11） */
+      const themeOpts = WB.theme.THEMES.map(t => [t.id, t.cn])
+        .concat(WB.customTheme.list().map(r => [WB.customTheme.PREFIX + r.id, r.name + "（照片）"]))
+        .concat([["auto", "跟随系统"]]);
       const accentOpts = [["off", "不干预"]].concat(AMB.ACCENT_KEYS);
       /* 单文件版不含窗景页（构建时剥离），那一格就不出现 */
       const windowOpts = [["off", "不干预"]].concat(

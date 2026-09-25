@@ -55,6 +55,12 @@ const THEME_CN = Object.assign({light: "晨雾奶油", dark: "夜雾", rose: "�
   (WB.theme && WB.theme.THEME_CN) || {});
 const WINDOW_CN = {mountains: "山雾四季", tower: "和塔暮色", study: "书房灯下"};
 
+/* 主题中文名：内置走 THEME_CN；照片主题（custom:<id>）取用户起的名字，查不到就原样显示 id */
+function themeCn(id){
+  if(THEME_CN[id]) return THEME_CN[id];
+  const rec = (WB.customTheme && String(id || "").indexOf("custom:") === 0) ? WB.customTheme.find(id) : null;
+  return rec ? rec.name : id;
+}
 function pad(n){ return String(n).padStart(2, "0"); }
 function timeLabel(seg){ return pad(seg.from) + ":00–" + pad(seg.to) + ":00"; }
 function windowMap(){ return (WB.scenes && WB.scenes.SCENES) || {}; }
@@ -149,7 +155,7 @@ function apply(force, silent){
   if(done.scene || done.theme || done.accent || done.window) WB.bus.emit("view:dirty");
   if(!silent && WB.ui && WB.ui.toast){
     WB.ui.toast("✦ 跟着节律切到「" + seg.name + "」：" +
-      describeFocus(seg.id) + " · " + (THEME_CN[cfg.theme] || cfg.theme));
+      describeFocus(seg.id) + " · " + themeCn(cfg.theme));
   }
   return done;
 }
@@ -190,7 +196,7 @@ function describeHome(id){
   const accent = c.accent === OFF ? "不干预"
     : ((ACCENT_KEYS.find(k => k[0] === c.accent) || [c.accent, c.accent])[1]);
   const win = (c.window === OFF) ? "不干预" : windowName(c.window);
-  return (THEME_CN[c.theme] || c.theme) + " · " + accent + " · " + win;
+  return themeCn(c.theme) + " · " + accent + " · " + win;
 }
 function describe(id){ return describeFocus(id) + " · " + describeHome(id); }
 

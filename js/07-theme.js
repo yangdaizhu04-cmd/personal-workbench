@@ -1,12 +1,14 @@
-/* 07-theme.js —— 主题（晨雾奶油/夜雾）、三套点缀色、自定义强调色、壁纸 */
+/* 07-theme.js —— 主题（晨雾奶油/夜雾）、三套点缀色、自定义强调色、壁纸、
+   照片自定义主题的档位与 token 落点（取色与记录见 07b-custom-theme.js） */
 (function(){
 "use strict";
 const WB = (window.WB = window.WB || {});
 
 const DEFAULTS = {
-  theme: "light",            // 主题 id，见文件下方的 THEMES 表（9 套）或 auto 跟随系统
+  theme: "light",            // 主题 id，见文件下方的 THEMES 表（9 套）、auto 跟随系统、custom:<id> 照片主题
   accent: "mist",            // mist | peach | mint | custom
   accentCustom: "#7fa3bd",
+  customInD: false,          // D 键是否也轮换照片主题（默认否：投屏时按 D 跳出私人照片太吓人）
   wallpaper: false,          // 兼容旧键：Bing 壁纸开关
   bgMode: "",                // blobs | dynamic | bing | custom（空=从旧键推导）
   motion: true,              // 动效
@@ -81,18 +83,24 @@ function apply(){
   const html = document.documentElement;
   const cur = resolvedTheme();
   const th = themeMeta(cur);
+  if(/^custom:/.test(cur) && !th.custom) noticeDegrade();
   /* 老主题的色块挂 data-theme；新六套只声明亮/暗档，色块挂 data-skin ——
-     于是整套暗色框架（阴影 / 壁纸蒙层 / 玻璃描边等 47 处选择器）自动跟随 */
+     于是整套暗色框架（阴影 / 壁纸蒙层 / 玻璃描边等 47 处选择器）自动跟随。
+     照片主题（custom:<id>）同理：档位只写 light/dark、不挂 data-skin，
+     它那 19 个 token 由 applyVars() 写成行内样式（行内优先级最高，切走时整批清掉） */
   html.dataset.theme = th.own ? th.id : th.base;
-  if(th.own) delete html.dataset.skin; else html.dataset.skin = th.id;
-  const acc = get("accent");
+  if(th.own || th.custom) delete html.dataset.skin; else html.dataset.skin = th.id;
+  applyVars(th.custom ? th.vars : null);
+  /* 照片主题的强调色是整套配色的一部分（由照片派生），此时点缀色预设让位；
+     用户的 accent 设置原样留着，切回内置主题立刻恢复生效 */
+  const acc = th.custom ? "mist" : get("accent");
   html.dataset.accent = acc === "custom" ? "mist" : acc;
   // 自定义强调色：覆盖 --accent / --accent-soft
-  if(acc === "custom" && get("accentCustom")){
+  if(!th.custom && acc === "custom" && get("accentCustom")){
     const c = get("accentCustom");
     html.style.setProperty("--accent", c);
     html.style.setProperty("--accent-soft", WB.hexToRgba(c, .16));
-  }else{
+  }else if(!th.custom){
     html.style.removeProperty("--accent");
     html.style.removeProperty("--accent-soft");
   }
@@ -130,7 +138,67 @@ function bgMode(){
   return s.themeCustomBg ? "custom" : (s.wallpaper ? "bing" : "blobs");
 }
 
+/* 照片主题的行内 token：写入 / 清除（编辑器里的预览也走这里）。
+   清单只有一份（07b 的 VARS）：切走时按同一份 removeProperty，漏一个就会盖住内置主题 */
+function applyVars(vars){
+  const html = document.documentElement;
+  if(vars){
+    for(const k in vars) html.style.setProperty(k, vars[k]);
+    return;
+  }
+  ((WB.customTheme && WB.customTheme.VARS) || []).forEach(k => html.style.removeProperty(k));
+}
+
+/* 预览（照片主题的新建/编辑弹窗）：只写档位与行内 token，不经 settings、不落库。
+   结束预览 = 调一次 apply()：档位与 token 全部按 settings 重算，预览残留一并清掉 */
+function previewVars(base, vars){
+  const html = document.documentElement;
+  html.dataset.theme = base === "dark" ? "dark" : "light";
+  delete html.dataset.skin;
+  applyVars(vars);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if(meta && vars && vars["--bg"]) meta.content = vars["--bg"];
+}
+
+/* 降级提示（主题方案 §5）：settings.theme 指向的 custom:<id> 在本机找不到记录 ——
+   换设备 / 清过 localStorage 会这样。界面已回落 light，这里只解释一句，每次启动最多一次 */
+function noticeDegrade(){
+  if(noticeDegrade.done) return;
+  noticeDegrade.done = true;
+  setTimeout(() => {
+    if(WB.ui && WB.ui.toast) WB.ui.toast("这台设备上没有那套照片主题，已回到晨雾奶油", "warn");
+  }, 1500);
+}
+
 function applyWallpaper(){
+  /* 照片主题：照片就是背景（压过「背景」设置里的模式）。IDB 是异步的 ——
+     命中缓存立刻挂；没命中就等 07b 取回来（期间保留上一帧的底，不闪白）；
+     照片不在本机（只同步了 id、或备份里没带照片）→ 回落到背景模式，不留白屏 */
+  const th = themeMeta(resolvedTheme());
+  if(th.custom){
+    const url = WB.customTheme.cached(th.id);
+    if(url){ paintWallpaper(url); return; }
+    WB.customTheme.photo(th.id).then(u => {
+      if(resolvedTheme() !== th.id) return;    // 期间已经切走：不要覆盖新主题的壁纸
+      if(u) paintWallpaper(u); else paintBgMode();
+    });
+    return;
+  }
+  paintBgMode();
+}
+
+/* 照片主题的背景：cap 只在这里给 —— 亮照片按默认口径会被蒙层压到 0.86，照片几乎看不见，
+   而"照片主题"的卖点就是那张照片（卡片本身不透明，正文不压在背景上，0.74 实测仍清晰）。
+   内置背景模式（Bing / 自定义图）一个字不动，仍走 adaptVeil(url) 的默认上限 */
+function paintWallpaper(url){
+  const body = document.body;
+  body.classList.add("wallpaper-on");
+  body.classList.remove("bg-dynamic-on");
+  body.style.backgroundImage = "url(" + url + ")";
+  adaptVeil(url, .74);
+}
+
+function paintBgMode(){
   const body = document.body;
   const mode = bgMode();
   const bg = get("themeCustomBg");
@@ -166,8 +234,9 @@ function applyWallpaper(){
 }
 
 /* 3.5 壁纸对比度自适应：按图片平均亮度算蒙层透明度（700ms 由 CSS 过渡接管）
-   跨域图会让 canvas 变成 tainted，getImageData 抛错 → 静默回落 CSS 默认值 */
-function adaptVeil(url){
+   跨域图会让 canvas 变成 tainted，getImageData 抛错 → 静默回落 CSS 默认值。
+   cap = 蒙层不透明度的上限，默认 .86（只给照片主题传 .74，见 paintWallpaper） */
+function adaptVeil(url, cap){
   const body = document.body;
   if(!url){ body.style.removeProperty("--wp-veil"); return; }
   const img = new Image();
@@ -184,7 +253,7 @@ function adaptVeil(url){
       for(let i = 0; i < d.length; i += 4) lum += (.2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2]) / 255;
       lum /= (d.length / 4);
       // 亮壁纸压得更实，暗壁纸可以多透出一些
-      const alpha = Math.min(.86, Math.max(.55, .52 + lum * .34));
+      const alpha = Math.min(cap || .86, Math.max(.55, .52 + lum * .34));
       body.style.setProperty("--wp-veil", alpha.toFixed(2));
     }catch(e){ fallback(); }
   };
@@ -215,7 +284,19 @@ const THEMES = [
 const THEME_CN = {auto: "跟随系统"};
 THEMES.forEach(t => { THEME_CN[t.id] = t.cn; });
 function themeMeta(id){
-  return THEMES.find(t => t.id === id) || THEMES[0];
+  const t = THEMES.find(t => t.id === id);
+  if(t) return t;
+  /* 照片主题 custom:<id>：记录由 07b-custom-theme.js 解析（名字/档位/token）；
+     找不到就回落 light —— 换设备、清过 localStorage 时界面不能变白板，也不能报错 */
+  const c = WB.customTheme && WB.customTheme.resolve(id);
+  return c || THEMES[0];
+}
+
+/* 亮档的兜底：lastLightTheme 里只可能是内置 id（自定义主题另存 lastCustom:*），
+   但仍要校验一次 —— 删过主题的机器上它可能已经是个不存在的 id */
+function fallbackLight(){
+  const id = WB.store.get("lastLightTheme", "light");
+  return THEMES.some(t => t.id === id) ? id : "light";
 }
 
 function toggleTheme(){
@@ -225,16 +306,28 @@ function toggleTheme(){
   const cur = resolvedTheme();
   const th = themeMeta(cur);
   /* D 键是「亮 ↔ 暗」二态（夜雾与墨岩都算暗档）；从暗切回来时回到你上次用的那套亮色主题 ——
-     否则在暮霞粉下按两下 D，暮霞粉就被悄悄吃掉了，还得回设置页重新挑 */
-  if(!th.dark) WB.store.set("lastLightTheme", cur);
-  const next = th.dark ? (WB.store.get("lastLightTheme", "light")) : "dark";
-  set("theme", next);   // set → apply，图标一并同步
+     否则在暮霞粉下按两下 D，暮霞粉就被悄悄吃掉了，还得回设置页重新挑。
+     照片主题单独记 lastCustom:light|dark，**默认不进轮换**（设置页 customInD 开关）：
+     投屏时随手按 D 弹出一张私人照片，是这套功能最可能的翻车方式 */
+  const isCustom = !!th.custom;
+  if(isCustom) WB.store.set("lastCustom:" + th.base, cur);
+  else if(!th.dark) WB.store.set("lastLightTheme", cur);
+  const wantDark = !th.dark;
+  const want = get("customInD") && WB.customTheme
+    ? WB.customTheme.find(WB.store.get("lastCustom:" + (wantDark ? "dark" : "light"), ""))
+    : null;
+  const next = (want && WB.customTheme.PREFIX + want.id !== cur)
+    ? WB.customTheme.PREFIX + want.id
+    : (wantDark ? "dark" : fallbackLight());
+  set("theme", next);   // set → apply，图标与照片一并同步
   const nextTh = themeMeta(next);
   WB.ui.toast(nextTh.dark ? nextTh.cn + "模式，晚安" : "回到" + nextTh.cn);
 }
 
 function init(){
   apply();   // 图标 / meta / 壁纸的同步都在 apply 里，这里不再重复
+  // 照片主题：清掉 IDB 里没人引用的照片（清过 localStorage / 导入过别人的备份会留下孤儿）
+  if(WB.customTheme && WB.customTheme.init) WB.customTheme.init();
   // 4.2 系统「减弱动态效果」作为默认值来源；用户显式设置过动效开关后以设置为准
   if(!motionUserSet() && matchMedia("(prefers-reduced-motion: reduce)").matches){
     document.documentElement.classList.add("no-motion");
@@ -247,5 +340,5 @@ function init(){
 }
 
 WB.theme = {DEFAULTS, THEMES, THEME_CN, themeMeta, all, get, set, merge, apply, toggleTheme, init, resolvedTheme, bgMode,
-  motionUserSet, adaptVeil};
+  motionUserSet, adaptVeil, applyVars, previewVars, paintWallpaper, fallbackLight};
 })();

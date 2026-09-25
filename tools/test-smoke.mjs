@@ -42,22 +42,33 @@ const targets = [
   {name: "folder", url: "file:///" + encodeURI(ROOT.replace(/\\/g, "/")) + "/index.html"},
   ...(fast ? [] : [{name: "single", url: "file:///" + encodeURI(ROOT.replace(/\\/g, "/")) + "/" + encodeURI("个人工作台.html")}]),
 ];
-/* 九套主题都要过：只测亮暗会让新主题长期无人看守（2026-09-24 从三套扩到九套） */
+/* 九套主题都要过：只测亮暗会让新主题长期无人看守（2026-09-24 从三套扩到九套）。
+   照片主题（批次 2）单列一路：没有它，apply 的行内 token / 照片壁纸 / 清理逻辑无人看守 */
 const THEMES = fast ? ["light"] : ["light", "dark", "rose", "spring", "sea", "maple", "snow", "ink", "hc"];
+const CUSTOM_PHOTO = path.join(ROOT, "tools/test-photos/test-night.jpg");
+/* fast 模式跳过；素材缺失（没生成过测试图）时跳过并说明，不算失败 */
+const SPECS = THEMES.map(id => ({id}))
+  .concat(!fast && fs.existsSync(CUSTOM_PHOTO) ? [{id: "custom-photo", photo: CUSTOM_PHOTO}] : []);
+if(!fast && !fs.existsSync(CUSTOM_PHOTO)){
+  console.log("· 跳过照片主题一路（缺 " + path.relative(ROOT, CUSTOM_PHOTO) + "，可跑 node tools/export-test-photos.mjs 生成）");
+}
 
 const browser = await puppeteer.launch({
   executablePath: chromePath,
   headless: "new",
   args: ["--no-first-run", "--disable-features=Translate"],
 });
-fs.rmSync(OUT, {recursive: true, force: true});
+/* 清旧截图：文件名是稳定的（主题-路由），覆盖即可；某些受限环境会拦截上千个文件的批量删除，
+   那种情况不该让整轮回归挂掉 —— 记一声继续跑 */
+try{ fs.rmSync(OUT, {recursive: true, force: true}); }
+catch(e){ console.warn("· 旧截图没清掉（批量删除被拦），本次直接覆盖：", String(e.message).split("\n")[0]); }
 fs.mkdirSync(OUT, {recursive: true});
 
 let failed = 0;
 const report = [];
 
 for(const target of targets){
-  for(const theme of THEMES){
+  for(const spec of SPECS){
     const page = await browser.newPage();
     const errors = [];
     page.on("console", msg => {
@@ -73,7 +84,24 @@ for(const target of targets){
     await page.goto(target.url + "#/today", {waitUntil: "load", timeout: 30000});
     await new Promise(r => setTimeout(r, 1800));
     // 首次访问可能有欢迎雾层/启动 toast，等它们退场再切主题
-    await page.evaluate(t => { WB.theme.set("theme", t); }, theme);
+    const theme = spec.id;
+    let setupFail = "";   // 路由循环每轮会清 errors，建档类错误得单独留着
+    if(spec.photo){
+      /* 照片主题：先在页面里建档（照片以 base64 注入 —— file:// 下 fetch 读不了本地文件），
+         建档失败要显式记错，否则这一路会"静默变成内置主题"地假通过 */
+      const b64 = fs.readFileSync(spec.photo).toString("base64");
+      const rec = await page.evaluate(async b64 => {
+        const bin = atob(b64), arr = new Uint8Array(bin.length);
+        for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        const file = new File([arr], "smoke.jpg", {type: "image/jpeg"});
+        const src = await WB.customTheme.source(file);
+        return await WB.customTheme.create({name: "冒烟照片", base: src.base, accent: src.accent, photo: src.photo, thumb: src.thumb});
+      }, b64).catch(e => { console.error("[setup] 照片主题建档异常", e.message); return null; });
+      if(!rec) setupFail = "[setup] 照片主题建档失败（IDB 不可用？）";
+      else await page.evaluate(id => { WB.theme.set("theme", "custom:" + id); }, rec.id);
+    }else{
+      await page.evaluate(t => { WB.theme.set("theme", t); }, theme);
+    }
     await new Promise(r => setTimeout(r, 1200));
 
     const routes = await page.evaluate(() => Object.keys(WB.router.allRoutes()));
@@ -93,7 +121,8 @@ for(const target of targets){
       }
     }
     await page.close();
-    console.log((errors.length ? "⚠" : "✓") + " " + target.name + "/" + theme + " · " + routes.length + " 路由已截图");
+    if(setupFail){ failed++; report.push({target: target.name, theme, route: "-", errors: [setupFail]}); }
+    console.log((errors.length || setupFail ? "⚠" : "✓") + " " + target.name + "/" + theme + " · " + routes.length + " 路由已截图");
   }
 }
 await browser.close();
