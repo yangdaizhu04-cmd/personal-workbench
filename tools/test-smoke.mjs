@@ -68,8 +68,12 @@ let failed = 0;
 const report = [];
 
 for(const target of targets){
-  for(const spec of SPECS){
-    const page = await browser.newPage();
+  /* 每个形态一份独立存储分区（踩坑 #090）：folder 的 index.html 与 single 的 个人工作台.html
+     都在 file:// 源下，默认共用一份 localStorage/IndexedDB —— 不隔离的话 single 那一轮开局就继承了
+     folder 那一轮的主题与「我的主题」记录，两边截图里的主题其实是同一份数据，双形态等于只测了一遍 */
+  const ctx = await browser.createBrowserContext();
+  for(const [specIdx, spec] of SPECS.entries()){
+    const page = await ctx.newPage();
     const errors = [];
     page.on("console", msg => {
       if(msg.type() !== "error") return;
@@ -86,6 +90,13 @@ for(const target of targets){
     // 首次访问可能有欢迎雾层/启动 toast，等它们退场再切主题
     const theme = spec.id;
     let setupFail = "";   // 路由循环每轮会清 errors，建档类错误得单独留着
+    /* 每个形态的第一路做一次"出厂态"自检：主题必须是默认、且没有上一路留下的记录。
+       这一条就是踩坑 #090 的守卫 —— 隔离一旦失效，双形态会静默退化成"同一份数据跑两遍" */
+    if(specIdx === 0){
+      const fresh = await page.evaluate(() => ({theme: WB.theme.get("theme"), customs: WB.customTheme.list().length}));
+      if(fresh.theme !== "light" || fresh.customs)
+        setupFail = "[setup] 开局不是出厂态（主题 " + fresh.theme + "、已有 " + fresh.customs + " 套照片主题）→ 存储没隔离";
+    }
     if(spec.photo){
       /* 照片主题：先在页面里建档（照片以 base64 注入 —— file:// 下 fetch 读不了本地文件），
          建档失败要显式记错，否则这一路会"静默变成内置主题"地假通过 */
@@ -103,6 +114,11 @@ for(const target of targets){
       await page.evaluate(t => { WB.theme.set("theme", t); }, theme);
     }
     await new Promise(r => setTimeout(r, 1200));
+    /* 关掉开局浮层（晨间仪式等）：它会在 1.8s 时盖住今日页，不关掉的话
+       今日页的截图里永远是一张弹窗，而且只有"该分区第一路"才有，双形态不对称。
+       关掉会顺手写上当天标记 → 同一分区后续各路都干净、可预期 */
+    await page.evaluate(() => { if(WB.modalOpen && WB.modalOpen()) WB.closeTopModal(); });
+    await new Promise(r => setTimeout(r, 500));
 
     const routes = await page.evaluate(() => Object.keys(WB.router.allRoutes()));
     const dir = path.join(OUT, target.name);
@@ -124,6 +140,7 @@ for(const target of targets){
     if(setupFail){ failed++; report.push({target: target.name, theme, route: "-", errors: [setupFail]}); }
     console.log((errors.length || setupFail ? "⚠" : "✓") + " " + target.name + "/" + theme + " · " + routes.length + " 路由已截图");
   }
+  await ctx.close();
 }
 await browser.close();
 
