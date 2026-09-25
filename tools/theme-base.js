@@ -29,6 +29,14 @@ function readThemeBase(){
   }
   const count = Object.keys(map).length;
   if(count < 3) throw new Error("theme-base: THEMES 只解析到 " + count + " 项，格式可能改了");
+  /* 逐条正则的软肋：一条不匹配就**静默跳过**（漏掉的那套主题首帧会闪一下米白）。
+     更麻烦的是冒烟脚本的一致性断言抓不到它 —— 断言两边的 map 都出自这个函数，一起漏就一起"一致"。
+     所以这里按"块里声明了几项"对数：声明数 ≠ 解析数就当场报错，而不是等用户看见那一下闪 */
+  const declared = (block[1].match(/\{\s*id:/g) || []).length;
+  if(declared !== count){
+    throw new Error("theme-base: THEMES 声明了 " + declared + " 项，只解析到 " + count +
+      " 项 —— 字段顺序或写法变了（固定写法：id, cn, base, own, dark, color）");
+  }
   return {map, count};
 }
 

@@ -14,6 +14,7 @@ const {el, icon} = WB;
 const KEY = "customThemes";        // store 键 → localStorage 的 wb:customThemes
 const PREFIX = "custom:";          // settings.theme 的前缀（沿用字符串字段，不改结构）
 const MAX = 20;                    // 套数上限（方案 §10-4）
+const MAX_UPLOAD = 30 * 1024 * 1024;   // 单张照片上限 30MB（再大解码峰值能把 WebView 撑崩，见 pickFile）
 const IMG_KEY = id => "theme:" + id;
 const THUMB_KEY = id => "theme:" + id + ":thumb";
 
@@ -66,12 +67,16 @@ function mix(a, b, t){
    ink / ink-2 / ink-3 / accent-ink 全部过这一关，而不是靠公式碰运气 */
 function ensure(hex, bg, min, dir){
   const c = rgbHsl(h2r(hex));
-  let l = c.l;
+  /* 起点先夹进 .04~.97：纯白/纯黑的 HSL 明度是 1 和 0，不夹就直接进循环 —— 第一步就撞上
+     "出界就停"那道判断，兜底值与底色几乎同色（白底上的白字 1.06:1），正是这条防线该拦的情况。
+     另外"出界"要按**行进方向**判：以前是先走一步再看区间，起点在区间外时第一步就被当成走到头 */
+  let l = WB.clamp(c.l, .04, .97);
   for(let i = 0; i < 70; i++){
     const cur = hsl(c.h, c.s, l);
     if(ratio(cur, bg) >= min) return cur;
-    l += dir * .015;
-    if(l <= .04 || l >= .97) break;
+    const next = l + dir * .015;
+    if(next < .04 || next > .97) break;   // 已到区间尽头：再走也只是同一个颜色
+    l = next;
   }
   return hsl(c.h, c.s, WB.clamp(l, .04, .97));
 }
@@ -176,11 +181,13 @@ async function pickPalette(blob){
   }finally{ URL.revokeObjectURL(url); }
 }
 
-/* 文件 → {photo, thumb, 配色}：长边 1600 当壁纸、480 当缩略图（方案 §3） */
+/* 文件 → {photo, thumb, 配色}：长边 1600 当壁纸、480 当缩略图（方案 §3）。
+   两个尺寸走**一次解码**（WB.idb.compressImages）：逐档各调一次会把同一张原图解码三遍，
+   50MP 照片在手机上就是几百 MB 的峰值内存。大小上限挡在 pickFile（三个入口共用的那一处） */
 async function source(file){
   if(file && /gif/i.test(file.type || "")) WB.ui.toast("动图只取第一帧，会做成静帧", "warn");
-  const photo = await WB.idb.compressImage(file, 1600, .8);
-  const thumb = await WB.idb.compressImage(file, 480, .72);
+  const [photo, thumb] = await WB.idb.compressImages(file,
+    [{maxSide: 1600, quality: .8}, {maxSide: 480, quality: .72}]);
   const p = await pickPalette(photo);
   return Object.assign({photo, thumb}, p);
 }
@@ -259,7 +266,11 @@ function invalidate(id){
 
 async function create({name, base, accent, photo, thumb}){
   const d = derive(base, accent);
-  const id = "ct_" + WB.uid().slice(-6);
+  /* id 必须现查一次重：撞了的话 idb 的两个键会把**别人那套的照片**覆盖掉，
+     而 records 里会多出一条同 id 的记录（find/del/update 都按 id 匹配，之后全是糊涂账）。
+     6 位 base36 撞的概率极低，但代价是不可逆的，所以宁花这一行 */
+  let id = "ct_" + WB.uid().slice(-6);
+  while(find(id)) id = "ct_" + WB.uid().slice(-6);
   const ok1 = await WB.idb.put(IMG_KEY(id), photo, {kind: "theme-photo"});
   const ok2 = await WB.idb.put(THUMB_KEY(id), thumb, {kind: "theme-thumb"});
   if(!ok1 || !ok2){
@@ -280,9 +291,18 @@ async function update(id, patch){
   const rec = find(id);
   if(!rec) return null;
   if(patch.photo && patch.thumb){
+    /* 两张图必须成对。以前是"有一张没写进去就 return null"，可照片那张其实**已经换掉了** ——
+       调用方以为整单失败、用户看到"存不下"，而主题里已经是新照片配旧缩略图，这才是真正的不一致。
+       现在的口径：照片没写进去 = 什么都没变（如实返回 null，缩略图也不动）；
+       照片进去了、缩略图没进去 = 主题照常可用，只是卡片预览旧一版（下次换照片会自愈） */
     const ok1 = await WB.idb.put(IMG_KEY(rec.id), patch.photo, {kind: "theme-photo"});
-    const ok2 = await WB.idb.put(THUMB_KEY(rec.id), patch.thumb, {kind: "theme-thumb"});
-    if(!ok1 || !ok2) return null;
+    if(!ok1) return null;
+    const ok2 = await WB.idb.put(THUMB_KEY(rec.id), patch.thumb, {kind: "theme-thumb"})
+      || await WB.idb.put(THUMB_KEY(rec.id), patch.thumb, {kind: "theme-thumb"});
+    if(!ok2){
+      console.warn("[theme] 缩略图写入失败（照片已更新）", rec.id);
+      WB.ui.toast("本地空间不太够，缩略图没更新（主题已生效）", "warn");
+    }
     invalidate(rec.id);                   // 换图：旧的两个 URL 作废（延迟撤销，见 invalidate）
   }
   const next = Object.assign({}, rec);
@@ -299,20 +319,31 @@ async function update(id, patch){
 async function del(id){
   const rec = find(id);
   if(!rec) return false;
+  /* 正在用这套：**先**切回内置亮色主题，再删记录。顺序反过来（先删后切）时，中间任何一次
+     apply() —— store 写入会触发监听，谁保证没有 —— 都会走到"记录找不到"那条降级分支，
+     用户白看一句"这台设备上没有那套照片主题" */
+  if(WB.theme.get("theme") === PREFIX + rec.id) WB.theme.set("theme", WB.theme.fallbackLight());
   /* 删除不走回收站（方案 §6）：回收站只存 localStorage 里的记录，恢复时照片已不在，会留下空壳主题 */
   await WB.idb.del(IMG_KEY(rec.id));
   await WB.idb.del(THUMB_KEY(rec.id));
   invalidate(rec.id);
   saveAll(list().filter(r => r.id !== rec.id));
-  /* 正在用这套：先切回内置亮色主题再删（否则 apply() 拿不到记录，会走一遍降级提示） */
-  if(WB.theme.get("theme") === PREFIX + rec.id) WB.theme.set("theme", WB.theme.fallbackLight());
   return true;
 }
 
 /* ============================ 生效路径（apply / 预览 / 壁纸） ============================ */
 /* 应用一套：主题字段一改，apply() 就会写档位、写 token、挂照片 */
-function use(rec, {toast = true} = {}){
-  if(!WB.ui.lock("theme", 700)) return false;      // 与 D 键同一个冷却闸门（方案 §5 坑④）
+function use(rec, {toast = true, retry = true} = {}){
+  /* 与 D 键同一个冷却闸门（方案 §5 坑④）。但冷却中不能"什么都不做"：
+     编辑器「保存并应用」撞上冷却时（刚点过主题卡片 / 刚按过 D），主题存下了却没换上，
+     而 saved 已置位 → onClose 不会 endPreview() → 界面停在行内预览 token 上。
+     所以先 apply() 按 settings 重算一次把预览收干净，再等冷却过去补换一次；
+     只补一次（retry 传 false），不会连环重试 */
+  if(!WB.ui.lock("theme", 700)){
+    WB.theme.apply();
+    if(retry) setTimeout(() => use(rec, {toast, retry: false}), 760);
+    return false;
+  }
   const id = PREFIX + (typeof rec === "string" ? bare(rec) : rec.id);
   const rec2 = find(id);
   if(!rec2){ WB.ui.toast("这套主题已经不在了", "warn"); return false; }
@@ -436,9 +467,24 @@ function replacePhoto(rec){
   });
 }
 
+/* 大小上限挡在入口：新建 / 换照片 / 编辑里换照片三个入口都走这里，一处覆盖。
+   30MB 以上的照片（50MP 级）单次解码峰值就能到几百 MB，WebView 会直接崩 */
 function pickFile(cb){
   const f = el("input", {type: "file", accept: "image/*", style: {display: "none"}});
-  f.addEventListener("change", () => { const file = f.files[0]; if(file) cb(file); });
+  const drop = () => f.remove();     // 隐藏的 input 用完就摘，别在 body 里越积越多
+  f.addEventListener("change", () => {
+    const file = f.files[0];
+    drop();
+    if(!file) return;
+    if(file.size > MAX_UPLOAD){
+      WB.ui.toast("照片太大了（" + Math.round(file.size / 1024 / 1024) + "MB，上限 " +
+        (MAX_UPLOAD / 1024 / 1024) + "MB），先压缩一下再上传", "warn");
+      return;
+    }
+    cb(file);
+  });
+  /* 取消选择时浏览器不发 change：新版 Chrome 有 cancel 事件，老版本留个隐藏节点（无害） */
+  f.addEventListener("cancel", drop);
   document.body.appendChild(f);
   f.click();
 }
@@ -453,6 +499,7 @@ function editor(rec, src){
   let thumbBlob = src ? src.thumb : null;
   let thumbURL = null;
   let saved = false;
+  let closed = false;      // 弹窗已关：异步回来的预览回调不许再写界面（见下面 photo() 那一句）
 
   const nameInput = el("input", {class: "input", value: rec ? rec.name : "", maxlength: 16,
     placeholder: "给这套主题起个名字", style: {width: "100%"}});
@@ -486,7 +533,11 @@ function editor(rec, src){
   if(thumbBlob) setThumb(thumbBlob);
   else if(rec) photoURL(rec.id, true).then(u => { if(u) thumb.style.backgroundImage = "url(" + u + ")"; });
   /* 编辑旧主题时先把大图读进缓存：预览才有背景可看（读不到就只预览配色，不报错） */
-  if(rec && !photoBlob) photo(rec.id).then(u => { if(u && !photoBlob) preview(base, derive(base, accent).vars, u); });
+  if(rec && !photoBlob) photo(rec.id).then(u => {
+    /* 这张图读回来之前弹窗可能已经关了（onClose → endPreview → apply）：那时再 preview()
+       等于把行内 token 又写回去，页面就停在预览态，直到下一次 apply 才恢复 */
+    if(u && !photoBlob && !closed) preview(base, derive(base, accent).vars, u);
+  });
 
   function refresh(){
     const d = derive(base, accent);
@@ -554,6 +605,7 @@ function editor(rec, src){
       }},
     ],
     onClose: () => {
+      closed = true;
       if(thumbURL){ URL.revokeObjectURL(thumbURL); thumbURL = null; }
       if(saved) return;         // 已保存：主题已换成新的，apply() 由 use() 触发
       endPreview();             // 取消/点遮罩：结束预览，回到原主题

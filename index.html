@@ -35,13 +35,18 @@
     }
     if(base){
       html.dataset.theme = base;
-      if(vars){
-        for(var k in vars) html.style.setProperty(k, vars[k]);
-        var mt = document.querySelector('meta[name="theme-color"]');
-        if(mt && vars["--bg"]) mt.content = vars["--bg"];
-      }else if(base !== t){
-        html.dataset.skin = t;   // 新主题的色块挂在 data-skin 上
-      }
+      /* 整段包 try：vars 来自 localStorage（可能是导入进来的备份），一个非法值就让首帧脚本中断 ——
+         那不只是少个颜色，连下面的点缀色与动效开关都一起丢。非法属性名/值在 CSSOM 里本就是 no-op，
+         包起来只为不中断 */
+      try{
+        if(vars){
+          for(var k in vars) html.style.setProperty(k, vars[k]);
+          var mt = document.querySelector('meta[name="theme-color"]');
+          if(mt && vars["--bg"]) mt.content = vars["--bg"];
+        }else if(base !== t && t.slice(0, 7) !== "custom:"){
+          html.dataset.skin = t;   // 新主题的色块挂在 data-skin 上；照片主题不挂（它的色值走行内 token）
+        }
+      }catch(e3){}
     }
     if(s.accent) html.dataset.accent = s.accent === "custom" ? "mist" : s.accent;
     if(s.accent === "custom" && s.accentCustom) html.style.setProperty("--accent", s.accentCustom);

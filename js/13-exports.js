@@ -149,5 +149,4 @@ function obsidian(){
   WB.ui.toast("已导出 " + entries.length + " 个文件（zip）");
 }
 WB.exports.obsidian = obsidian;
-WB.makeZip = makeZip;   // 探针/调试用：验证 zip 字节结构
 })();

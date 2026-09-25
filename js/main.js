@@ -97,7 +97,13 @@ function initShortcuts(){
 function checkReminders(){
   /* 桌面版把窗口收进托盘/最小化之后，系统通知交给 Rust 的后台线程发（js/18-desktop.js）：
      这里直接让位，否则同一条提醒会被前后端各响一次 */
-  if(WB.desktop && WB.desktop.available() && WB.desktop.hidden()) return;
+  if(WB.desktop && WB.desktop.available()){
+    if(WB.desktop.hidden()) return;
+    /* 还有一件事：Rust 在隐藏期间发过的那几条，前端的记账里没有（那张表只活在它那个进程里）。
+       窗口刚回到可见的这几毫秒正在补账（js/18-desktop.js 的 mergeFired）——这期间先不动，
+       否则会把刚补上的那条又响一次。补完会 emit reminders:synced，那时再跑（踩坑 #091） */
+    if(WB.desktop.firedPending && WB.desktop.firedPending()) return;
+  }
   const today = WB.bizDate();
   const todos = WB.store.get("todos", []).filter(t =>
     !t.done && t.date === today && t.time);
@@ -178,6 +184,9 @@ function boot(){
   veilOut();
   setTimeout(() => animateCards(WB.$("#view")), 300);
   setInterval(() => { checkReminders(); checkDayRollover(); }, 30000);
+  /* 桌面版补账完成（Rust 已发的并进前端记账）→ 立刻补跑一轮：
+     上面那道 firedPending 门就是为了等这一刻，不然窗口刚回到可见时会漏掉这一轮 */
+  WB.bus.on("reminders:synced", () => checkReminders());
   setTimeout(checkReminders, 4000);
   WB.ensureNotifyPermission();
 

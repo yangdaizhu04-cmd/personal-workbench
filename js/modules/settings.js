@@ -153,7 +153,8 @@ WB.registerModule({
     wrap.appendChild(sectionCard("palette", "外观", [
       rowTheme,
       rowAccent,
-      WB.customTheme.manageBlock(),
+      /* 07b 没加载（脚本被裁/被打包工具漏掉）时别让整个设置页陪葬：那一块直接不出 */
+      WB.customTheme ? WB.customTheme.manageBlock() : null,
       row("D 键轮换照片主题", "关着时 D 只在亮暗之间切内置主题 —— 投屏或共享屏幕时不会跳出私人照片；打开后 D 会在亮暗两档里各自记住最近用过的那套照片主题",
         toggle(s.customInD, v => WB.theme.set("customInD", v))),
       row("静音动效", "一键关闭所有动画与音效",

@@ -115,6 +115,46 @@ function firedIds(){
   return s;
 }
 
+/* ---------- 反方向：把 Rust 已经发过的补进前端记账（踩坑 #091） ----------
+   上面 firedIds() 管的是"前端发过 → 别让 Rust 再发"；这里管"Rust 发过 → 别让前端再发"。
+   两个方向缺一不可：Rust 的去重表只活在进程内存里，前端拿不到 —— 窗口收在托盘时响过的那条，
+   恢复可见后前端只看得到自己那份记账，会在有效期内（待办 30 分钟、晨间 4 小时、收工 5 小时）再响一次。
+   记账形状与 main.js / inWindow 对齐：待办存 t.id（键按 id 里带的那个日期），其余 id 原样存（键按业务日） */
+const TODO_ID = /^todo:(.+):(\d{4}-\d{2}-\d{2})$/;
+let firedMerging = 0;            // 正在补账的请求数：>0 时前端先别发提醒（门在 main.js/checkReminders）
+function mergeFired(){
+  if(!inTauri) return Promise.resolve(0);
+  firedMerging++;
+  return invoke("fired_ids").then(ids => {
+    if(!Array.isArray(ids) || !ids.length) return 0;
+    const today = WB.bizDate();
+    const todoByDay = new Map();
+    const desk = new Set(WB.store.get("firedDesktop:" + today, []));
+    let added = 0, todoChanged = false, deskChanged = false;
+    ids.forEach(id => {
+      const m = TODO_ID.exec(id);
+      if(m){
+        if(!todoByDay.has(m[2])) todoByDay.set(m[2], new Set(WB.store.get("firedReminders:" + m[2], [])));
+        const set = todoByDay.get(m[2]);
+        if(!set.has(m[1])){ set.add(m[1]); added++; todoChanged = true; }
+      }else if(!desk.has(id)){ desk.add(id); added++; deskChanged = true; }
+    });
+    /* 没有新增就不写：写一遍会白白触发 store 的监听（重绘/重推） */
+    if(todoChanged) todoByDay.forEach((set, day) => WB.store.set("firedReminders:" + day, Array.from(set)));
+    if(deskChanged) WB.store.set("firedDesktop:" + today, Array.from(desk));
+    return added;
+  }).catch(err => {
+    /* 拉不到就照旧：宁可偶尔重复一次，也不能让这条命令把提醒整条链路卡住 */
+    console.warn("[desktop] 已发提醒清单读取失败", err);
+    return 0;
+  }).then(n => { firedMerging--; return n; }, err => { firedMerging--; throw err; });
+}
+function firedPending(){ return firedMerging > 0; }
+/* 补账 + 广播：调用方（main.js/checkReminders）靠这条广播解开"先别发"的门 */
+function syncFired(){
+  return mergeFired().then(n => { WB.bus.emit("reminders:synced", {added: n}); return n; });
+}
+
 /* ---------- 推送（防抖：数据一动就推，但别每敲一个字推一次） ---------- */
 let debounce = null;
 let lastJson = "";
@@ -208,12 +248,18 @@ function inWindow(){
 }
 
 if(inTauri){
-  /* 启动后推一次；数据变化（含设置改动）后防抖推；每 30 分钟重推一次兜底 */
-  setTimeout(() => sync(true), 2500);
+  /* 启动后推一次；数据变化（含设置改动）后防抖推；每 30 分钟重推一次兜底。
+     每次推送前都先补一次账（Rust 在隐藏期间发过的那几条）——顺序反了就会把刚补上的又推回去 */
+  setTimeout(() => syncFired().then(() => sync(true)), 2500);
   WB.bus.on("view:dirty", () => schedule());
   WB.bus.on("settings:changed", () => schedule(1200));
-  setInterval(() => sync(true), 30 * 60 * 1000);
-  document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible") schedule(600); });
+  setInterval(() => syncFired().then(() => sync(true)), 30 * 60 * 1000);
+  /* 从隐藏变可见：先补账、再重推清单，并把"门可以开了"广播出去（main.js 的 checkReminders 在等它）。
+     补账必须在重推之前 —— 反过来的话，重推的那份清单里还带着 Rust 已经发过的条目 */
+  document.addEventListener("visibilitychange", () => {
+    if(document.visibilityState !== "visible") return;
+    syncFired().then(() => schedule(600));
+  });
 }
 
 WB.desktop = {
@@ -221,5 +267,7 @@ WB.desktop = {
   /* 窗口是否被藏起来（关窗收进托盘 / 最小化）。用来决定"这条提醒谁发" */
   hidden: () => !inTauri || document.visibilityState !== "visible",
   buildList, sync, schedule, inWindow, notifyNow, autostartGet, autostartSet, testNotify,
+  /* 补账（Rust 发过 → 前端记账）：main.js 靠 firedPending 先让位，靠 reminders:synced 再补跑 */
+  mergeFired, syncFired, firedPending,
 };
 })();

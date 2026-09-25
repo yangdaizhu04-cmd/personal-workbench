@@ -187,9 +187,19 @@ async function restore(key, picks){
     }
     localStorage.setItem("wb:settings", localStorage.getItem("wb:settings") || "{}");
   }catch(e){
-    /* 只写了一半就炸（配额等）比不恢复更糟：先尽力退回原状，再明说，不 reload（让用户看清状态） */
+    /* 只写了一半就炸（配额等）比不恢复更糟：先尽力退回原状，再明说，不 reload（让用户看清状态）。
+       **回滚必须双向**：写回去的 + 被删掉的。只补"写回"那一半，会留下"删了没补"的洞 ——
+       恢复失败后数据比失败前还少，那是最坏的结果 */
     console.error("[snapshots] 恢复写入失败，尝试回滚", e);
-    Object.entries(before).forEach(([k, v]) => { try{ localStorage.setItem(k, v); }catch(_){} });
+    try{
+      const now = new Set();
+      for(let i = localStorage.length - 1; i >= 0; i--){
+        const k = localStorage.key(i);
+        if(isData(k)) now.add(k);
+      }
+      now.forEach(k => { if(!(k in before)) localStorage.removeItem(k); });   // 先删"恢复过程中新增的"
+      Object.entries(before).forEach(([k, v]) => { try{ localStorage.setItem(k, v); }catch(_){} });
+    }catch(_){ /* 回滚本身也可能撞上配额：到此为止，下面照实说明 */ }
     WB.ui.toast("恢复中途写入失败（本机存储可能已满），已尽量退回原状 —— 建议先导出 JSON 备份再试", "warn");
     return false;
   }

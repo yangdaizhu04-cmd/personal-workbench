@@ -31,7 +31,9 @@ const server = http.createServer((req, res) => {
   catch(e){ res.writeHead(400); return res.end(); }
   if(urlPath === "/") urlPath = "/index.html";
   const fp = path.join(ROOT, urlPath);
-  if(!fp.startsWith(ROOT) || !fs.existsSync(fp) || fs.statSync(fp).isDirectory()){
+  /* 前缀比较必须带上分隔符：只比 ROOT 的话，名字以 ROOT 结尾的兄弟目录（如 个人工作台-backup）会被放行 */
+  const inside = fp === ROOT || fp.startsWith(ROOT + path.sep);
+  if(!inside || !fs.existsSync(fp) || fs.statSync(fp).isDirectory()){
     res.writeHead(404); return res.end();
   }
   res.writeHead(200, {"Content-Type": MIME[path.extname(fp).toLowerCase()] || "application/octet-stream"});

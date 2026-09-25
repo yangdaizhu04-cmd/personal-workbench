@@ -72,6 +72,33 @@ const idb = {
       });
     }catch(e){ return []; }
   },
+  /* 一次解码、多档输出。同一个文件要出多个尺寸时（照片主题：壁纸 1600 + 缩略图 480）
+     别再逐档各调一次 compressImage —— 同一张原图会被 <img> 解码好几遍，手机上一张 50MP
+     照片就是几百 MB 的峰值内存。这里用 createImageBitmap 解一次、画多档，用完 close() 立刻还内存。
+     它解不开的格式（HEIC 等）退回老路逐档 compressImage：行为与以前一模一样，不会更差 */
+  async compressImages(file, specs){
+    const draw = (src, maxSide, quality) => new Promise((resolve, reject) => {
+      let {width: w, height: h} = src;
+      const ratio = Math.min(1, maxSide / Math.max(w, h));
+      w = Math.round(w * ratio); h = Math.round(h * ratio);
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(src, 0, 0, w, h);
+      cv.toBlob(b => b ? resolve(b) : reject(new Error("toBlob failed")), "image/jpeg", quality);
+    });
+    let bmp = null;
+    try{
+      bmp = await createImageBitmap(file);
+      const out = [];
+      for(const s of specs) out.push(await draw(bmp, s.maxSide, s.quality));
+      return out;
+    }catch(e){
+      console.warn("[idb] 单次解码不可用，退回逐档压缩", e);
+      const out = [];
+      for(const s of specs) out.push(await idb.compressImage(file, s.maxSide, s.quality));
+      return out;
+    }finally{ if(bmp && bmp.close) bmp.close(); }
+  },
   /* 图片压缩：最长边 400px，JPEG 质量 0.72（封面 ≈30-60KB） */
   compressImage(file, maxSide = 400, quality = 0.72){
     return new Promise((resolve, reject) => {

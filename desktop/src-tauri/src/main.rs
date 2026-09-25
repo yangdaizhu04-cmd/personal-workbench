@@ -92,6 +92,21 @@ fn set_reminders(
     n
 }
 
+/// Rust 这一侧**已经发过**的提醒 id（进程内去重表的快照）。
+///
+/// 为什么需要它：窗口隐藏/最小化时提醒由后台线程发，那条记录只活在本进程内存里，
+/// 前端一无所知 —— 前端自己的记账（localStorage 的 firedReminders / firedDesktop）
+/// 因此漏掉了这一段，等窗口回到可见，前端会在有效期内把同一条再响一次（踩坑 #091）。
+/// 所以前端在"从隐藏变可见"和启动时各拉一次，把结果并进自己的记账。
+#[tauri::command]
+fn fired_ids(state: tauri::State<'_, ReminderState>) -> Vec<String> {
+    state
+        .fired
+        .lock()
+        .map(|f| f.iter().cloned().collect())
+        .unwrap_or_default()
+}
+
 /// 自检：立刻发一条，并**说清用的是哪条通道** ——
 /// "没看到通知"这个反馈里最难查的就是"到底发出去没有、走的哪条路"
 #[tauri::command]
@@ -558,6 +573,7 @@ fn main() {
         )
         .invoke_handler(tauri::generate_handler![
             set_reminders,
+            fired_ids,
             test_notify,
             notify_now,
             toast_payload,
