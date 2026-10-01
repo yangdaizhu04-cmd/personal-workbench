@@ -17,7 +17,6 @@ function ac(){
   if(ctx.state === "suspended") ctx.resume();
   return ctx;
 }
-function master(){ const c = ac(); return c ? c._wbMaster : null; }
 function ensureMaster(){
   const c = ac(); if(!c) return null;
   if(!c._wbMaster){
@@ -371,7 +370,6 @@ function setVol(key, v){
     else if(key === "url" && urlAudio) urlAudio.volume = clamp01(v * (p.vol.master || .9));
     else if(running[key].el) running[key].el.volume = clamp01(v * (p.vol.master || .9));
     else{
-      const c = ac();
       // running[key].stop 存的是实例；重新拿不到 gain —— 简化：直接改 out（存引用）
       if(running[key].out) running[key].out.gain.value = clamp01(v * (p.vol.master || .9));
     }
@@ -381,6 +379,7 @@ function setVol(key, v){
 function clamp01(x){ return Math.max(0, Math.min(1, x)); }
 /* 把 out 引用记下来以便调音量 */
 const _origStartSource = startSource;
+// oxlint-disable-next-line no-func-assign —— 有意装饰器模式：保留原引用后整体替换
 startSource = function(key){
   if(running[key]) return;
   if(key === "local" || key === "url"){ _origStartSource(key); return; }
@@ -444,7 +443,6 @@ function playLocalIdx(i){
 }
 function localStop(){ if(localAudio){ localAudio.pause(); } }
 function localNext(){ if(localAudio) playLocalIdx(localAudio._idx + 1); }
-function localPrev(){ if(localAudio) playLocalIdx(localAudio._idx - 1); }
 
 /* ---------- 我的音频库（URL 直链） ---------- */
 let urlAudio = null;
@@ -629,7 +627,6 @@ function toggleAll(){
 }
 function muteAll(){
   Object.keys(running).forEach(stopSource);
-  const p = prefs();
   // 保留组合偏好，仅停播放
   refreshPanel && refreshPanel();
 }

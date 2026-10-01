@@ -106,7 +106,6 @@ WB.registerModule({
       ["mist", "雾蓝淡紫"], ["peach", "蜜桃鹅黄"], ["mint", "薄荷奶咖"], ["custom", "自定义"],
     ];
     accents.forEach(([id, label]) => {
-      const on = (id === "custom" ? s.accent === "custom" : s.accent === id) || (id !== "custom" && s.accent === id);
       accentRow.appendChild(el("button", {
         class: "chip clickable" + (s.accent === id ? "" : " plain"),
         text: label,
@@ -342,7 +341,7 @@ WB.registerModule({
           borderTop: "1px dashed var(--card-border)", cursor: "pointer", alignItems: "center"}},
           cb,
           el("span", {class: "grow", style: {fontSize: "14px"}, text: r.name}),
-          el("span", {class: "small faint", text: r.now + " → " + r.then}),
+          el("span", {class: "small faint", text: r.now + " → " + r.past}),
           el("span", {class: "small", style: {minWidth: "84px", textAlign: "right",
             color: r.delta > 0 ? "var(--accent)" : r.missingNow ? "var(--warn)" : ""}, text: note})));
       });

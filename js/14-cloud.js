@@ -59,17 +59,31 @@ function decodeInto(key, payload, tombstones){
   const cur = WB.store.get(key, []);
   const map = new Map(cur.map(r => [r.id, r]));
   let changed = false;
+  /* B2 时钟差容忍：两端的记录 updatedAt 都来自各自设备的 Date.now()，
+     差几百毫秒的领先不该被判「较新」—— 否则慢一点的那台会把快照内容反复拽回
+     （尤其两个客户端同秒编辑同一批记录时）。一律先设 0，谁明显更新（>1s）才谁赢 */
   Object.values(records).forEach(r => {
     if(tombstones.has(r.id)) return;
     const old = map.get(r.id);
+    const rNew = r.updatedAt || 0, oNew = old ? (old.updatedAt || 0) : 0;
     if(!old){ map.set(r.id, r); changed = true; }
-    else if((r.updatedAt || 0) > (old.updatedAt || 0)){ map.set(r.id, r); changed = true; }
+    else if(rNew - oNew > 1000){ map.set(r.id, r); changed = true; }
+    else if(oNew - rNew > 1000){ /* 本地明显更新：不写回 */ }
+    else{ /* 同一秒内的双写（时钟差在容差内）：保留本地，不再强覆盖 */
+      /* 本地没有该项而云端有 → 保留云端；两者几乎同期 → 以本地为锚 */
+      if(!oNew){ map.set(r.id, r); changed = true; }
+    }
   });
   if(changed) WB.store.set(key, Array.from(map.values()));
   return changed;
 }
+/* 云端 tombstone 集合 = 回收站（30 天）+ 持久墓碑（sync:tombstones，删除后永久记账，见 02-store B2）。
+   pull 时两边都要过滤 —— 回收站还在用旧 id，墓碑 cover 回收站过期之后的时间段 */
 function tombstoneSet(){
-  return new Set(WB.store.get("trash", []).map(t => t.data && t.data.id).filter(Boolean));
+  const trash = new Set(WB.store.get("trash", []).map(t => t.data && t.data.id).filter(Boolean));
+  const tombs = WB.store.get("sync:tombstones", {});
+  Object.keys(tombs).forEach(k => (tombs[k] || []).forEach(id => trash.add(id)));
+  return trash;
 }
 
 /* ---------- 同步动作 ---------- */
@@ -86,21 +100,60 @@ async function pushNow(){
   if(!available || !token() || syncing) return;
   syncing = true; setStatus("同步中…");
   const data = {};
-  SYNC_KEYS.forEach(k => data[k] = encodeKey(WB.store.get(k, [])));
+  const tombs = WB.store.get("sync:tombstones", {});
+  SYNC_KEYS.forEach(k => {
+    data[k] = encodeKey(WB.store.get(k, []));
+    /* B2：把该键的删除墓碑随 push 带上 —— 服务端据此删掉远端副本，
+       避免「这台删了、另一台 pull 又把它拽回来」 */
+    const dead = tombs[k] || [];
+    if(dead.length) data[k].deleted = dead;
+  });
+  /* B2：push 前先把写合并落盘 —— push 读的是 store（localStorage），
+     pending 里没落盘的写入会漏传 */
+  WB.store.flush();
   const r = await call("sync", {action: "push", token: token(), data});
   syncing = false;
   setStatus(r.ok ? "已同步" : "同步失败");
 }
+/* pull 互斥：5 分钟定时、联网恢复、启动三路可能撞在同一毫秒（踩坑同款竞态）。
+   拉取期间 push 也放行（push 有它自己的 syncing 锁）—— 只要不让两个 pull 叠着跑就行 */
+let pulling = false;
 async function pullNow(){
-  if(!available || !token()) return;
+  if(!available || !token() || pulling) return;
+  pulling = true;
   const r = await call("sync", {action: "pull", token: token(), since: lastSyncTs});
+  pulling = false;
   if(!r.ok) { setStatus("同步失败"); return; }
   const tombs = tombstoneSet();
   let changed = false;
+  /* B2：把云端 pull 下来的 deleted 并回本地墓碑 —— 别的设备删掉的东西，这台要记得
+     （tombstoneSet 每次都从 sync:tombstones 重建，这里直接落库即可） */
+  const remoteTombs = WB.store.get("sync:tombstones", {});
   Object.keys(r.data || {}).forEach(k => {
     if(!SYNC_KEYS.includes(k)) return;
+    const dead = (r.data[k] && r.data[k].deleted) || [];
+    if(dead.length){
+      const set = new Set((remoteTombs[k] || []).concat(dead));
+      /* M2：与服务端同上限裁剪（新 id 在尾部，裁头部最旧），本地墓碑不随 pull 无界膨胀 */
+      remoteTombs[k] = WB.store.trimTombstones(Array.from(set));
+      changed = true;
+      dead.forEach(id => tombs.add(id));
+    }
+    /* H1 镜像服务端「同 id 同步上来时清墓碑」：云端 records 里出现的 id，
+       若本地墓碑还记着，说明它已在别处被恢复/重建 —— 本地也清掉，
+       否则 decodeInto 会把它永久过滤掉（删了又恢复的记录在其它设备上永远不可见） */
+    const incoming = (r.data[k] && r.data[k].records) || {};
+    const restored = (remoteTombs[k] || []).filter(id => incoming[id]);
+    if(restored.length){
+      const keep = (remoteTombs[k] || []).filter(id => !incoming[id]);
+      if(keep.length) remoteTombs[k] = keep;
+      else delete remoteTombs[k];
+      restored.forEach(id => tombs.delete(id));
+      changed = true;
+    }
     if(decodeInto(k, r.data[k], tombs)) changed = true;
   });
+  if(changed) WB.store.set("sync:tombstones", remoteTombs);
   lastSyncTs = r.serverTime || Date.now();
   WB.store.set("sync:since", lastSyncTs);
   setStatus("已同步");

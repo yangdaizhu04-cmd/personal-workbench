@@ -642,9 +642,9 @@ WB.registerModule({
         + todos.length + " 件待完成" + (overdue.length ? " · 逾期 " + overdue.length : "") + "</span>",
         onclick: () => WB.router.go("todos")}));
     if(overdue.length){
-      box.appendChild(el("div", {class: "row small", style: {color: "var(--danger)", marginBottom: "8px"},
+      box.appendChild(el("div", {class: "row small", style: {color: "var(--danger)", marginBottom: "8px", cursor: "pointer"},
         html: icon("bell", 14) + "<span>有 " + overdue.length + " 件过期未完成，点击去处理</span>",
-        style: "cursor:pointer", onclick: () => WB.router.go("todos")}));
+        onclick: () => WB.router.go("todos")}));
     }
     if(!todos.length){
       box.appendChild(WB.ui.emptyState("check", "今天还没有安排", "按 T 新建，或点下面的「添加待办」"));
@@ -856,7 +856,7 @@ WB.registerModule({
         el("span", {class: "chip plain"}, "支出 ¥" + spend.toFixed(2).replace(/\.00$/, ""))));
     if(j && (j.free || j.done || j.answer)){
       card.appendChild(el("div", {class: "small muted ellipsis", style: {marginTop: "8px"},
-        text: "✍ " + (j.free || j.done || "已写日志").replace(/[#*`>\-\[\]]/g, "").slice(0, 40)}));
+        text: "✍ " + (j.free || j.done || "已写日志").replace(/[#*`>[\]-]/g, "").slice(0, 40)}));
     }else{
       card.appendChild(el("div", {class: "small faint", style: {marginTop: "8px"}, text: "今晚写几句，明天的你会感谢现在"}));
     }
@@ -912,7 +912,7 @@ WB.registerModule({
     const today = WB.parseDate(dateStr);
     const pool = [];
     const md = dateStr.slice(5); // MM-DD
-    const strip = t => (t || "").replace(/[#*`>\[\]]/g, "").replace(/\s+/g, " ").trim();
+    const strip = t => (t || "").replace(/[#*`>[\]]/g, "").replace(/\s+/g, " ").trim();
     WB.store.get("journals", []).forEach(j => {
       if((j.date || "").slice(5) === md && j.date !== dateStr){
         const years = today.getFullYear() - WB.parseDate(j.date).getFullYear();

@@ -349,7 +349,6 @@ WB.registerModule({
     const timerCard = el("div", {class: "card", style: {textAlign: "center", marginBottom: "14px"}});
     if(!s){
       /* 预设选择 */
-      let mode = "focus";
       const presetSeg = el("div", {class: "seg", style: {marginBottom: "14px"}});
       const customRow = el("div", {class: "row", style: {justifyContent: "center", gap: "8px", marginBottom: "12px", display: "none"}});
       const fIn = el("input", {type: "number", class: "input", value: settings.pomodoroFocus, min: 1, max: 180, style: {width: "80px", textAlign: "center"}});

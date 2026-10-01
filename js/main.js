@@ -175,13 +175,18 @@ function checkDayRollover(){
 
 /* ---------- 启动 ---------- */
 function boot(){
-  WB.theme.init();
-  if(WB.ambience && WB.ambience.init) WB.ambience.init();   // 引擎没开时 init 直接返回，零成本
-  if(WB.scenes && WB.scenes.init) WB.scenes.init();
-  WB.iconHydrate(document);
-  WB.router.init();
-  initShortcuts();
-  veilOut();
+  /* 数据迁移最优先：theme.init 要把旧字段升级成新结构时，必须先到当前 schema（见 02-store §Schema） */
+  try{ WB.store.runMigrations(); }
+  catch(e){ console.error("[boot] 数据迁移失败，继续启动", e); }
+  /* 各初始化段独立容错：单模块抛错记录后继续，不让整条启动链断掉
+     （一个模块初始化失败 ≠ 全站不可用；若确需阻止后续，优先在段内 return 而非抛错） */
+  try{ WB.theme.init(); }catch(e){ console.error("[boot] theme.init 失败", e); }
+  try{ if(WB.ambience && WB.ambience.init) WB.ambience.init(); }catch(e){ console.error("[boot] ambience.init 失败", e); }
+  try{ if(WB.scenes && WB.scenes.init) WB.scenes.init(); }catch(e){ console.error("[boot] scenes.init 失败", e); }
+  try{ WB.iconHydrate(document); }catch(e){ console.error("[boot] iconHydrate 失败", e); }
+  try{ WB.router.init(); }catch(e){ console.error("[boot] router.init 失败", e); }
+  try{ initShortcuts(); }catch(e){ console.error("[boot] initShortcuts 失败", e); }
+  try{ veilOut(); }catch(e){ console.error("[boot] veilOut 失败", e); }
   setTimeout(() => animateCards(WB.$("#view")), 300);
   setInterval(() => { checkReminders(); checkDayRollover(); }, 30000);
   /* 桌面版补账完成（Rust 已发的并进前端记账）→ 立刻补跑一轮：
@@ -210,8 +215,12 @@ function boot(){
     WB.store.set("lastOpenDay", today);
     if(WB.rituals && WB.rituals.maybeMorning) setTimeout(() => WB.rituals.maybeMorning(), 1800);
   }
-  // 每日数据快照 + 备份提醒（放启动尾部，不抢首屏）
-  if(WB.snapshots && WB.snapshots.maybeDaily) setTimeout(() => WB.snapshots.maybeDaily(), 2600);
+  // 每日数据快照 + 备份提醒：放启动尾部不抢首屏；空闲才拍（浏览器空闲就绪前不打扰交互）
+  if(WB.snapshots && WB.snapshots.maybeDaily){
+    const run = () => WB.snapshots.maybeDaily();
+    if("requestIdleCallback" in window) requestIdleCallback(run, {timeout: 8000});
+    else setTimeout(run, 2600);
+  }
   WB.bus.on("route:changed", (id, info) => {
     if(info && info.samePage) return;   // 同页数据更新：别把整页卡片重放一遍
     setTimeout(() => animateCards(WB.$("#view")), 60);

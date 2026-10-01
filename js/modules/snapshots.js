@@ -41,6 +41,9 @@ const CONFIG_GROUPS = {settings: 1, uiPrefs: 1, webdav: 1, cloud: 1, ambiencePla
 function isConfig(g){ return !!CONFIG_GROUPS[g]; }
 
 function collect(){
+  /* 快照要在"全部已落盘"的基线上拍：先让 pending 写合并如期 flush
+     （否则同一宏任务里刚产生的数据会漏进快照） */
+  WB.store.flush && WB.store.flush();
   const out = {};
   for(let i = 0; i < localStorage.length; i++){
     const k = localStorage.key(i);
@@ -126,16 +129,16 @@ async function diff(key){
   const snap = parsed.data || {};
   const cur = collect();
   const G = {};
-  const touch = g => G[g] || (G[g] = {group: g, name: groupName(g), now: 0, then: 0,
+  const touch = g => G[g] || (G[g] = {group: g, name: groupName(g), now: 0, past: 0,
     nowKeys: [], thenKeys: [], same: true, missingNow: false});
   Object.keys(cur).forEach(k => { const g = touch(groupOf(k)); g.now += countOf(cur[k]); g.nowKeys.push(k); });
-  Object.keys(snap).forEach(k => { const g = touch(groupOf(k)); g.then += countOf(snap[k]); g.thenKeys.push(k); });
+  Object.keys(snap).forEach(k => { const g = touch(groupOf(k)); g.past += countOf(snap[k]); g.thenKeys.push(k); });
   Object.keys(G).forEach(g => {
     const G0 = G[g];
     /* 逐键比 JSON：条数一样不代表没变（改个字也算变），只是没法在几行字里说清改了哪条 */
     const all = new Set(G0.nowKeys.concat(G0.thenKeys));
     all.forEach(k => { if(cur[k] !== snap[k]) G0.same = false; });
-    G0.delta = G0.then - G0.now;          // 正数 = 快照比现在多（恢复后会多出来）
+    G0.delta = G0.past - G0.now;         // 正数 = 快照比现在多（恢复后会多出来）
     G0.changed = !G0.same;
     G0.missingNow = G0.thenKeys.length === 0;   // 现在有、快照里没有 → 恢复会把它清掉
   });
@@ -143,7 +146,7 @@ async function diff(key){
   rows.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || b.now - a.now);
   return {key, date: key.slice(PREFIX.length), rows,
     changedKeys: rows.length, totalGroups: Object.keys(G).length,
-    totalNow: rows.reduce((s, r) => s + r.now, 0), totalThen: rows.reduce((s, r) => s + r.then, 0)};
+    totalNow: rows.reduce((s, r) => s + r.now, 0), totalPast: rows.reduce((s, r) => s + r.past, 0)};
 }
 
 /* ---------- 恢复 ---------- */

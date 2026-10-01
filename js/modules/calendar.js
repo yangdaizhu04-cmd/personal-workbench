@@ -118,7 +118,7 @@ WB.registerModule({
       const left = el("div", {class: "card"},
         el("div", {class: "card-title", html: icon("calendar", 18) + "<span>" + WB.fmtDateCN(ds, true) + "</span>",
           onclick: () => WB.router.go("journal", ds)}));
-      (WB.cal.festivalOf(ds) ? left.appendChild(el("div", {class: "chip", style: {marginBottom: "8px"}, text: WB.cal.festivalOf(ds)})) : null);
+      if(WB.cal.festivalOf(ds)) left.appendChild(el("div", {class: "chip", style: {marginBottom: "8px"}, text: WB.cal.festivalOf(ds)}));
       const t = todos.all().filter(x => x.date === ds);
       const tbox = el("div", {class: "col", style: {gap: "6px"}});
       if(!t.length) tbox.appendChild(el("div", {class: "small faint", text: "无待办"}));
@@ -137,7 +137,7 @@ WB.registerModule({
         agg.mood.note ? el("span", {class: "faint", text: "「" + agg.mood.note + "」"}) : null));
       if(agg.journal) left.appendChild(el("div", {class: "small muted", style: {marginTop: "10px", cursor: "pointer"},
         onclick: () => WB.router.go("journal", ds),
-        text: "📝 " + ((agg.journal.free || agg.journal.done || "已写日志").replace(/[#*`>\[\]]/g, "").slice(0, 50))}));
+        text: "📝 " + ((agg.journal.free || agg.journal.done || "已写日志").replace(/[#*`>[\]]/g, "").slice(0, 50))}));
       left.appendChild(el("div", {class: "row", style: {marginTop: "12px", gap: "8px"}},
         el("button", {class: "btn sm", text: "写日志", onclick: () => WB.router.go("journal", ds)}),
         el("button", {class: "btn sm", text: "添加待办", onclick: () => WB.todos && WB.todos.quickAdd({date: ds})})));

@@ -188,7 +188,7 @@ for(const target of targets){
       vid.hasVideo === false && vid.fxPlay === "running", JSON.stringify(vid));
   }else{
     check(target.name, "视频背景：1080p、src 指向当前场景、静音循环、在播且盖上 CSS 动态层",
-      vid.exists && /vendor\/video\/mist\.mp4$/.test(vid.src) && vid.muted === true && vid.loop === true &&
+      vid.exists && vid.src.endsWith("/vendor/video/mist.mp4") && vid.muted === true && vid.loop === true &&
       vid.paused === false && vid.on && vid.hasVideo && vid.fxPlay === "paused" && vid.vw >= 1920,
       JSON.stringify(vid));
   }

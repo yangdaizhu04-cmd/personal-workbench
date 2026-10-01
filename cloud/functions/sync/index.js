@@ -35,7 +35,7 @@ exports.main = async function(event){
 
   try{
     if(action === "push"){
-      const data = body.data || {}; // {key: {records:{id:rec}}}
+      const data = body.data || {}; // {key: {records:{id:rec}, deleted:[id]}}
       let doc = await getUserDoc(u);
       if(!doc){
         await db.collection("wb_data").add({uid: u, data: {}, updatedAt: now});
@@ -45,13 +45,25 @@ exports.main = async function(event){
       let merged = 0;
       for(const key of Object.keys(data)){
         const incoming = data[key].records || {};
+        const deleted = data[key].deleted || [];
         const cur = remote[key] || {records: {}};
+        /* 删除墓碑：从远端副本剔除 + 记入远端 deleted，让其它设备 pull 时也知道这些 id 已删
+           M3 有界化：与客户端同上限（500）。合并按 first-seen 保序追加，新 id 在尾部，
+           裁掉头部最旧墓碑 —— 远端副本不随历史删除量无界膨胀；
+           「同 id 同步上来时清墓碑」已保证存活墓碑都是真删除，被裁掉的风险与回收站过期同级 */
+        if(deleted.length){
+          cur.records = cur.records || {};
+          deleted.forEach(id => { delete cur.records[id]; });
+          cur.deleted = Array.from(new Set((cur.deleted || []).concat(deleted))).slice(-500);
+        }
         for(const id of Object.keys(incoming)){
           const r = incoming[id];
           const old = cur.records[id];
           if(!old || (r.updatedAt || 0) >= (old.updatedAt || 0)){
             cur.records[id] = r;
             merged++;
+            /* 恢复过/重建的记录不该再被墓碑卡住：同 id 同步上来时清掉墓碑 */
+            cur.deleted = (cur.deleted || []).filter(d => d !== id);
           }
         }
         remote[key] = cur;

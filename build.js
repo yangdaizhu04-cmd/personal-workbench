@@ -62,17 +62,20 @@ try{
   require("child_process").execSync("node tools/build-islands.mjs", {cwd: ROOT, stdio: "inherit"});
 }catch(e){ /* 仓库缺失：用已提交产物，不阻塞构建 */ }
 
-/* 0.5 单文件版：剥离 islands（含 5.5MB 场景页/1.7MB 书架均不内联），注入标记 */
+/* 0.5 单文件版：剥离 islands（含 5.5MB 场景页/1.7MB 书架均不内联），注入标记
+   [^>]* 兼容 src 标签上的 async/defer 属性（收紧为 [^"'>]*，避免跨行贪婪误吞） */
 html = html.replace(
-  /<script src="vendor\/threeui\/islands\/[^"]+"><\/script>\n?/g,
+  /<script src="vendor\/threeui\/islands\/[^"]+"[^"'>]*><\/script>\n?/g,
   "<script>window.WB_SINGLE_FILE=1;</script>\n"
 );
 
 /* 1. 内联 <link rel="stylesheet"> */
 html = html.replace(/<link rel="stylesheet" href="([^"]+)">/g, (m, href) => inlineCSS(read(href)));
 
-/* 2. 内联 <script src>（保持顺序；转义字符串里的 </script>） */
-html = html.replace(/<script src="([^"]+)"><\/script>/g, (m, src) => {
+/* 2. 内联 <script src>（保持顺序；转义字符串里的 </script>；丢弃 async/defer 属性——
+   内联后本就同步执行，属性无意义且会让单文件版与文件夹版时序不一致。
+   属性区用 [^"'>]* 限定，避免跨行贪婪误吞（L1）） */
+html = html.replace(/<script src="([^"]+)"[^"'>]*><\/script>/g, (m, src) => {
   const code = read(src);
   const safe = minifyJS(code).replace(/<\/script>/g, "<\\/script>");
   return "<script>\n" + safe + "\n</script>";

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://oxc-project.github.io/schema/configuration-file.json",
+  "rules": {
+    "no-unused-vars": ["warn", {
+      "caughtErrors": "none",
+      "argsIgnorePattern": "^_|^e$",
+      "varsIgnorePattern": "^_|^(esc|el|icon|warn)$"
+    }],
+    "no-unused-expressions": ["warn", {"allowShortCircuit": true, "allowTernary": true}]
+  }
+}

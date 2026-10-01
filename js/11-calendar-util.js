@@ -42,7 +42,6 @@ const SOLAR_FEST = {
 };
 /* ---------- 农历节日 ---------- */
 const LUNAR_FEST = {"1-1":"春节","1-15":"元宵节","2-2":"龙抬头","5-5":"端午节","7-7":"七夕","7-15":"中元节","8-15":"中秋节","9-9":"重阳节","12-8":"腊八节","12-23":"小年"};
-const LUNAR_FEST_LASTDAY = {"1-1":"除夕"};
 
 /* ---------- 节气寄语（24 节气温柔一句） ---------- */
 const TERM_TIPS = {
@@ -151,7 +150,7 @@ function nextHoliday(){
 }
 
 /* ---------- 农历生日 → 下一个公历日期 ---------- */
-function nextLunarBirthday(lMonth, lDay, leapOk){
+function nextLunarBirthday(lMonth, lDay){
   const today = WB.bizDate();
   const thisYear = new Date().getFullYear();
   for(let y = thisYear; y <= thisYear + 2; y++){

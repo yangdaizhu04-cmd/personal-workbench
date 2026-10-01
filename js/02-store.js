@@ -27,19 +27,54 @@ function rawSet(key, val){
   }
 }
 
+/* ---- 写合并：同一宏任务内的多次 set 只落一次盘 ----
+   高频写入路径（勾待办、连打多笔账、番茄结算会连续 set 多个 key）让全量 JSON.stringify
+   在每 tick 十几遍，而 set 之间只相隔几毫秒。合并后同一 tick 内对同一 key 只序列化一次；
+   WB.bus 的 kv: 事件也只在真正落盘时发一次（cloud 的 schedulePush 自带 3s 防抖，不差这几毫秒）。
+   store.get 会先读 pending，保证写入后立刻读仍是新值 —— 语义与同步写等价。 */
+const pending = new Map();          // key -> 待落盘的最新值
+let flushScheduled = false;
+function flushNow(){
+  flushScheduled = false;
+  for(const [k, v] of pending){
+    pending.delete(k);
+    rawSet(k, v);
+    WB.bus.emit("kv:" + k, v);
+  }
+}
+function scheduleFlush(){
+  if(flushScheduled) return;
+  flushScheduled = true;
+  Promise.resolve().then(flushNow);
+}
+/* 崩溃兜底：microtask flush 前页面被关闭/后台被系统杀掉会丢 pending 写入。
+   pagehide 在关闭/切后台/刷新时均触发（含移动端，比 beforeunload 覆盖更全），
+   此时同步落盘一次；正常情况下 pending 已空，调用是空转，零成本 */
+addEventListener("pagehide", flushNow);
+
 const store = {
   get(key, def){
+    /* 优先读未落盘的 pending 值：同一次操作里 set 后立刻 get 必须拿到新值
+       （cloud 推送 / 徽章结算 / 渲染 都会在写入后的同一宏任务里再读） */
+    if(pending.has(key)) return pending.get(key);
     const v = rawGet(key);
     return v == null ? def : v;
   },
-  set(key, val){ rawSet(key, val); WB.bus.emit("kv:" + key, val); },
-  /* 真正删掉一个键（草稿这类"用完即弃"的数据用，避免导出时带上空壳） */
+  set(key, val){
+    pending.set(key, val);
+    scheduleFlush();
+  },
+  /* 真正删掉一个键（草稿这类"用完即弃"的数据用，避免导出时带上空壳）
+     del 保持同步：删除立即可见，避免"删了又被 get 读到旧值"的多义状态 */
   del(key){
+    pending.delete(key);
     try{ localStorage.removeItem(PREFIX + key); }catch(e){}
     WB.bus.emit("kv:" + key, null);
   },
-  /* 全量导出 / 导入（不含 netcache） */
+  /* 全量导出 / 导入（不含 netcache）。导出/导入都先强制 flush：
+     否则 pending 里未落盘的写入会漏出/被覆盖，导出的不是最新数据 */
   exportAll(){
+    flushNow();
     const out = {};
     for(let i = 0; i < localStorage.length; i++){
       const k = localStorage.key(i);
@@ -50,6 +85,7 @@ const store = {
     return out;
   },
   importAll(obj, {merge} = {}){
+    flushNow();
     for(const [k, v] of Object.entries(obj || {})){
       if(k.startsWith("netcache:")) continue;
       if(merge){
@@ -78,6 +114,31 @@ const store = {
 
 /* ---- 回收站 ---- */
 const TRASH_TTL = 30 * 86400000;
+/* 删除墓碑（B2）：删除过的记录 id 单独持久记账，回收站清空/过期也不丢。
+   云同步靠它阻止「被删掉的记录在 pull 时复活」—— 回收站只有 30 天 TTL，
+   过期被清掉后，云端 pull 回来的旧记录会重新冒出来（除非这里一直在记）。
+   M2 有界化：每 key 上限 TOMBSTONE_MAX 条。合并路径（Set/concat）都按 first-seen
+   顺序把新 id 追加到尾部，所以「数组头部 = 最旧墓碑」，超限裁头部即可；
+   被裁掉的几乎都是真删除的旧记录（恢复/重建的记录会走「回写即清」被移除），
+   残留副本复活风险与回收站过期同级，可接受。 */
+const TOMBSTONE_MAX = 500;
+function trimTombstones(list){
+  return list.length > TOMBSTONE_MAX ? list.slice(-TOMBSTONE_MAX) : list;
+}
+function tombstoneAdd(moduleName, ids){
+  const all = store.get("sync:tombstones", {});
+  const list = new Set(all[moduleName] || []);
+  ids.forEach(id => list.add(id));
+  all[moduleName] = trimTombstones(Array.from(list));
+  store.set("sync:tombstones", all);
+}
+function tombstoneRemove(moduleName, ids){
+  const all = store.get("sync:tombstones", {});
+  const list = (all[moduleName] || []).filter(id => !ids.includes(id));
+  if(list.length) all[moduleName] = list;
+  else delete all[moduleName];
+  store.set("sync:tombstones", all);
+}
 function toTrash(moduleName, records){
   const list = store.get("trash", []);
   const now = Date.now();
@@ -89,13 +150,14 @@ function toTrash(moduleName, records){
      调用方不必各自实现（模块名 == 集合名，restoreTrash 直接放回原集合）。
      清空回收站 / 彻底删除 / 覆盖导入不走这里，仍保留确认框（不可逆操作） */
   if(WB.ui && WB.ui.undoToast) WB.ui.undoToast(items);
+  tombstoneAdd(moduleName, (Array.isArray(records) ? records : [records]).map(r => r && r.id).filter(Boolean));
   return items;
 }
 /* 从回收站取回若干条：按原 id 放回所属集合（回收站页的「恢复」也走这里） */
 function restoreTrash(items){
   const ids = new Set((items || []).map(i => i.id));
   (items || []).forEach(it => {
-    try{ WB.collection(it.module).add(Object.assign({}, it.data)); }
+    try{ WB.collection(it.module).add(Object.assign({}, it.data)); tombstoneRemove(it.module, [it.data && it.data.id]); }
     catch(e){ console.error("[store] restore failed", it.module, e); }
   });
   store.set("trash", store.get("trash", []).filter(x => !ids.has(x.id)));
@@ -165,7 +227,47 @@ addEventListener("storage", e => {
   WB.bus.emit("store:external", {key: e.key});
 });
 
+/* ---- Schema 版本化与迁移（工程约定，见 开发交接文档 §9）----
+   1. 所有「数据体」（字段、键位、格式）的变更都必须升版本：
+      SCHEMA 说明当前代码期望的数据版本；wb:schemaVersion 记录本机数据实际版本。
+   2. 启动时（main.js boot 最前）执行 WB.store.runMigrations()：
+      从本机版本逐级升到 SCHEMA，每级跑已注册的迁移函数，最后回写版本号。
+   3. 数据版本高于代码版本（从新版应用拿旧代码打开）绝不降级写：
+      只在内存里继续跑，防止把高版本数据写坏。
+   首次落地注册表为空（当前所有数据体都没有历史包袱）；
+   未来字段变更在此补 migration，旧档案自然升级，不用在渲染处打补丁。 */
+const SCHEMA = 2;                      // 版本 2 = 写合并落地后的当前格式（v1 起算）
+const migrations = new Map();          // 目标版本 -> fn(store)，升到该版本前依次执行
+
+function rawSchemaVersion(){
+  try{ const v = localStorage.getItem(PREFIX + "schemaVersion"); return v == null ? 1 : parseInt(v, 10) || 1; }
+  catch(e){ return 1; }
+}
+function runMigrations(){
+  try{
+    let v = rawSchemaVersion();
+    if(v > SCHEMA){
+      console.warn("[store] 本机数据版本(" + v + ")高于当前代码(" + SCHEMA + ")，不做迁移写回，请在读模式下继续");
+      return v;
+    }
+    while(v < SCHEMA){
+      const fn = migrations.get(v + 1);
+      if(fn) fn(store);
+      v++;
+      try{ localStorage.setItem(PREFIX + "schemaVersion", String(v)); }catch(e){}
+    }
+  }catch(e){ console.error("[store] 数据迁移失败，保持原版本继续", e); }
+  return rawSchemaVersion();
+}
+function registerMigration(to, fn){ migrations.set(to, fn); }
+
 WB.store = store;
+WB.store.flush = flushNow;
+WB.store.SCHEMA = SCHEMA;
+WB.store.schemaVersion = rawSchemaVersion;
+WB.store.runMigrations = runMigrations;
+WB.store.registerMigration = registerMigration;
+WB.store.trimTombstones = trimTombstones;   // 供 14-cloud pull 合并墓碑时复用同一上限
 WB.collection = collection;
 WB.toTrash = toTrash;
 WB.restoreTrash = restoreTrash;

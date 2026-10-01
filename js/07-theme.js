@@ -83,7 +83,7 @@ function apply(){
   const html = document.documentElement;
   const cur = resolvedTheme();
   const th = themeMeta(cur);
-  if(/^custom:/.test(cur) && !th.custom) noticeDegrade();
+  if(cur.startsWith("custom:") && !th.custom) noticeDegrade();
   /* 老主题的色块挂 data-theme；新六套只声明亮/暗档，色块挂 data-skin ——
      于是整套暗色框架（阴影 / 壁纸蒙层 / 玻璃描边等 47 处选择器）自动跟随。
      照片主题（custom:<id>）同理：档位只写 light/dark、不挂 data-skin，
@@ -334,9 +334,14 @@ function init(){
   }
   const btn = WB.$("#btn-theme");
   if(btn) btn.addEventListener("click", toggleTheme);
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  /* A5 兼容性：Safari <14 没有 mql.addEventListener（只有旧 API addListener）。
+     特征检测后走可用分支，避免暗色跟随系统的监听在旧内核上整体失效 */
+  const mql = matchMedia("(prefers-color-scheme: dark)");
+  if(mql.addEventListener) mql.addEventListener("change", onChange);
+  else if(mql.addListener) mql.addListener(onChange);
+  function onChange(){
     if(get("theme") === "auto") apply();
-  });
+  }
 }
 
 WB.theme = {DEFAULTS, THEMES, THEME_CN, themeMeta, all, get, set, merge, apply, toggleTheme, init, resolvedTheme, bgMode,

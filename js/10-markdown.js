@@ -61,7 +61,7 @@ function render(src){
 
 /* 提取 #标签 */
 function extractTags(text){
-  const m = String(text).match(/#([^\s#，。,\.]+)/g) || [];
+  const m = String(text).match(/#([^\s#，。.,]+)/g) || [];
   return [...new Set(m.map(s => s.slice(1)))];
 }
 

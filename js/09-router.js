@@ -24,7 +24,6 @@ function register(mod){
 WB.registerModule = register; // 模块文件统一调用 WB.registerModule
 function getRoute(id){ return routes[id]; }
 function allRoutes(){ return routes; }
-function groupsAll(){ return groups; }
 
 function parseHash(){
   const h = location.hash.replace(/^#\/?/, "");
