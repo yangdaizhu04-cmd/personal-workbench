@@ -8,6 +8,7 @@ let box = null, input = null, listEl = null, selIdx = 0, items = [];
 /* ---------- 日期词解析 ---------- */
 function parseDateWords(text){
   const today = WB.parseDate(WB.bizDate());
+  const todayStr = WB.bizDate();
   let date = null, clean = text;
   /* getDay() 周日=0、周一=1。以前直接用 "一二三四六".indexOf 当星期值，全体差一天（"周三"解析到周二） */
   const dayIdx = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "日": 0, "天": 0};
@@ -31,25 +32,29 @@ function parseDateWords(text){
   if(pm){ prio = {"1": "high", "2": "mid", "3": "low"}[pm[1]]; clean = clean.replace(pm[0], " ").trim(); }
   /* 允许出现在句中，但要求前面是空格或开头：「交周报 明天 15:00」能识别，
      而「整理明天的会议纪要」不会误伤（"明天"前没有分隔） */
-  rep(/(?:^|\s)(大后天)/, () => WB.dateStr(new Date(today.getTime() + 3 * 86400000)));
-  rep(/(?:^|\s)(后天)/, () => WB.dateStr(new Date(today.getTime() + 2 * 86400000)));
-  rep(/(?:^|\s)(明天)/, () => WB.dateStr(new Date(today.getTime() + 86400000)));
+  /* 日期加减走 WB.addDaysStr（setDate 口径），**不用 `+ 86400000` 毫秒**：
+     夏令时回退日本地午夜到次日午夜是 25 小时，毫秒加法落在今天 23:00，
+     于是「明天」被算成今天（每年 2 次，只在有 DST 的时区）。全项目其它地方都用
+     addDaysStr，只有这里用毫秒，是一个孤立缺陷（踩坑 #099）。 */
+  rep(/(?:^|\s)(大后天)/, () => WB.addDaysStr(todayStr, 3));
+  rep(/(?:^|\s)(后天)/, () => WB.addDaysStr(todayStr, 2));
+  rep(/(?:^|\s)(明天)/, () => WB.addDaysStr(todayStr, 1));
   rep(/(?:^|\s)(今天)/, () => WB.bizDate());
-  rep(/(?:^|\s)(\d{1,3})\s*天后/, m => WB.dateStr(new Date(today.getTime() + Number(m[1]) * 86400000)));
+  rep(/(?:^|\s)(\d{1,3})\s*天后/, m => WB.addDaysStr(todayStr, Number(m[1])));
   rep(/\s*(下周)([一二三四五六日天])/, m => {
     const want = dayIdx[m[2]];
     const cur = today.getDay();
     let add = (7 - cur + want);
     if(add <= 0) add += 7;
     if(add < 7) add += 7; // 下周
-    return WB.dateStr(new Date(today.getTime() + add * 86400000));
+    return WB.addDaysStr(todayStr, add);
   });
   rep(/\s*(周|礼拜|星期)([一二三四五六日天])/, m => {
     const want = dayIdx[m[2]];
     const cur = today.getDay();
     let add = want - cur;
     if(add <= 0) add += 7;
-    return WB.dateStr(new Date(today.getTime() + add * 86400000));
+    return WB.addDaysStr(todayStr, add);
   });
   rep(/\s*(\d{1,2})月(\d{1,2})[日号]/, m => {
     const y = today.getFullYear();
@@ -57,11 +62,14 @@ function parseDateWords(text){
     if(d < new Date(today.getFullYear(), today.getMonth(), today.getDate())) d = new Date(y + 1, +m[1] - 1, +m[2]);
     return WB.dateStr(d);
   });
-  /* 时刻：15:00 / 15点30 / 9点（前面要有空白或位于开头，避免误伤标题里的数字） */
+  /* 时刻：15:00 / 15点30 / 9点（前面要有空白或位于开头，避免误伤标题里的数字）
+     「点」后面若紧跟汉字则**不算时刻** —— 「买 3 点心」原来被匹配成 3 点，
+     标题截成「买 心」还落下凌晨 3:00 的提醒（踩坑 #099）。 */
   let time = "";
-  const tm = clean.match(/(?:^|\s)([01]?\d|2[0-3])[:：点](\d{1,2})?分?/);
+  const tm = clean.match(/(?:^|\s)([01]?\d|2[0-3])(?:[:：](\d{1,2})|点(?:(\d{1,2})分?)?)(?![一-龥])/);
   if(tm){
-    time = String(Number(tm[1])).padStart(2, "0") + ":" + (tm[2] ? String(Number(tm[2])).padStart(2, "0") : "00");
+    const mm = tm[2] || tm[3];
+    time = String(Number(tm[1])).padStart(2, "0") + ":" + (mm ? String(Number(mm)).padStart(2, "0") : "00");
     clean = clean.replace(tm[0], " ").trim();
   }
   return {date, clean, time, repeat, prio};
@@ -75,7 +83,11 @@ function searchAll(kw){
     if(t.title.toLowerCase().includes(k)) out.push({module: "todos", icon: "check-circle", label: t.title, hint: "待办 · " + (t.date || ""), go: () => WB.router.go("todos")});
   });
   WB.store.get("notes", []).forEach(n => {
-    if(n.content.toLowerCase().includes(k)) out.push({module: "notes", icon: "edit", label: n.content.slice(0, 40), hint: "笔记", go: () => WB.router.go("notes")});
+    /* 正文兜底：导入的 JSON 里少一个 content 就会抛 TypeError，
+       而 buildItems 是在 open() 里同步调用的 —— 一条脏数据会让 ⌘K 变成**空白遮罩**，
+       必须刷新才能恢复（踩坑 #098）。 */
+    const body = String(n.content == null ? "" : n.content);
+    if(body.toLowerCase().includes(k)) out.push({module: "notes", icon: "edit", label: body.slice(0, 40), hint: "笔记", go: () => WB.router.go("notes")});
   });
   WB.store.get("journals", []).forEach(j => {
     const text = (j.free || "") + (j.done || "") + (j.problems || "");

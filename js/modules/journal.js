@@ -114,7 +114,7 @@ WB.registerModule({
     /* 摘要行 */
     const todosDone = WB.store.get("todos", []).filter(t => t.date === dateStr && t.done).length;
     const pomo = WB.store.get("pomoLog", []).filter(l => l.date === dateStr && l.status === "done").length;
-    const spend = WB.store.get("ledger", []).filter(l => l.date === dateStr && l.type === "out").reduce((s, l) => s + (l.amount || 0), 0);
+    const spend = WB.store.get("ledger", []).filter(l => l.date === dateStr && l.type === "out").reduce((s, l) => s + WB.amount(l.amount), 0);
     view.appendChild(el("div", {class: "row", style: {flexWrap: "wrap", gap: "8px", marginBottom: "14px"}},
       el("span", {class: "chip plain"}, "✅ 完成 " + todosDone + " 项任务"),
       el("span", {class: "chip plain"}, "🍅 专注 " + pomo + " 个番茄"),

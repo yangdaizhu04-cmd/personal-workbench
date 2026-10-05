@@ -280,8 +280,11 @@ function srcGain(key){
 function startSource(key){
   if(running[key]) return;
   const c = ac(); if(!c) return;
-  if(key === "local"){ localPlay(); running[key] = {stop(){ localStop(); }}; return; }
-  if(key === "url"){ urlPlay(); running[key] = {stop(){ urlStop(); }}; return; }
+  /* local / url 两路只有**真的开始播**才占位。它们的"起播"要读 IndexedDB / 音频库，
+     可能是空的（第一次用还没添加文件）；占上了又永远不释放，这一路就再也发不出声，
+     而 startSource 首行的 `if(running[key]) return` 会把用户后续的每次点击都挡掉（踩坑 #099）。 */
+  if(key === "local"){ if(localPlay()) running[key] = {stop(){ localStop(); }}; return; }
+  if(key === "url"){ if(urlPlay()) running[key] = {stop(){ urlStop(); }}; return; }
   const mk = makers[key];
   if(!mk) return;
   const out = srcGain(key);
@@ -357,21 +360,21 @@ function setVol(key, v){
   const p = prefs(); p.vol[key] = v; setPrefs(p);
   if(key === "master"){
     Object.keys(running).forEach(k => {
-      if(k === "local" && localAudio) localAudio.volume = clamp01(v * (p.vol.local || .8));
-      if(k === "url" && urlAudio) urlAudio.volume = clamp01(v * (p.vol.url || .8));
+      if(k === "local" && localAudio) localAudio.volume = clamp01(v * (WB.num(p.vol.local, .8)));
+      if(k === "url" && urlAudio) urlAudio.volume = clamp01(v * (WB.num(p.vol.url, .8)));
       if(running[k].el) running[k].el.volume = clamp01((p.vol[k] != null ? p.vol[k] : .5) * v);
     });
-    if(localAudio && !running.local) localAudio.volume = clamp01(v * (p.vol.local || .8));
+    if(localAudio && !running.local) localAudio.volume = clamp01(v * (WB.num(p.vol.local, .8)));
     applyLevel(duckFactor);   // 滑杆之后重新落一遍压低乘数，避免专注中被拉回满音量
     return;
   }
   if(running[key]){
-    if(key === "local" && localAudio) localAudio.volume = clamp01(v * (p.vol.master || .9));
-    else if(key === "url" && urlAudio) urlAudio.volume = clamp01(v * (p.vol.master || .9));
-    else if(running[key].el) running[key].el.volume = clamp01(v * (p.vol.master || .9));
+    if(key === "local" && localAudio) localAudio.volume = clamp01(v * (WB.num(p.vol.master, .9)));
+    else if(key === "url" && urlAudio) urlAudio.volume = clamp01(v * (WB.num(p.vol.master, .9)));
+    else if(running[key].el) running[key].el.volume = clamp01(v * (WB.num(p.vol.master, .9)));
     else{
       // running[key].stop 存的是实例；重新拿不到 gain —— 简化：直接改 out（存引用）
-      if(running[key].out) running[key].out.gain.value = clamp01(v * (p.vol.master || .9));
+      if(running[key].out) running[key].out.gain.value = clamp01(v * (WB.num(p.vol.master, .9)));
     }
   }
   applyLevel(duckFactor);
@@ -412,12 +415,17 @@ function musicList(){ return WB.store.get("musicList", []); }
 function localPlay(){
   const list = musicList();
   const p = prefs();
-  if(!list.length){ WB.ui.toast("先在下方添加本地音乐文件", "warn"); const st = prefs(); st.active.local = false; setPrefs(st); return; }
+  /* 返回「真的开始播了吗」：空列表时只提示并return，而 startSource 原来**照样**
+     把 running.local 占上 —— 于是 startSource 首行 `if(running[key]) return`
+     永远挡住这一路，用户加完文件再点播放毫无反应（连提示都没有）。
+     `pomo:start → restoreCombo()` 每次开始专注都会占位，所以这个死锁很容易撞上（踩坑 #099）。 */
+  if(!list.length){ WB.ui.toast("先在下方添加本地音乐文件", "warn"); const st = prefs(); st.active.local = false; setPrefs(st); refreshPanel && refreshPanel(); return false; }
   if(!localAudio) localAudio = new Audio();
   const idx = Math.max(0, musicList().findIndex(m => m.id === p.localCur));
   localAudio._list = list;
   localAudio._idx = p.localMode === "shuffle" ? Math.floor(Math.random() * list.length) : (idx >= 0 ? idx : 0);
   playLocalIdx(localAudio._idx);
+  return true;
 }
 function playLocalIdx(i){
   const list = localAudio._list || musicList();
@@ -429,7 +437,7 @@ function playLocalIdx(i){
     const url = URL.createObjectURL(rec.data);
     localAudio.src = url;
     const p = prefs();
-    localAudio.volume = clamp01((p.vol.local || .8) * (p.vol.master || .9));
+    localAudio.volume = clamp01((WB.num(p.vol.local, .8)) * (WB.num(p.vol.master, .9)));
     localAudio.onended = () => {
       const pp = prefs();
       if(pp.localMode === "one"){ playLocalIdx(localAudio._idx); return; }
@@ -451,10 +459,11 @@ function urlPlay(){
   const lib = urlLib();
   const p = prefs();
   const item = lib.find(x => x.id === p.urlId) || lib[0];
-  if(!item){ WB.ui.toast("声音库还是空的", "warn"); const st = prefs(); st.active.url = false; setPrefs(st); refreshPanel && refreshPanel(); return; }
+  /* 同 localPlay：空库返回 false，别让调用方把这一路占上（踩坑 #099） */
+  if(!item){ WB.ui.toast("声音库还是空的", "warn"); const st = prefs(); st.active.url = false; setPrefs(st); refreshPanel && refreshPanel(); return false; }
   if(!urlAudio) urlAudio = new Audio();
   urlAudio.src = item.url;
-  urlAudio.volume = clamp01((p.vol.url || .8) * (p.vol.master || .9));
+  urlAudio.volume = clamp01((WB.num(p.vol.url, .8)) * (WB.num(p.vol.master, .9)));
   urlAudio.loop = true;
   urlAudio.play().catch(() => {
     WB.ui.toast("「" + item.name + "」暂时播不了，已标灰", "warn");
@@ -463,6 +472,7 @@ function urlPlay(){
     const st = prefs(); st.active.url = false; setPrefs(st);
     refreshPanel && refreshPanel();
   });
+  return true;
 }
 function urlStop(){ if(urlAudio) urlAudio.pause(); }
 

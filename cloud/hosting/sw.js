@@ -1,12 +1,15 @@
 /* Service Worker —— 云端版专用（本地 file:// 双击版自动跳过注册）
    策略：静态资源 cache-first + 后台更新；API 请求不缓存 */
-const CACHE = "wb-cache-v7";   // 照片自定义主题（新增 js/07b、设置页「我的主题」、index.html 首帧支持 custom:<id>）→ 升版让老 PWA 用户拿到新壳
+const CACHE = "wb-cache-v8";   // 安全整改轮（踩坑 #098）：修 SW 预缓存清单（原来含 3 个产物里不存在的文件，addAll 整体失败 → 离线能力实为 0）+ 导入覆盖语义 + 金额口径 → 升版让老 PWA 用户拿到新壳
+/* 这一份列表是**云端单文件版**的清单（`node build.js --cloud` 会用同样的项覆盖它）。
+   改动前 build.js 生成的清单里有 `./css/main.css`、`./vendor/font/…woff2`、
+   `./vendor/threeui/islands/core.js` —— 而单文件产物里这三样都已经内联/剥离了，压根不存在。
+   `cache.addAll()` 有一项 404 就整体 reject → install 失败 → SW 永不激活，
+   而注册那行被 try/catch 吞掉，症状只是"离线打不开"（踩坑 #098）。 */
 const SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./css/main.css",
-  "./vendor/font/lxgw-wenkai-subset.woff2",
   "./vendor/audio/rain.ogg",
   "./vendor/audio/waves.ogg",
   "./vendor/audio/fire.ogg",
@@ -14,7 +17,6 @@ const SHELL = [
   "./vendor/audio/piano.ogg",
   "./vendor/audio/pad.ogg",
   "./vendor/audio/lofi.ogg",
-  "./vendor/threeui/islands/core.js",
 ];
 
 self.addEventListener("install", e => {

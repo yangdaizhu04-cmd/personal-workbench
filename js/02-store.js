@@ -52,6 +52,18 @@ function scheduleFlush(){
    此时同步落盘一次；正常情况下 pending 已空，调用是空转，零成本 */
 addEventListener("pagehide", flushNow);
 
+/* ---- 敏感键（导出/快照一律剔除，导入一律拒收）----
+   三处都是**明文凭据**，而备份文件的用途恰恰是下载 / 迁移 / 分享 ——
+   一份 JSON 泄露等于凭据与全量个人数据一起泄露（三处界面都写着"只存本机"，踩坑 #097）：
+     webdav → 账号 + 应用密码
+     byok   → 第三方 AI Key（还有 Unsplash Key）
+     token  → 云端会话
+   指纹键（webdavLastHash 等）留着无害（只是哈希与时间戳），webdavAuto:<日期> 是开关记账，都不含机密。
+   注意：**不要**手写各调用方各自过滤 —— 出口收敛到这一个函数，才不会像 WebDAV 快照那样
+   "上传那份剔了、导出 JSON 那份忘了"。放在 store 对象之外声明：对象字面量里写 const 是语法错误。 */
+const SECRET_KEYS = ["webdav", "byok", "token"];
+const isSecretKey = k => SECRET_KEYS.includes(k) || String(k).startsWith("token:");
+
 const store = {
   get(key, def){
     /* 优先读未落盘的 pending 值：同一次操作里 set 后立刻 get 必须拿到新值
@@ -79,26 +91,62 @@ const store = {
     for(let i = 0; i < localStorage.length; i++){
       const k = localStorage.key(i);
       if(k && k.startsWith(PREFIX) && !k.startsWith(PREFIX + "netcache:")){
-        out[k.slice(PREFIX.length)] = rawGet(k.slice(PREFIX.length));
+        const name = k.slice(PREFIX.length);
+        if(isSecretKey(name)) continue;
+        out[name] = rawGet(name);
       }
     }
     return out;
   },
-  importAll(obj, {merge} = {}){
+  /* 需要**连凭据一起**搬家时用这个（目前无调用方，保留给将来的「整机迁移」）；
+     默认路径走 exportAll()，宁可少带也不误带。 */
+  exportAllRaw(){
+    flushNow();
+    const out = {};
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(k && k.startsWith(PREFIX) && !k.startsWith(PREFIX + "netcache:")) out[k.slice(PREFIX.length)] = rawGet(k.slice(PREFIX.length));
+    }
+    return out;
+  },
+  importAll(obj, {merge} = {}, {allowSecrets = false} = {}){
     flushNow();
     for(const [k, v] of Object.entries(obj || {})){
       if(k.startsWith("netcache:")) continue;
+      /* 外部文件不得写入凭据类键：否则「导入一份别人的配置分享」就能把工作台的
+         WebDAV 指向换成攻击者的服务器，30 秒后 autoCheck 把全量数据传出去（踩坑 #097）。
+         备份文件里若带了这些键（旧版本导出的），也只丢弃不静默生效。 */
+      if(!allowSecrets && isSecretKey(k)){ console.warn("[store] 导入文件里的敏感键已忽略：" + k); continue; }
       if(merge){
         const cur = rawGet(k);
         if(k === "settings" || k === "uiPrefs"){
           rawSet(k, Object.assign({}, v, cur || {})); continue;
         }
         if(Array.isArray(v) && Array.isArray(cur)){
-          const ids = new Set(cur.map(r => r && r.id));
+          /* 只拿**有 id 的**记录去建去重集合。原来直接 `cur.map(r => r.id)`：
+             一旦 cur 里有任何无 id 的记录，集合里就混进 undefined，
+             于是备份里所有无 id 的记录都被当成"已存在"而**静默丢弃**（踩坑 #098）。 */
+          const ids = new Set(cur.filter(r => r && r.id).map(r => r.id));
           rawSet(k, cur.concat(v.filter(r => r && !ids.has(r.id)))); continue;
         }
       }
       rawSet(k, v);
+    }
+    /* 覆盖模式：**必须先删掉文件里没有的键**，否则"覆盖"名不副实 ——
+       界面文案说「替换本机全部数据」，实际只把文件里存在的键写回去，
+       备份之后新产生的那几类（wishes / interrupts 之类）原样留着，新旧数据混在一起，
+       而用户以为已经回到备份那一刻了（踩坑 #098）。
+       三个覆盖入口（JSON 导入 / WebDAV 拉取 / 云端快照恢复）都走这里。
+       例外两类不参与删除：netcache（网络缓存）与敏感键（凭据压根没进备份，
+       删掉等于把用户的 WebDAV 配置与 AI Key 一并清空 —— 那不是"恢复备份"该做的事）。 */
+    if(!merge){
+      for(let i = localStorage.length - 1; i >= 0; i--){
+        const rk = localStorage.key(i);
+        if(!rk || !rk.startsWith(PREFIX)) continue;
+        const name = rk.slice(PREFIX.length);
+        if(name.startsWith("netcache:") || isSecretKey(name)) continue;
+        if(!(name in obj)) localStorage.removeItem(rk);
+      }
     }
     WB.bus.emit("data:imported", obj);
   },
@@ -263,6 +311,8 @@ function registerMigration(to, fn){ migrations.set(to, fn); }
 
 WB.store = store;
 WB.store.flush = flushNow;
+WB.store.SECRET_KEYS = SECRET_KEYS.slice();
+WB.store.isSecretKey = isSecretKey;
 WB.store.SCHEMA = SCHEMA;
 WB.store.schemaVersion = rawSchemaVersion;
 WB.store.runMigrations = runMigrations;

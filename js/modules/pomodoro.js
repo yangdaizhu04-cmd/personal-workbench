@@ -88,7 +88,12 @@ function giveUp(){
 }
 function finish(){
   const s = stateRaw(); if(!s) return;
-  const minutes = Math.round(s.plannedSec / 60);
+  /* 记**实际跑过**的分钟，不是计划时长。
+     原来写 `Math.round(s.plannedSec / 60)`：跑 1 秒后点「完成本段」也记满 25 分钟，
+     于是统计时长、百番茄徽章、花园植物数 +1 全是假的 —— 而放弃（giveUp）走的是
+     `elapsedSec`，两套口径。用 elapsedSec 后两者一致，且"提前完成"不会虚增（踩坑 #099）。
+     注：elapsedSec 由时间戳算出，跨设备时钟漂移不影响（状态里存的是 resumeTs）。 */
+  const minutes = Math.max(0, Math.round((state().elapsedSec || 0) / 60));
   pomoLog.add({date: WB.bizDate(), mode: s.mode, status: "done", minutes,
     bindType: s.bindType, bindId: s.bindId, bindTitle: s.bindTitle, ts: Date.now()});
   if(WB.coins && s.mode === "focus") WB.coins.forPomo();
@@ -372,8 +377,9 @@ WB.registerModule({
         onclick: () => {
           let fMin, rMin;
           if(curPreset === "自定义"){
-            fMin = WB.clamp(parseInt(fIn.value) || 25, 1, 180);
-            rMin = WB.clamp(parseInt(rIn.value) || 5, 1, 60);
+            /* toInt：填 0 应被钳到下限 1，而不是静默变回 25 / 5（踩坑 #099） */
+            fMin = WB.clamp(WB.toInt(fIn.value, 25), 1, 180);
+            rMin = WB.clamp(WB.toInt(rIn.value, 5), 1, 60);
           }else{
             const p = PRESETS.find(x => x.label === curPreset);
             fMin = p.focus; rMin = p.rest;

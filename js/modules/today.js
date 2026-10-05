@@ -635,7 +635,10 @@ WB.registerModule({
 
   /* ---------- 今日待办 ---------- */
   todosCard(dateStr){
-    const todos = WB.store.get("todos", []).filter(t => t.date === dateStr && !t.done);
+    /* 走 todos.onDay 这一个口径：重复任务当天只认实例、不认模板，
+       否则同一条会显示两次（模板也带 date，materialize 又造了一个当日实例）。 */
+    const todos = (WB.todos && WB.todos.onDay) ? WB.todos.onDay(dateStr)
+      : WB.store.get("todos", []).filter(t => t.date === dateStr && !t.done);
     const overdue = WB.store.get("todos", []).filter(t => !t.done && t.date && t.date < dateStr && !(t.repeat && t.repeat.type !== "none"));
     const box = el("div", {class: "card"},
       el("div", {class: "card-title", html: icon("check-circle", 18) + "<span>今日待办</span><span class='card-sub'>"
@@ -846,7 +849,7 @@ WB.registerModule({
     const todos = WB.store.get("todos", []);
     const pomo = WB.store.get("pomoLog", []).filter(l => l.date === dateStr && l.status === "done").length;
     const spend = WB.store.get("ledger", []).filter(l => l.date === dateStr && l.type === "out")
-      .reduce((s, l) => s + (l.amount || 0), 0);
+      .reduce((s, l) => s + WB.amount(l.amount), 0);
     const card = el("div", {class: "card", style: {cursor: "pointer"},
       onclick: () => WB.router.go("journal")},
       el("div", {class: "card-title", html: icon("book", 18) + "<span>今日日志</span><span class='card-sub'>自动摘要</span>"}),

@@ -25,13 +25,51 @@ function coverArt(type, title){
     '<text x="150" y="228" font-size="120" text-anchor="middle" fill="' + a + '" opacity=".75" font-family="serif">' + short + '</text></svg>';
   return "data:image/svg+xml," + encodeURIComponent(svg);
 }
+/* 封面 blob URL 的缓存。
+   原来 coverOf() 每次渲染都为每条记录 `URL.createObjectURL` 且从不 revoke：
+   进出「书影剧馆」20 次 × 20 本书 = 数百个 blob 一直挂在浏览器手里（只增不减）。
+   缓存 + 在封面真正被删时 revoke，内存才有着落（对照 07b-custom-theme 的 setThumb）。 */
+const coverURLCache = new Map();
 async function coverOf(m){
   if(m.coverKey){
+    if(coverURLCache.has(m.coverKey)) return coverURLCache.get(m.coverKey);
     const rec = await WB.idb.get("cover:" + m.coverKey);
-    if(rec && rec.data) return URL.createObjectURL(rec.data);
+    if(rec && rec.data){
+      const u = URL.createObjectURL(rec.data);
+      coverURLCache.set(m.coverKey, u);
+      return u;
+    }
   }
   if(m.coverUrl) return m.coverUrl;
   return coverArt(m.type, m.title);
+}
+function dropCoverURL(key){
+  const u = coverURLCache.get(key);
+  if(u){ URL.revokeObjectURL(u); coverURLCache.delete(key); }
+}
+
+/* 封面垃圾回收：只删**没有任何引用**的 cover:* （既不在 media 记录里，
+   也不在未过期的回收站条目里）。删除记录时**不**立刻删封面 blob ——
+   那样撤销/恢复之后 coverKey 变成悬空引用，卡片退化成内置插画且没有任何提示（踩坑 #098）。
+   等回收站条目过期（30 天）它自然就成了孤儿，那时再清。 */
+async function sweepCovers(){
+  try{
+    const keys = await WB.idb.allKeys("cover:");
+    if(!keys.length) return;
+    const live = new Set();
+    WB.store.get("media", []).forEach(m => { if(m && m.coverKey) live.add(m.coverKey); });
+    const now = Date.now();
+    WB.store.get("trash", []).forEach(t => {
+      if(t.expiresAt > now && t.data && t.data.module === "media" && t.data.data && t.data.data.coverKey)
+        live.add(t.data.data.coverKey);
+    });
+    for(const k of keys){
+      const key = String(k).slice("cover:".length);
+      if(live.has(key)) continue;
+      await WB.idb.del(k);
+      dropCoverURL(key);
+    }
+  }catch(e){ console.error("[media] 封面清理失败", e); }
 }
 
 function itemModal(existing){
@@ -105,7 +143,10 @@ function itemModal(existing){
       ...(isNew ? [] : [{label: "删除", danger: true, onClick: () => {
         WB.ui.confirmBox("删除「" + esc(m.title) + "」？", {danger: true, okLabel: "删除"}).then(async ok => {
           if(ok){
-            if(m.coverKey) await WB.idb.del("cover:" + m.coverKey);
+            /* 封面 blob **不在这里删**：media.remove() 才把记录放进回收站，
+               而回收站里存的是完整记录（含 coverKey）。先删 IDB 的话，
+               撤销条与回收站「恢复」都会让这条记录带着一个悬空的 coverKey 回来，
+               卡片无声地退化成内置插画（踩坑 #098）。封面交给 sweepCovers() 按孤儿回收。 */
             media.remove(m.id); modalIns.close(); WB.router.render();
           }
         });
@@ -167,7 +208,9 @@ WB.registerModule({
     bar.appendChild(el("button", {class: "btn primary sm", html: icon("plus", 14) + "<span>记录一部</span>", onclick: () => itemModal(null)}));
     view.appendChild(bar);
 
-    let arr = media.all().sort((a, b) => b.updatedAt - a.updatedAt);
+    /* slice()：见 trash.js 同处注释 —— get 返回的是存储里的同一个引用，
+       原地 sort 会绕过 set（不落盘、不发事件）。 */
+    let arr = media.all().slice().sort((a, b) => b.updatedAt - a.updatedAt);
     if(filter.type) arr = arr.filter(m => m.type === filter.type);
     if(filter.status) arr = arr.filter(m => m.status === filter.status);
 
@@ -194,7 +237,10 @@ WB.registerModule({
       coverOf(m).then(url => { cover.style.backgroundImage = "url(" + url + ")"; });
       card.appendChild(cover);
       card.appendChild(el("div", {class: "row", style: {marginTop: "8px", gap: "5px"}},
-        el("span", {class: "small", text: TYPES[m.type].emoji}),
+        /* type 兜底：导入的 JSON 里 type 不是四类之一（或是缺字段）时原来直接抛
+           `Cannot read properties of undefined` → 整页崩，而页面崩了连编辑弹窗都进不去，
+           只能去设置里覆盖导入才能脱身（踩坑 #098）。同行的 STATUS 早就写了 `|| ""`。 */
+        el("span", {class: "small", text: (TYPES[m.type] && TYPES[m.type].emoji) || "🎬"}),
         el("span", {class: "small muted", text: STATUS[m.status] || ""}),
         el("span", {class: "grow"}),
         m.rating ? el("span", {class: "small", style: {color: "#e8cf8f"}, text: "★".repeat(m.rating)}) : null));
@@ -203,6 +249,9 @@ WB.registerModule({
       grid.appendChild(card);
     });
     view.appendChild(grid);
+    /* 进页面时清一次孤儿封面（删掉的记录、过期回收站条目留下的 blob）。
+       放在渲染末尾：不阻塞首屏，封面照常用缓存里的 URL。 */
+    sweepCovers();
   },
 });
 })();

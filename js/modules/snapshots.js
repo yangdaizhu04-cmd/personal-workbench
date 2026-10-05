@@ -48,6 +48,11 @@ function collect(){
   for(let i = 0; i < localStorage.length; i++){
     const k = localStorage.key(i);
     if(!isData(k)) continue;
+    /* 凭据类键不进快照（与 02-store 的 exportAll 同一口径，踩坑 #097）：
+       一是明文密码没必要跟着每天走，二是"整份恢复"时不该把 WebDAV 指向一起回滚。
+       判据走 WB.store.isSecretKey —— isSecretKey 是 02-store 的模块私有常量，
+       直接写在这里会 ReferenceError（冒烟抓到的就是这么一次：快照每天失败两次）。 */
+    if(WB.store && WB.store.isSecretKey && WB.store.isSecretKey(k.slice(3))) continue;
     out[k] = localStorage.getItem(k);
   }
   return out;
@@ -85,14 +90,27 @@ async function take(label){
      连「恢复前」那张兜底都会"看起来拍好了"，其实没有。宁可返回 null 让调用方说清楚 */
   const wrote = await WB.idb.put(key, json, {type: "snapshot", bytes: json.length, label: label || "auto", ts: Date.now()});
   if(wrote === false){ console.error("[snapshots] 快照写入失败", key); return null; }
-  await prune();
+  /* 裁剪时**排除刚写的那一份**。原来 prune 只看"总数超了就把字典序最旧的删掉"，
+     而「恢复前」的 key 带当前时刻后缀 —— 攒到 KEEP 份后恢复一份最旧的，
+     新拍的「恢复前」会让数量变成 KEEP+1，被裁掉的恰好就是**正在恢复的那一份**：
+     恢复本身成功了，但兜底网与回退目标同时消失（踩坑 #098）。 */
+  await prune(key);
   return {key, bytes: json.length};
 }
 
-async function prune(){
+async function prune(keepKey){
   const keys = (await WB.idb.allKeys(PREFIX)).sort();
-  while(keys.length > KEEP){
-    await WB.idb.del(keys.shift()); // 最旧的日期在前（YYYY-MM-DD 字典序，同日后缀排序在后）
+  /* 裁剪时把刚写的那一份**排除在候选之外**。
+     原来只看"总数超了就删字典序最旧的"：攒到 KEEP 份后去恢复一份最旧的快照，
+     新拍的「恢复前」会让数量变成 KEEP+1，于是被裁掉的恰好是**用户刚选中的那一份** ——
+     恢复本身成功了（数据已读进内存），但那份快照从列表里消失了，用户没法再回到它（踩坑 #098）。
+     「恢复前」自己是当天带时刻后缀的 key，永远排在最后，本来就轮不到它；
+     真正被裁掉的是**目标**。所以这里保护的是 keepKey，裁剪额度相应少留一份。 */
+  const keep = (keepKey && keys.includes(keepKey)) ? keepKey : null;
+  const budget = keep ? KEEP - 1 : KEEP;
+  const pool = keep ? keys.filter(k => k !== keep) : keys;
+  while(pool.length > budget){
+    await WB.idb.del(pool.shift()); // 最旧的日期在前（YYYY-MM-DD 字典序，同日后缀排序在后）
   }
 }
 

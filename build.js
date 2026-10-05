@@ -103,21 +103,38 @@ if(process.argv.includes("--cloud")){
   fs.mkdirSync(dir, {recursive: true});
   fs.writeFileSync(path.join(dir, "index.html"), html);
   fs.writeFileSync(path.join(dir, "manifest.webmanifest"), read("manifest.webmanifest"));
-  // SW 预缓存清单自动生成：静态 shell + islands 核心包；场景页/书架走运行时缓存（首次打开后离线可用）
+  /* SW 预缓存清单：**只列 cloud/hosting 里真实存在的文件**。
+     这是踩过坑才定下来的形状：`--cloud` 产物是单文件（css/js/字体全部内联），islands 也被剥离，
+     所以 `./css/main.css`、`./vendor/font/…woff2`、`./vendor/threeui/islands/core.js`
+     在 hosting 里**都不存在**。而 `cache.addAll()` 只要有一项 404 就整体 reject →
+     install 失败 → SW 永不激活；注册那行又被 try/catch 吞掉，于是"离线打不开"且毫无报错（踩坑 #098）。
+     hosting 里真正需要预缓存的只有：入口两个（./ 与 index.html）、manifest、以及 7 个音源
+     （sound.js 按相对路径 vendor/audio/*.ogg 取数，没有它们离线时环境音全哑）。
+     要加项时先确认 `fs.cpSync` 之后文件真的在那儿 —— 清单与产物不同步是这类 bug 的唯一来源。 */
   const shell = ["./", "./index.html", "./manifest.webmanifest",
-    "./css/main.css", "./vendor/font/lxgw-wenkai-subset.woff2",
     "./vendor/audio/rain.ogg", "./vendor/audio/waves.ogg", "./vendor/audio/fire.ogg",
     "./vendor/audio/white.ogg", "./vendor/audio/piano.ogg",
     "./vendor/audio/pad.ogg", "./vendor/audio/lofi.ogg",
-    "./vendor/threeui/islands/core.js"];
+  ];
+  /* 自检：清单里每一项都必须在产物目录里真的存在（构建期就报错，别留给用户发现） */
+  const missing = shell.filter(rel => !fs.existsSync(path.join(dir, rel.replace(/^\.\//, ""))));
+  if(missing.length){
+    console.error("✗ SW 预缓存清单里有产物中不存在的文件：", missing.join("、"));
+    process.exitCode = 1;
+  }
   const sw = read("sw.js").replace(
     /const SHELL = \[[\s\S]*?\];/,
     "const SHELL = [\n" + shell.map(s => '  "' + s + '",').join("\n") + "\n];"
   );
   fs.writeFileSync(path.join(dir, "sw.js"), sw);
-  /* 音源文件：sound.js 按相对路径 vendor/audio/*.ogg 取数，SW 预缓存清单也引用它们——hosting 里必须真有 */
-  fs.cpSync("vendor/audio", path.join(dir, "vendor", "audio"), {recursive: true});
-  console.log("✅ 云端产物已写入 cloud/hosting/（index.html + manifest + sw.js + 音源，预缓存 %d 项）", shell.length);
+  /* 音源文件：sound.js 按相对路径 vendor/audio/*.ogg 取数，SW 预缓存清单也引用它们——hosting 里必须真有。
+     用过滤版拷贝：vendor/audio 下混着工具自己的状态目录（.mimosa），拷进发布产物等于
+     把带会话 id 的文件发布出去并入库（.gitignore 忽略了 .mimosa/，但 hosting 是已跟踪目录）。 */
+  const AUDIO = ["rain.ogg", "waves.ogg", "fire.ogg", "white.ogg", "piano.ogg", "pad.ogg", "lofi.ogg"];
+  fs.mkdirSync(path.join(dir, "vendor", "audio"), {recursive: true});
+  AUDIO.forEach(f => fs.copyFileSync(path.join("vendor", "audio", f), path.join(dir, "vendor", "audio", f)));
+  console.log("✅ 云端产物已写入 cloud/hosting/（index.html + manifest + sw.js + %d 个音源，预缓存 %d 项）",
+    AUDIO.length, shell.length);
 }
 
 /* Tauri 桌面版：完整文件夹拷贝（含场景视频/窗景页/3D 书架），与网页文件夹版功能 100% 一致 */

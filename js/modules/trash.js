@@ -22,6 +22,13 @@ const MODULE_MAP = {
   media: {coll: "media", name: "书影剧", titleKey: "title"},
   skills: {coll: "skills", name: "技能卡", titleKey: "name"},
   doodles: {coll: "doodles", name: "涂鸦", titleKey: "name"},
+  /* 这三个是**漏掉的**（踩坑 #099）：它们的删除都走 collection.remove → 会进回收站，
+     但这里没登记 → 列表里分类标签显示原始集合名、点「恢复」toast「该条目无法恢复」，
+     记录就永久躺在回收站里（只有刚删时那条撤销条能救，过期就没了）。
+     加新集合时记得两处都改：这里 + 02-store 的 toTrash（它按传入的 moduleName 记账）。 */
+  rssSources: {coll: "rssSources", name: "订阅源", titleKey: "name"},
+  health: {coll: "health", name: "健康记录", titleKey: "date"},
+  interrupts: {coll: "interrupts", name: "打断记录", titleKey: "label"},
 };
 
 function titleOf(moduleName, data){
@@ -41,7 +48,10 @@ WB.registerModule({
   },
 
   render(view){
-    const trash = WB.store.get("trash", []).sort((a, b) => b.deletedAt - a.deletedAt);
+    /* `.slice()` 不是多余的：store.get 返回的是**存储里那同一个数组引用**
+       （写合并的 pending 命中时更是直接给引用），原地 sort 等于绕过 set 改数据 ——
+       排序不落盘、kv: 事件也不发，症状是"排序偶尔自己变回去"（踩坑 #098）。 */
+    const trash = WB.store.get("trash", []).slice().sort((a, b) => b.deletedAt - a.deletedAt);
 
     const bar = el("div", {class: "row", style: {marginBottom: "14px"}});
     bar.appendChild(el("div", {class: "muted small"}, "误删不必慌，30 天内都能救回来。过期自动清理。"));

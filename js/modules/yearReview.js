@@ -40,9 +40,9 @@ function gather(year){
     s + ((j.done || "") + (j.problems || "") + (j.plan || "") + (j.free || "") + (j.answer || "")).length, 0);
 
   const ledger = WB.store.get("ledger", []).filter(l => inYear(l.date));
-  const outSum = ledger.filter(l => l.type === "out").reduce((s, l) => s + (Number(l.amount) || 0), 0);
+  const outSum = ledger.filter(l => l.type === "out").reduce((s, l) => s + WB.amount(l.amount), 0);
   const byCat = {};
-  ledger.filter(l => l.type === "out").forEach(l => { byCat[l.catId] = (byCat[l.catId] || 0) + (Number(l.amount) || 0); });
+  ledger.filter(l => l.type === "out").forEach(l => { byCat[l.catId] = (byCat[l.catId] || 0) + WB.amount(l.amount); });
   const topCatEntry = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0];
   const topCat = topCatEntry ? ((WB.store.get("ledgerCats", []).find(c => c.id === topCatEntry[0]) || {}).name || "") : "";
 
@@ -54,11 +54,22 @@ function gather(year){
   const keywords = Object.entries(kw).sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0]);
 
   const first = WB.theme.get("firstSeenTs") || 0;
+  /* 陪伴天数要**夹在所查年份内**：原来直接用「安装至今」，于是 2026-01-01 装、
+     2027-01-01 打开「2026 年报」会写「陪了你 365 天」（实际 366 天，且含 2027 那天）。
+     口径：这一年里你实际在用的天数 = 从 max(1/1, 装机日) 到 min(12/31, 今天) 的天数。
+     装机之前的那年整年都算 0（那时它还不存在）。 */
+  const yStart = new Date(year, 0, 1).getTime();
+  const yEnd = new Date(year, 11, 31).getTime();
+  let days = 0;
+  if(first){
+    const from = Math.max(yStart, first);
+    const to = Math.min(yEnd, Date.now());
+    if(to >= from) days = Math.max(1, Math.round((to - from) / 86400000) + 1);
+  }
   return {doneCount: done.length, topDay, pomoCount: pomo.length, pomoMin, topHabit,
     moodCount: moods.length, topMoodIdx: topMood[0], topMoodN: topMood[1],
-    journals: journals.length, words, outSum, inSum: ledger.filter(l => l.type === "in").reduce((s, l) => s + (Number(l.amount) || 0), 0),
-    topCat, keywords,
-    days: first ? Math.max(1, Math.floor((Date.now() - first) / 86400000)) : 0};
+    journals: journals.length, words, outSum, inSum: ledger.filter(l => l.type === "in").reduce((s, l) => s + WB.amount(l.amount), 0),
+    topCat, keywords, days};
 }
 
 function fmtMin(min){

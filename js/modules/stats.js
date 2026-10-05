@@ -81,7 +81,7 @@ function buildWeeklyReport(weekStart){
   const focusMin = WB.store.get("pomoLog", []).filter(l => days.includes(l.date) && l.status === "done" && l.mode === "focus").reduce((s, l) => s + l.minutes, 0);
   const moods = WB.store.get("moods", []).filter(m => days.includes(m.date));
   const moodAvg = moods.length ? (moods.reduce((s, m) => s + m.level, 0) / moods.length) : 0;
-  const spend = WB.store.get("ledger", []).filter(l => days.includes(l.date) && l.type === "out").reduce((s, l) => s + l.amount, 0);
+  const spend = WB.store.get("ledger", []).filter(l => days.includes(l.date) && l.type === "out").reduce((s, l) => s + WB.amount(l.amount), 0);
   let comment;
   const rate = created ? Math.round(done / created * 100) : 0;
   if(!created && !focusMin) comment = "这周很闲？要么是效率极高，要么是还没开始记录 😄";
@@ -232,7 +232,7 @@ WB.registerModule({
       const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - (5 - i));
       return WB.monthStr(d);
     });
-    const spendData = months.map(ym => WB.store.get("ledger", []).filter(l => l.type === "out" && l.date.startsWith(ym)).reduce((s, l) => s + l.amount, 0));
+    const spendData = months.map(ym => WB.store.get("ledger", []).filter(l => l.type === "out" && l.date.startsWith(ym)).reduce((s, l) => s + WB.amount(l.amount), 0));
     if(spendData.some(v => v > 0)){
       chartCard(view, "月支出汇总", "wallet").setOption({
         grid: baseGrid(),

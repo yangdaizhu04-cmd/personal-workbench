@@ -157,7 +157,7 @@ function doodleModal(){
     }}]});
 }
 function doodleGallery(){
-  const list = WB.store.get("doodles", []).sort((a, b) => b.ts - a.ts);
+  const list = WB.store.get("doodles", []).slice().sort((a, b) => b.ts - a.ts);
   const body = el("div", {class: "grid", style: {gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "10px"}});
   if(!list.length){ body.appendChild(el("div", {class: "small faint"}, "还没有作品")); }
   list.forEach(d => {

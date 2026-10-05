@@ -44,6 +44,22 @@ function materializeRepeats(){
   return changed;
 }
 
+/* 当日视图口径：**重复任务只认当日实例，不认模板**。
+   原来两处都是裸 `t.date === today`：模板自己也有日期（checkTodo 靠它推进到下一期），
+   而 materializeRepeats 每次路由渲染都会为模板造一个当日实例 ——
+   于是「今天」里同一条重复待办出现**两次**（模板 + 实例），勾一条只完成实例，
+   模板那条明天还会再物化一条，用户得每天点两次；完成率与 KPI 也按重复条目虚高（踩坑 #099）。 */
+function isRepeatTemplate(t){ return !!(t && t.repeat && t.repeat.type !== "none" && t.repeatOf === undefined); }
+function hasInstanceToday(t, today, all){
+  return (all || todos.all()).some(x => x.repeatOf === t.id && x.date === today);
+}
+/** 某一天的「要做」列表：排除重复模板（当天有实例的、以及没到期的模板都不进这一天的视图） */
+function onDay(dateStr, all){
+  const list = all || todos.all();
+  return list.filter(t => t.date === dateStr && !t.done
+    && !(isRepeatTemplate(t) && hasInstanceToday(t, dateStr, list)));
+}
+
 function nextRepeatDate(t, fromDate){
   if(t.repeat.type === "daily") return WB.addDaysStr(fromDate, 1);
   if(t.repeat.type === "weekly"){
@@ -430,9 +446,20 @@ WB.registerModule({
       chips.appendChild(el("button", {class: "chip clickable" + (viewState.listId === "" ? "" : " plain"), text: "全部清单",
         onclick: () => { viewState.listId = ""; WB.router.render(); }}));
       allLists().forEach(l => {
-        chips.appendChild(el("button", {class: "chip clickable" + (viewState.listId === l.id ? "" : " plain"),
-          html: "<span style='width:8px;height:8px;border-radius:50%;background:" + l.color + "'></span>" + l.name,
-          onclick: () => { viewState.listId = l.id; WB.router.render(); }}));
+        /* 清单名与颜色都走 DOM 而不是拼 HTML：名字是用户自由输入（也可由导入 JSON 带入），
+           拼进 innerHTML 就是一条 XSS 通路；颜色还要防「闭合单引号逃逸到属性外」。
+           同文件 279/284/358 行渲染同一份数据时本来就用的 text:，这里是遗漏（踩坑 #097）。 */
+        const chip = el("button", {
+          class: "chip clickable" + (viewState.listId === l.id ? "" : " plain"),
+          onclick: () => { viewState.listId = l.id; WB.router.render(); },
+        });
+        const dot = el("span", {style: {
+          width: "8px", height: "8px", borderRadius: "50%",
+          background: WB.safeColor(l.color, "var(--accent)"),
+        }});
+        chip.appendChild(dot);
+        chip.appendChild(document.createTextNode(l.name == null ? "" : String(l.name)));
+        chips.appendChild(chip);
       });
       bar.appendChild(chips);
     }
@@ -462,7 +489,12 @@ WB.registerModule({
         WB.router.render();
       };
       ops.appendChild(el("button", {class: "btn sm", text: "标记完成", onclick: withPicked(ids => {
-        ids.forEach(id => todos.update(id, {done: true, doneAt: Date.now()}));
+        /* 走 checkTodo 而不是直接 todos.update：
+           单条勾选的发币、庆祝、以及**重复任务的日期推进**都在 checkTodo 里。
+           原来批量直接 update，于是：① 一条币都不发 ② 重复模板被置成 done 而不是推进到下一期
+           （它自身的 date 不动，只靠 materializeRepeats 兜次日），③ 完成率/KPI 却按已完成算。
+           不传 ev 是因为批量没有单一的鼠标坐标（踩坑 #099）。 */
+        ids.forEach(id => { const t = todos.find(id); if(t && !t.done) checkTodo(t, null); });
       })}));
       ops.appendChild(el("button", {class: "btn sm", text: "改到明天", onclick: withPicked(ids => {
         ids.forEach(id => todos.update(id, {date: WB.addDaysStr(WB.bizDate(), 1)}));
@@ -497,9 +529,15 @@ WB.registerModule({
 
 function listViewWith(content, prefiltered){
   const today = WB.bizDate();  let show = prefiltered;
+  /* 「今天」= 今天到期 + 逾期未完成，但**要去掉重复模板**（见 onDay 的注释） */
   if(viewState.filter === "today") show = show.filter(t => !t.done && (t.date === today || (t.date && t.date < today)));
   else if(viewState.filter === "later") show = show.filter(t => !t.done && t.date > today);
   else show = show.filter(t => t.done).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+  if(viewState.filter === "today"){
+    const all = todos.all();
+    const instIds = new Set(all.filter(t => t.repeatOf && t.date === today).map(t => t.repeatOf));
+    show = show.filter(t => !instIds.has(t.id));
+  }
 
   if(!show.length){
     content.appendChild(el("div", {class: "card"}, WB.ui.emptyState("check-circle",
@@ -561,5 +599,5 @@ function listViewWith(content, prefiltered){
    toggle 是「勾选一条待办」的唯一出口 —— 日历里那个复选框以前直写 update，
    于是重复任务模板在日历里勾 = 直接变已完成、不生成下一期，与待办页行为不一致 */
 WB.todos = {quickAdd(preset){ todoModal(null, typeof preset === "object" ? preset : undefined); },
-  materializeRepeats, toggle: checkTodo};
+  materializeRepeats, toggle: checkTodo, onDay, isRepeatTemplate};
 })();

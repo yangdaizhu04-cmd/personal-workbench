@@ -30,13 +30,24 @@ function setBudgets(b){ WB.store.set("ledgerBudgets", b); }
 /* ---- 记一笔弹窗（总览快速记账也调用） ---- */
 function quickAdd(preset){
   ensureCats();
-  const t = Object.assign({type: "out", amount: "", catId: cats.all()[0] && cats.all()[0].id, date: WB.bizDate(), note: ""}, preset || {});
+  /* 默认分类要跟默认类型一致：ensureCats() 建出来的第一个分类是「餐饮」（kind:"out"），
+     原来无条件拿它，于是「记一笔 → 点收入 → 直接保存」会存下一条 type:"in" 却挂着
+     「餐饮」的记录，界面上还没有任何高亮能让你察觉（踩坑 #099）。 */
+  const firstOf = kind => { const c = cats.all().find(x => (x.kind || "out") === kind); return c && c.id; };
+  const t = Object.assign({type: "out", amount: "", catId: firstOf("out"), date: WB.bizDate(), note: ""}, preset || {});
   const body = el("div");
   const typeSeg = el("div", {class: "seg"});
   let curType = t.type;
   [["out", "支出"], ["in", "收入"]].forEach(([v, l]) => typeSeg.appendChild(el("button", {
     class: v === curType ? "on" : "", text: l, dataset: {v},
-    onclick: () => { curType = v; typeSeg.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === v)); paintCats(); },
+    onclick: () => {
+      curType = v;
+      typeSeg.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
+      /* 切类型时把默认分类也换过去：否则 curCat 还指着上一类型的分类，
+         而列表只显示当前类型的分类 —— 界面上一个都不高亮，保存下来就是错分类（踩坑 #099） */
+      if(!cats.all().some(c => c.id === curCat && (c.kind || "out") === curType)) curCat = firstOf(curType);
+      paintCats();
+    },
   })));
   const amount = el("input", {type: "number", class: "input", placeholder: "金额", min: 0, step: "0.01",
     style: {fontSize: "20px", textAlign: "center"}});
@@ -88,7 +99,7 @@ function checkBudgetWarn(){
   const b = budgets();
   if(!b.total) return;
   const month = WB.monthStr(new Date());
-  const spent = ledger.all().filter(l => l.type === "out" && monthOf(l.date) === month).reduce((s, l) => s + l.amount, 0);
+  const spent = ledger.all().filter(l => l.type === "out" && monthOf(l.date) === month).reduce((s, l) => s + WB.amount(l.amount), 0);
   const ratio = spent / b.total;
   const key = "budgetWarned:" + month;
   const warned = WB.store.get(key, {});
@@ -169,7 +180,7 @@ WB.registerModule({
   icon: "wallet",
   sub: function(){
     const month = WB.monthStr(new Date());
-    const out = ledger.all().filter(l => l.type === "out" && monthOf(l.date) === month).reduce((s, l) => s + l.amount, 0);
+    const out = ledger.all().filter(l => l.type === "out" && monthOf(l.date) === month).reduce((s, l) => s + WB.amount(l.amount), 0);
     return "本月支出 ¥" + out.toFixed(2).replace(/\.00$/, "");
   },
 
@@ -203,8 +214,8 @@ WB.registerModule({
       ymDay = WB.bizDate();
       bar.querySelector("#led-ym").textContent = ym.replace("-", " 年 ") + " 月";
       const arr = ledger.all().filter(l => monthOf(l.date) === ym).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
-      const out = arr.filter(l => l.type === "out").reduce((s, l) => s + l.amount, 0);
-      const inn = arr.filter(l => l.type === "in").reduce((s, l) => s + l.amount, 0);
+      const out = arr.filter(l => l.type === "out").reduce((s, l) => s + WB.amount(l.amount), 0);
+      const inn = arr.filter(l => l.type === "in").reduce((s, l) => s + WB.amount(l.amount), 0);
       summary.innerHTML = "";
       const b = budgets();
       const budgetCell = el("div", {class: "card"},
@@ -231,7 +242,7 @@ WB.registerModule({
         arr.filter(l => l.type === "out").forEach(l => {
           const c = catOf(l.catId);
           const key = c ? c.name : "其他";
-          byCat[key] = (byCat[key] || 0) + l.amount;
+          byCat[key] = (byCat[key] || 0) + WB.amount(l.amount);
         });
         const chips = el("div", {class: "row", style: {flexWrap: "wrap", gap: "6px", marginTop: "10px"}});
         Object.entries(byCat).sort((a, b) => b[1] - a[1]).forEach(([name, v]) => {
@@ -259,7 +270,7 @@ WB.registerModule({
             el("div", {text: l.note || (c ? c.name : "记账")}),
             el("div", {class: "small faint", text: l.date + " · " + (c ? c.name : "未分类")})),
           el("b", {style: {color: l.type === "out" ? "var(--ink)" : "var(--ok)"},
-            text: (l.type === "out" ? "-" : "+") + "¥" + l.amount.toFixed(2).replace(/\.00$/, "")}),
+            text: (l.type === "out" ? "-" : "+") + "¥" + WB.amount(l.amount).toFixed(2).replace(/\.00$/, "")}),
           el("button", {class: "icon-btn", html: icon("trash", 14), title: "删除", onclick: () => {
             ledger.remove(l.id);     // 撤销条由 02-store.js 的 toTrash 统一弹
             WB.router.render();

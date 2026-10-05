@@ -6,11 +6,22 @@ const { el, icon } = WB;
 
 /* ---- WebDAV 同步引擎（浏览器直连，Basic 认证；目录不存在时先 MKCOL 再重试一次） ---- */
 const WBDAV_FILE = "personal-workbench-backup.json";
+const INSECURE_MSG = "服务器地址是 http:// —— Basic 认证只是 base64 不是加密，账号与应用密码会明文过网，请改成 https://";
+let insecureWarned = false;
+function warnInsecureOnce(){
+  if(insecureWarned) return;
+  insecureWarned = true;
+  WB.ui.toast(INSECURE_MSG, "warn");
+}
 function wdBase(){
   const c = WB.store.get("webdav", {});
   let u = (c.url || "").trim();
   if(!u) return null;
   if(!/^https?:\/\//i.test(u)) u = "https://" + u;
+  /* Basic 认证只是 base64，**不是加密**。原来只在"没写 scheme"时补 https，
+     用户显式填 `http://…` 就照旧发出去 —— 账号与应用密码在网路上明文走过。
+     这里直接拒绝：http 的唯一好处是自签证书场景，而那种场景本来也过不了 fetch。 */
+  if(/^http:\/\//i.test(u)) return {base: "", c, insecure: true};
   return {base: u.endsWith("/") ? u : u + "/", c};
 }
 function wdHeaders(c){
@@ -43,6 +54,7 @@ WB.webdav = {
   async upload(){
     const base = wdBase();
     if(!base) return {ok: false, err: "先填服务器目录"};
+    if(base.insecure) return {ok: false, err: INSECURE_MSG};
     if(!base.c.user || !base.c.pass) return {ok: false, err: "先填账号与应用密码"};
     try{
       const body = webdavSnapshot();
@@ -56,6 +68,7 @@ WB.webdav = {
   async pull(){
     const base = wdBase();
     if(!base) return {ok: false, err: "先填服务器目录"};
+    if(base.insecure) return {ok: false, err: INSECURE_MSG};
     try{
       const res = await fetch(base.base + WBDAV_FILE, {headers: wdHeaders(base.c)});
       if(!res.ok) return {ok: false, err: "HTTP " + res.status + "（没有备份或目录不对）"};
@@ -74,6 +87,9 @@ WB.webdav = {
     const body = webdavSnapshot();
     if(webdavDataHash() === WB.store.get("webdavLastHash", "")) return;
     const base = wdBase();
+    /* 每天静默上传这条路径更要紧：不用用户点，凭据就在后台发出去。
+       http 地址直接静默跳过（没人想每天看这个提示），只留一次说明。 */
+    if(!base || base.insecure){ if(base && base.insecure) warnInsecureOnce(); return; }
     const res = await wdPut(base, c, body);
     if(res.ok){
       WB.store.set("webdavAuto:" + today, true);
@@ -88,6 +104,24 @@ function webdavHash(str){   // djb2：够用来判断"数据变没变"
   return String(h);
 }
 setTimeout(() => { WB.webdav.autoCheck().catch(e => console.error("[webdav]", e)); }, 30000);
+
+/* ---- 配置分享的键集（模块级：导出与导入共用同一份，踩坑 #097）----
+   为什么要白名单而不是"照单全收"：导入的 JSON 是**外部文件**，
+   而 importAll 会把里面每一个键都写进 store。曾经只判一个 `__share === 1` 就全盘接收，
+   于是恶意文件只要带上 `webdav:{url:攻击者, auto:true}`，30 秒后 autoCheck 就把
+   全量数据传到对方服务器 —— 用户看到的还只是"配置已导入"（踩坑 #097）。
+   散对象（settings / uiPrefs）只能挑键搬，不能整块替换。 */
+const SHARE_SETTING_KEYS = ["theme", "accent", "accentCustom", "quoteSource",
+  "currencies", "weatherCity", "offworkHour", "birthdayAhead"];
+const SHARE_UIPREF_KEYS = ["todayCards", "todayExpanded", "todayMinimal"];
+const SHARE_LIST_KEYS = ["coinRewards", "rssSources", "todoLists", "ledgerCats"];
+function pickShareKeys(obj, keys){
+  const out = {};
+  if(obj && typeof obj === "object"){
+    keys.forEach(k => { if(Object.prototype.hasOwnProperty.call(obj, k)) out[k] = obj[k]; });
+  }
+  return out;
+}
 
 
 WB.registerModule({
@@ -425,14 +459,10 @@ WB.registerModule({
           onclick: () => {
             const s = WB.store.get("settings", {}), u = WB.store.get("uiPrefs", {});
             const share = {__share: 1, exportedAt: new Date().toISOString(),
-              settings: {theme: s.theme, accent: s.accent, accentCustom: s.accentCustom, quoteSource: s.quoteSource,
-                currencies: s.currencies, weatherCity: s.weatherCity, offworkHour: s.offworkHour, birthdayAhead: s.birthdayAhead},
-              uiPrefs: {todayCards: u.todayCards, todayExpanded: u.todayExpanded, todayMinimal: u.todayMinimal},
-              coinRewards: WB.store.get("coinRewards", []),
-              rssSources: WB.store.get("rssSources", []),
-              todoLists: WB.store.get("todoLists", []),
-              ledgerCats: WB.store.get("ledgerCats", []),
+              settings: pickShareKeys(s, SHARE_SETTING_KEYS),
+              uiPrefs: pickShareKeys(u, SHARE_UIPREF_KEYS),
             };
+            SHARE_LIST_KEYS.forEach(k => { share[k] = WB.store.get(k, []); });
             WB.downloadFile("工作台配置-" + WB.todayStr() + ".json", JSON.stringify(share, null, 2), "application/json");
             WB.ui.toast("配置已导出（不含私人数据）");
           }})),
@@ -505,7 +535,9 @@ WB.registerModule({
       return row(label, "", input);
     };
     const aiProvSeg = el("div", {class: "seg"});
-    [["", "不填（用云开发额度）"], ["glm", "智谱 GLM"], ["deepseek", "DeepSeek"], ["openai", "OpenAI 兼容"]].forEach(([v, l]) => {
+    /* 只有这三家：服务端不再接受自定义 baseUrl（那是 SSRF 的直接入口，踩坑 #097）。
+       "OpenAI 兼容"指的是协议相同、但仍走 api.openai.com —— 想连别家就等它进名单。 */
+    [["", "不填（用云开发额度）"], ["glm", "智谱 GLM"], ["deepseek", "DeepSeek"], ["openai", "OpenAI"]].forEach(([v, l]) => {
       aiProvSeg.appendChild(el("button", {class: (byokS.aiProvider || "") === v ? "on" : "", text: l,
         onclick: () => {
           const b = WB.store.get("byok", {});
@@ -515,7 +547,7 @@ WB.registerModule({
         }}));
     });
     wrap.appendChild(sectionCard("key", "BYOK 我的密钥", [
-      el("div", {class: "small muted", style: {marginBottom: "8px"}, text: "密钥只存在你的浏览器本地，请求时随用随传，不经过其他服务器。不填则使用免费方案。"}),
+      el("div", {class: "small muted", style: {marginBottom: "8px"}, text: "密钥只存在你的浏览器本地，请求时随用随传，不经过其他服务器；导出备份与快照都不含它。不填则使用免费方案。"}),
       row("AI 服务商", "对话/标签建议用", aiProvSeg),
       byokField("AI Key", "aiKey", "粘贴你的 API Key（sk-… / id.secret…）", "password"),
       byokField("AI 模型", "aiModel", "留空用默认（glm-4-flash / deepseek-chat）"),
@@ -849,7 +881,8 @@ WB.registerModule({
       btn.appendChild(file);
       return btn;
     }
-    /* 配置分享导入：识别 __share 格式，合并模式走 importAll（数组按 id 去重、settings 浅合并），不动私人数据 */
+    /* 配置分享导入：**按白名单投影后再落库**（与导出共用 SHARE_* 键集）。
+       判一个 __share 标记就整盘接收，等于把"能写哪些键"交给对方 —— 踩坑 #097 */
     function importShareBtn(){
       const file = el("input", {type: "file", accept: ".json", style: {display: "none"}});
       file.addEventListener("change", async () => {
@@ -857,9 +890,14 @@ WB.registerModule({
         try{
           const data = JSON.parse(await f.text());
           if(!data || data.__share !== 1) throw new Error("不是配置分享文件（请选择「导出配置」生成的 JSON）");
+          const picked = {
+            settings: pickShareKeys(data.settings, SHARE_SETTING_KEYS),
+            uiPrefs: pickShareKeys(data.uiPrefs, SHARE_UIPREF_KEYS),
+          };
+          SHARE_LIST_KEYS.forEach(k => { if(Array.isArray(data[k])) picked[k] = data[k]; });
           if(!await WB.ui.confirmBox("将把对方的配置合并进你的工作台（同 id 去重，不影响日记/账单），继续？")) return;
           if(WB.snapshots){ try{ await WB.snapshots.take("导入配置前"); }catch(e){} }
-          WB.store.importAll(data, {merge: true});
+          WB.store.importAll(picked, {merge: true});
           WB.ui.toast("配置已导入，正在刷新…");
           setTimeout(() => location.reload(), 900);
         }catch(err){ WB.ui.toast("导入失败：" + err.message, "warn"); }

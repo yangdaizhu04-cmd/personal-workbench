@@ -5,14 +5,20 @@ const WB = (window.WB = window.WB || {});
 /* esc 必须解构出来：本文件的 render() 一直在用它，但从来没引入过 ——
    只要调用 WB.md.render() 就抛 ReferenceError（笔记页有笔记时整页渲染失败）。
    以前没暴露是因为「笔记页 + 有笔记」这条路径平时没人走到（踩坑 #057 的连带发现） */
-const { esc } = WB;
+const { esc, safeUrl } = WB;
 
 function inline(s){
   return s
     .replace(/`([^`]+)`/g, '<code class="md-code">$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
     .replace(/\*([^*]+)\*/g, "<i>$1</i>")
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    /* 链接：**协议必须过白名单**。esc 只处理 & < > " '，不处理 scheme，
+       于是 `[x](javascript:alert(1))` 会渲染出一个可点的可执行链接（踩坑 #097）。
+       不合规的地址降级成纯文本（只保留可见文字），而不是留一个点不动的死链。 */
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, label, url) => {
+      const safe = safeUrl(url);
+      return safe ? '<a href="' + safe + '" target="_blank" rel="noopener">' + label + "</a>" : label;
+    });
 }
 
 function render(src){

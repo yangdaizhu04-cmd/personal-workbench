@@ -11,8 +11,19 @@ function targetOf(c, today){
     target = WB.cal.nextLunarBirthday(c.lunar.lMonth, c.lunar.lDay) || c.date;
   }else if(c.repeatYearly){
     const y = new Date().getFullYear();
-    let t = y + c.date.slice(4);
-    if(t < today) t = (y + 1) + c.date.slice(4);
+    /* 2 月 29 日这类日期在平年不存在：`parseDate("2027-02-29")` 会被 Date 顺延成 3 月 1 日，
+       于是用户填的 2/29 在平年显示成 3/1，还差一天且没有任何提示（踩坑 #099）。
+       显式判一次"那天在这个平年存不存在"，不存在就顺延到 2 月 28 日（与非闰年常识一致）。 */
+    const mk = yy => {
+      const mm = +c.date.slice(5, 7), dd = +c.date.slice(8, 10);
+      const probe = WB.parseDate(yy + "-" + String(mm).padStart(2, "0") + "-" + String(dd).padStart(2, "0"));
+      if(probe.getMonth() + 1 === mm && probe.getDate() === dd) return yy + c.date.slice(4);
+      /* Date 会把 2/29 顺延成 3/1：回退到该月最后一天 */
+      const last = new Date(yy, mm, 0).getDate();
+      return yy + "-" + String(mm).padStart(2, "0") + "-" + String(Math.min(dd, last)).padStart(2, "0");
+    };
+    let t = mk(y);
+    if(t < today) t = mk(y + 1);
     target = t;
   }
   return target;

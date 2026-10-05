@@ -25,7 +25,7 @@ function dataContext(){
   const focusMin = WB.store.get("pomoLog", []).filter(l => days7.includes(l.date) && l.status === "done" && l.mode === "focus").reduce((s, l) => s + l.minutes, 0);
   const moods = WB.store.get("moods", []).filter(m => days7.includes(m.date));
   const moodAvg = moods.length ? (moods.reduce((s, m) => s + m.level, 0) / moods.length).toFixed(1) : "无";
-  const spend = WB.store.get("ledger", []).filter(l => days7.includes(l.date) && l.type === "out").reduce((s, l) => s + l.amount, 0).toFixed(0);
+  const spend = WB.store.get("ledger", []).filter(l => days7.includes(l.date) && l.type === "out").reduce((s, l) => s + WB.amount(l.amount), 0).toFixed(0);
   const habits = WB.store.get("habits", []).filter(h => !h.archived).map(h => h.name + "(" + WB.habits.streakOf(h.id) + "天)").join("、") || "无";
   const journalExcerpts = WB.store.get("journals", [])
     .filter(j => days7.includes(j.date) && (j.free || j.done))

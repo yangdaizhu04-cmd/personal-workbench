@@ -146,6 +146,7 @@ function startMorning(){
       onclick: () => {
         saveStep(idx);
         if(isLast){
+          finished = true;
           WB.store.set("morningDone:" + today, true);
           m.close();
           WB.ui.chime("done");
@@ -160,7 +161,14 @@ function startMorning(){
       }}));
     }
   };
+  let finished = false;
   m = WB.ui.modal({title: steps[0].title, icon: "sun", content: steps[0].content, wide: true, onClose: () => {
+    /* 走完的按钮会先置 finished 再 close，那种情况不再重复保存。
+       误关（× 或点遮罩）时**把已经做过的选择存下来**再标记完成 ——
+       原来无条件写 morningDone 就算完成，于是第一步里给昨天待办选的「今天做 / 放下」
+       全部丢失（那些待办的日期没动过），而当天又不会再弹，
+       用户以为已经安排过了 —— 仪式的主要价值静默失效（踩坑 #099）。 */
+    if(!finished) saveStep(idx);
     WB.store.set("morningDone:" + today, true); // 关闭也算完成，不反复弹
   }});
   show();

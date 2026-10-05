@@ -102,8 +102,11 @@ WB.registerModule({
       if(!data.some(v => v != null)) return;
       const a = A();
       const div = el("div", {style: {width: "100%", height: "240px"}});
+      /* 指标名与单位是用户自由输入（也可由导入 JSON 带入），拼进 innerHTML 即 XSS 通路。
+         同文件 73/130 行渲染同一个 d.name 时用的就是 text:，这里是遗漏（踩坑 #097）。 */
       const cardEl = el("div", {class: "card"},
-        el("div", {class: "card-title", html: icon("trend-up", 17) + "<span>" + d.name + "（近 30 天 · " + d.unit + "）</span>"}),
+        el("div", {class: "card-title"}, icon("trend-up", 17),
+          el("span", {text: (d.name == null ? "" : d.name) + "（近 30 天 · " + (d.unit == null ? "" : d.unit) + "）"})),
         div);
       grid.appendChild(cardEl);
       const inst = echarts.init(div);

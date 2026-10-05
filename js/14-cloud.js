@@ -18,6 +18,10 @@ const SYNC_KEYS = [
 function token(){ return localStorage.getItem("wb:token") || ""; }
 function setToken(t){ t ? localStorage.setItem("wb:token", t) : localStorage.removeItem("wb:token"); }
 
+/* token 现在是**服务端随机会话**（有 30 天过期，踩坑 #097），不再是"密码的确定性函数"。
+   所以它真的会失效 —— 以前 token 永不过期，失效这条路径根本不存在。
+   处理方式与其它错误分开：清掉本地 token、重新弹密码门（一次），而不是干报"同步失败"。 */
+let reloginPrompted = false;
 async function call(fn, payload){
   try{
     const res = await fetch(baseUrl + "/" + fn, {
@@ -26,14 +30,23 @@ async function call(fn, payload){
       body: JSON.stringify(payload),
     });
     if(!res.ok) throw new Error("HTTP " + res.status);
-    return await res.json();
+    const data = await res.json();
+    if(data && data.code === "unauthorized"){
+      setToken("");
+      if(!reloginPrompted && fn !== "gate"){
+        reloginPrompted = true;
+        setStatus("登录已失效");
+        WB.ui.toast("云端登录已过期，正在重新验证密码…", "warn");
+        gateModal().then(ok => { if(ok) location.reload(); });
+      }
+    }
+    return data;
   }catch(e){
     return {ok: false, message: e.message};
   }
 }
 
-/* ---------- 编码 / 解码（本地 ↔ 同步格式） ---------- */
-function encodeKey(val){
+/* ---------- 编码 / 解码（本地 ↔ 同步格式） ---------- */function encodeKey(val){
   const records = {};
   if(Array.isArray(val)){
     val.forEach(r => { if(r && r.id) records[r.id] = r; });
@@ -259,7 +272,11 @@ const cloudApi = {
     return true;
   },
   onStatus(fn){ statusListeners.push(fn); },
-  callProxy(payload){ return call("proxy", payload); },
+  /* proxy 现在也要鉴权（原来完全公开 = 任何人都能拿它当免费 AI 中继，
+     且可控 baseKey 让它能被当 SSRF 跳板，踩坑 #097）：token 由这里统一带上。 */
+  callProxy(payload){
+    return call("proxy", Object.assign({token: token()}, payload || {}));
+  },
   token,
 };
 function decodeSnapshot(data){

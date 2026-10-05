@@ -165,9 +165,19 @@ WB.registerModule({
       }
 
       const tl = el("div", {style: {maxHeight: "330px", overflowY: "auto", border: "1px solid var(--card-border)", borderRadius: "12px"}});
-      for(let h = 6; h <= 24; h++){
+      /* 行集合 = 6..24 加上**数据里真出现过的、更早的小时**。
+         原来只画 6..24：一条 03:00 或 00:00 的待办在时间轴上没有对应的行，
+         而"未安排"只收 time 为空的 —— 两处都不显示，用户以为拖丢了（踩坑 #098）。 */
+      const hours = [];
+      for(let h = 6; h <= 24; h++) hours.push(h);
+      withTime.forEach(x => {
+        const hh = parseInt(String(x.time || ""), 10);
+        if(Number.isFinite(hh) && hh >= 0 && hh < 6 && hours.indexOf(hh) < 0) hours.push(hh);
+      });
+      hours.sort((a, b) => a - b);
+      for(const h of hours){
         const hm = (h % 24 === 0 ? "24" : String(h).padStart(2, "0")) + ":00";
-        const blocks = withTime.filter(x => parseInt(x.time) === h);
+        const blocks = withTime.filter(x => parseInt(String(x.time || ""), 10) === h);
         const row = el("div", {dataset: {hour: h}, style: {display: "flex", borderBottom: "1px dashed var(--card-border)", minHeight: "34px",
           background: blocks.length ? "var(--accent-soft)" : "transparent", transition: "background .2s"}});
         row.appendChild(el("div", {class: "small faint", style: {width: "52px", flex: "none", padding: "7px 8px", textAlign: "right", borderRight: "1px solid var(--card-border)"}, text: hm}));
@@ -185,8 +195,14 @@ WB.registerModule({
           e.preventDefault();
           const id = e.dataTransfer.getData("text/plain");
           if(id && todos.find(id)){
-            todos.update(id, {time: String(h % 24).padStart(2, "0") + ":00"});
-            WB.ui.toast("已安排到 " + (h % 24) + ":00");
+            /* 末行是「24:00」= 当天最后一格。原来写 `h % 24` 得到 "00:00"：
+               而时间轴的行集合不含 0 点、"未安排"又要求 time 为空 ——
+               这条待办从此在两处都看不见，只在列表里还留一行（踩坑 #098）。
+               落 23:59，并说清楚它落在哪一行。 */
+            const last = h === 24;
+            const hh = last ? "23:59" : String(h).padStart(2, "0") + ":00";
+            todos.update(id, {time: hh});
+            WB.ui.toast(last ? "已安排到 23:59（24:00 就是当天最后一格）" : "已安排到 " + hh);
             paint();
           }
         });

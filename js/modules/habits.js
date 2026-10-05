@@ -46,6 +46,12 @@ function firstToday(){
   const today = WB.bizDate();
   return !logsAll().some(l => l.date === today && l.count > 0);
 }
+/* 达标奖励门闩：每个习惯每天只发一次 +2。
+   用 KV 记而不是"看 count 现值"，因为次数型习惯可以 ＋1/－1 来回改 count，
+   任何基于当前值的判据都能被反复触发。参照 WB.coins.big3Bonus 的做法。 */
+function bonusKey(habitId, date){ return "habitBonus:" + habitId + ":" + date; }
+function bonusClaimed(habitId, date){ return WB.store.get(bonusKey(habitId, date), false) === true; }
+function claimBonus(habitId, date){ WB.store.set(bonusKey(habitId, date), true); }
 function habitModal(existing){
   const isNew = !existing;
   const h = Object.assign({name: "", type: "check", target: 8}, existing || {});
@@ -79,7 +85,9 @@ function habitModal(existing){
       {label: "保存", primary: true, onClick: () => {
         const nameV = name.value.trim();
         if(!nameV){ name.focus(); return; }
-        const patch = {name: nameV, type: curType, target: Math.max(2, parseInt(targetIn.value) || 8)};
+        /* toInt 而不是 `parseInt(...) || 8`：填 0 是"我想要 0"（会被钳到下限 2），
+           不是"没填所以用 8"（踩坑 #099） */
+        const patch = {name: nameV, type: curType, target: Math.max(2, WB.toInt(targetIn.value, 8))};
         if(isNew) habits.add(patch);
         else habits.update(h.id, patch);
         m.close(); WB.router.render();
@@ -123,7 +131,11 @@ function checkRow(h, dateStr, big){
       onclick: e => {
         setLog(h.id, dateStr, count + 1);
         if(count + 1 >= target){ WB.ui.starBurst(e.clientX, e.clientY); WB.ui.chime("done"); WB.ui.toast("「" + h.name + "」今日达标 ✓");
-          if(WB.coins && count + 1 === target) WB.coins.forHabit(2); }   // 每日首次达标 +2，超刷不加
+          /* 达标奖励走**当日门闩**，不是"count+1 恰好等于 target"。
+             原来的判据只看当前值，而下面是有一个「－1」的：8/8 → －1 → 7 → ＋1 → 8
+             又成立一次，于是 +2 币可以无限刷（对比 WB.coins.big3Bonus 用的是门闩，踩坑 #098）。 */
+          if(WB.coins && !bonusClaimed(h.id, dateStr)){ claimBonus(h.id, dateStr); WB.coins.forHabit(2); }
+        }
         WB.router.render();
         if(WB.badgeCheck) WB.badgeCheck();
       }}));
@@ -265,7 +277,10 @@ WB.registerModule({
   },
 });
 
-/* 打卡入口：抽成模块级函数——WB.habits 对象字面量里的成员对模块内其他函数不可见（踩坑 #030 同款） */
+/* 打卡入口：抽成模块级函数——WB.habits 对象字面量里的成员对模块内其他函数不可见（踩坑 #030 同款）
+   结算口径与习惯页的 checkRow **必须一致**（原来这里少了发币与徽章结算，
+   于是「今日」页打卡进度卡点一下：有星光有铃声但币不变，徽章（如 first-habit）永远不触发，
+   同一个动作两个出口两个结果，踩坑 #099）。 */
 function quickCheck(h, ev){
   const dateStr = WB.bizDate();
   const log = logOf(h.id, dateStr);
@@ -276,9 +291,11 @@ function quickCheck(h, ev){
     if(!done){
       if(ev) WB.ui.starBurst(ev.clientX, ev.clientY);
       WB.ui.chime("done");
+      if(WB.coins) WB.coins.forHabit(1);
       if(wasFirst) WB.ui.celebrate({});
     }
     WB.router.render();
+    if(WB.badgeCheck) WB.badgeCheck();
   }else{
     WB.router.go("habits");
   }

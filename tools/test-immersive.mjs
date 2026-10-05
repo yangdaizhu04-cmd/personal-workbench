@@ -188,7 +188,11 @@ for(const target of targets){
       vid.hasVideo === false && vid.fxPlay === "running", JSON.stringify(vid));
   }else{
     check(target.name, "视频背景：1080p、src 指向当前场景、静音循环、在播且盖上 CSS 动态层",
-      vid.exists && vid.src.endsWith("/vendor/video/mist.mp4") && vid.muted === true && vid.loop === true &&
+      /* 16-immersive.js 的 VIDEO_DIR 是**相对路径**（"vendor/video/"），setAttribute 进去的
+         也是相对路径；getAttribute("src") 原样返回，不带前导斜杠。原来断言写成
+         endsWith("/vendor/video/mist.mp4")（多一个斜杠），于是**永远不可能成立** ——
+         这条断言从写下起就没真正通过过，是"探针口径错了"而不是代码坏了（踩坑 #100）。 */
+      vid.exists && vid.src.endsWith("vendor/video/mist.mp4") && vid.muted === true && vid.loop === true &&
       vid.paused === false && vid.on && vid.hasVideo && vid.fxPlay === "paused" && vid.vw >= 1920,
       JSON.stringify(vid));
   }

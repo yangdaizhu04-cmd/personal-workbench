@@ -85,7 +85,8 @@ function detailModal(s){
         el("span", {class: "grow small ellipsis", text: l.title || l.url}),
         bv ? el("button", {class: "btn sm primary", text: "▶ 内嵌播放",
           onclick: () => biliModal(bv, l.title)}) : null,
-        el("button", {class: "icon-btn", html: icon("external", 13), onclick: () => window.open(l.url, "_blank")}),
+        el("button", {class: "icon-btn", html: icon("external", 13),
+          onclick: () => { const u = WB.safeUrl(l.url); if(u) window.open(u, "_blank", "noopener"); }}),
         el("button", {class: "icon-btn", html: icon("close", 12), onclick: () => { fresh.links.splice(i, 1); persist(); renderLinks(); }})));
     });
     if(!(fresh.links || []).length) linkBox.appendChild(el("div", {class: "small faint", text: "添加教程链接（B站视频可内嵌播放）"}));

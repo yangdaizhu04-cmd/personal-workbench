@@ -135,7 +135,8 @@ WB.registerModule({
         let host = "";
         try{ host = new URL(l.url).hostname.replace(/^www\./, ""); }catch(e){}
         const cell = el("div", {class: "card hoverable", style: {padding: "14px", cursor: "pointer"},
-          onclick: () => { try{ window.open(l.url, "_blank"); }catch(e){} }},
+          /* 协议过白名单：地址是用户填的 / 书签导入的，`javascript:` 伪协议点一下就执行（踩坑 #097） */
+          onclick: () => { const u = WB.safeUrl(l.url); if(!u) return; try{ window.open(u, "_blank", "noopener"); }catch(e){} }},
           el("div", {class: "row"},
             el("span", {class: "center", style: {width: "34px", height: "34px", borderRadius: "10px", background: "var(--accent-soft)", color: "var(--accent)", fontWeight: "700", flex: "none"},
               text: l.name.slice(0, 1).toUpperCase()}),

@@ -31,7 +31,7 @@ const pomoOn = d => WB.store.get("pomoLog", []).filter(l => l.date === d && l.st
 const moodOn = d => WB.store.get("moods", []).find(m => m.date === d) || null;
 const journalOn = d => WB.store.get("journals", []).find(j => j.date === d) || null;
 const spendOn = d => WB.store.get("ledger", []).filter(l => l.date === d && l.type === "out")
-  .reduce((s, l) => s + (Number(l.amount) || 0), 0);
+  .reduce((s, l) => s + WB.amount(l.amount), 0);
 const habitLogsOn = d => WB.store.get("habitLogs", []).filter(l => l.date === d && l.count > 0);
 const habitName = id => (WB.store.get("habits", []).find(h => h.id === id) || {}).name || "习惯";
 const rangeDays = (a, b) => {

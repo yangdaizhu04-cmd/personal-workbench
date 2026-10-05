@@ -39,11 +39,12 @@ function ledger(){
   if(!ls.length){ WB.ui.toast("还没有账单可导出", "warn"); return; }
   const cats = WB.store.get("ledgerCats", []);
   const catName = id => { const c = cats.find(x => x.id === id); return c ? c.name : ""; };
+  /* 每个字段都走 WB.csvCell：加引号挡不住公式注入（`="cmd|'/c calc'!A0` 在引号里照样执行），
+     真正要挡的是以 = + - @ 开头的值。分类名与备注都是用户自己填的（踩坑 #099）。 */
+  const row = l => [WB.csvCell(l.date), WB.csvCell(l.type === "out" ? "支出" : "收入"),
+    WB.csvCell(WB.amount(l.amount)), WB.csvCell(catName(l.catId)), WB.csvCell(l.note)].join(",");
   let csv = "\uFEFF日期,类型,金额,分类,备注\n"; // BOM 让 Excel 正确识别 UTF-8
-  ls.forEach(l => {
-    const note = '"' + String(l.note || "").replace(/"/g, '""') + '"';
-    csv += [l.date, l.type === "out" ? "支出" : "收入", l.amount, catName(l.catId), note].join(",") + "\n";
-  });
+  ls.forEach(l => { csv += row(l) + "\n"; });
   WB.downloadFile("账单导出-" + WB.todayStr() + ".csv", csv, "text/csv;charset=utf-8");
   WB.ui.toast("已导出 " + ls.length + " 笔账单");
 }
@@ -137,10 +138,11 @@ function obsidian(){
   if(ls.length){
     const cats = WB.store.get("ledgerCats", []);
     const catName = id => { const c = cats.find(x => x.id === id); return c ? c.name : ""; };
+    /* 与上面那个 CSV 导出同一口径（WB.csvCell，含公式注入防护） */
+    const row = l => [WB.csvCell(l.date), WB.csvCell(l.type === "out" ? "支出" : "收入"),
+      WB.csvCell(WB.amount(l.amount)), WB.csvCell(catName(l.catId)), WB.csvCell(l.note)].join(",");
     let csv = "日期,类型,金额,分类,备注\n";
-    ls.forEach(l => {
-      csv += [l.date, l.type === "out" ? "支出" : "收入", l.amount, catName(l.catId), '"' + String(l.note || "").replace(/"/g, '""') + '"'].join(",") + "\n";
-    });
+    ls.forEach(l => { csv += row(l) + "\n"; });
     entries.push({name: "账单.csv", data: csv});
   }
   if(!entries.length){ WB.ui.toast("还没有可导出的数据", "warn"); return; }

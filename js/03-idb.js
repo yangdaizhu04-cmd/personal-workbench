@@ -6,18 +6,30 @@ const DB_NAME = "wb-files";
 const STORE = "files";
 let dbPromise = null;
 
+/* 连接缓存：**只缓存成功的连接**。
+   原来 `dbPromise` 连 reject 也缓存：首次打开失败（隐私模式 / 被另一标签升级 / 连接被 GC）
+   之后，IDB 就此终身失效 —— 之后每个 put/get/del 都走 catch 分支静默返回 false/null，
+   表现是"封面/音乐/快照/涂鸦全都不动"，而且没有任何报错可查（踩坑 #099）。
+   现在失败时把缓存清掉（下次调用会重试），并且监听 versionchange 让连接能被换掉。 */
 function open(){
   if(dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
     let req;
     try{ req = indexedDB.open(DB_NAME, 1); }
-    catch(e){ reject(e); return; }
+    catch(e){ dbPromise = null; reject(e); return; }
     req.onupgradeneeded = () => {
       const db = req.result;
       if(!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, {keyPath: "key"});
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      /* 别的标签升级了版本：这条连接马上会失效，主动关掉并让下次重新开。
+         不监听的话，本页会在第一次访问时报一个没人看得懂的 InvalidStateError。 */
+      db.onversionchange = () => { try{ db.close(); }catch(e){} dbPromise = null; };
+      resolve(db);
+    };
+    req.onerror = () => { dbPromise = null; reject(req.error); };
+    req.onblocked = () => { dbPromise = null; reject(new Error("indexedDB blocked")); };
   });
   return dbPromise;
 }

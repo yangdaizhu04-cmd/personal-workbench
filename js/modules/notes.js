@@ -155,7 +155,11 @@ WB.registerModule({
       if(filterTag) arr = arr.filter(n => (n.tags || []).includes(filterTag));
       if(keyword){
         const k = keyword.replace(/^#/, "").toLowerCase();
-        arr = arr.filter(n => n.content.toLowerCase().includes(k) || (n.tags || []).some(t => t.toLowerCase().includes(k)));
+        /* 正文兜底：导入的 JSON 缺 content 时原来直接抛 TypeError，整页渲染被
+           09-router 的 try/catch 兜成「这个模块打了个盹」—— 一条脏数据让**一页笔记都看不到**，
+           而且界面上没法删掉它自救（踩坑 #098）。 */
+        arr = arr.filter(n => String(n.content == null ? "" : n.content).toLowerCase().includes(k)
+          || (n.tags || []).some(t => String(t).toLowerCase().includes(k)));
       }
       grid.innerHTML = "";
       if(!arr.length){
