@@ -113,7 +113,8 @@ cd mobile/android && gradlew.bat assembleDebug
 
 - [x] **A 批完成（2026-10-09）**：真机冒烟通过 —— OPPO PLB110 / Android 16（SDK 36）：侧载安装、启动无崩溃无 JS 错误、首屏渲染（奶油主题/晨间仪式/天气联网）、**返回键关弹窗且 App 不退出**、**无弹窗时退后台进程存活**、**深浅色切换状态栏实时跟随**、底栏/抽屉/路由正常
 - [x] A 批：返回键到底层的行为 → 真机已定 = `minimizeApp()` 退后台、进程存活（番茄计时时间戳制照走）
-- [ ] B 批：IndexedDB 大文件（封面/涂鸦/照片主题）落盘通道 + 本地音乐迁原生 Filesystem
+- [x] **B 批核心完成（2026-10-09）**：① Preferences 镜像（`js/20-appdata.js`：数据导入后防抖 + 每 60s 兜底 + **退后台走 `app:state`**，真机验证 `shared_prefs/CapacitorStorage.xml` 落盘、敏感键/netcache 正确剔除；本机空时启动自动恢复）；② 系统分享导出（`downloadFile` 加 App 分支 → `saveAndShare`：Filesystem(CACHE) + Share，JSON/MD/CSV/zip 全走通，真机验证分享面板弹出「个人工作台备份-2026-10-09.json」）。新增插件 preferences / filesystem / share
+- [ ] B 批二阶段：IndexedDB 大文件（封面/涂鸦/照片主题）原生落盘通道 + 本地音乐迁原生 Filesystem（涉及共享 03-idb/sound，需网页回归）
 - [ ] C 批：通知去重复用 `18-desktop.js` 的 `firedIds` 双账机制
 - [ ] D 批：启动屏自定义资源（当前用系统默认；`assets/` 已留规格说明）
 - [ ] E 批（可选）：云同步联调 / 应用内检查更新 / 系统分享收文本

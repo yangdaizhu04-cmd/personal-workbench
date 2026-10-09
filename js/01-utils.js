@@ -119,6 +119,12 @@ function fallbackCopy(text){
   ta.remove(); return true;
 }
 function downloadFile(name, content, mime){
+  /* App 里 <a download> 触发不了下载（WebView 无 DownloadListener），
+     改走原生 Filesystem 写文件 + 系统分享（js/20-appdata.js）；Web 下仍走浏览器下载 */
+  if(window.WB && WB.appData && WB.appData.available && WB.appData.available()){
+    WB.appData.saveAndShare(name, content, mime);
+    return;
+  }
   const blob = content instanceof Blob ? content : new Blob([content], {type: mime || "text/plain;charset=utf-8"});
   const url = URL.createObjectURL(blob);
   const a = el("a", {href: url, download: name});

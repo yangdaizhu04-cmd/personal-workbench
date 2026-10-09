@@ -193,6 +193,8 @@
 <script src="js/18-desktop.js"></script>
 <!-- 移动端桥：App（Capacitor）专属能力，排在 main.js 之前（返回键/生命周期要早注册）；Web 下整体 no-op -->
 <script src="js/19-app.js"></script>
+<!-- 移动端数据护城河：Preferences 镜像 + 系统分享导出（Web 下 no-op） -->
+<script src="js/20-appdata.js"></script>
 <!-- ThreeUI 视觉 island（构建产物：tools/build-islands.mjs；React 组件打包为普通脚本）
      defer 加载：core.js 纯事件驱动（监听 data-theme / body.bg-dynamic-on / pomo:orb-attach），
      无同步前置依赖；延后使其不阻塞首帧解析与 boot，DOMContentLoaded 前仍按序就绪 -->
