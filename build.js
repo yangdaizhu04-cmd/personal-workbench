@@ -31,6 +31,31 @@ function minifyCSS(code){
   }catch(e){ console.warn("  ! CSS 压缩失败，使用原样代码:", String(e.message).slice(0, 80)); return code; }
 }
 
+/* App 移动端版：把裸标识符 __WB_APP__ 替换成 true（仅 --app 分支调用）。
+   其它形态（文件夹/单文件/--cloud/--tauri）不做替换 —— js/19-app.js 用
+   `typeof __WB_APP__ !== "undefined"` 兜底，未定义时判 false，零构建形态也安全。
+   只 define 不 minify：保持 mobile/dist 与文件夹版结构一致（与 --tauri 的原样拷贝对称）。 */
+function transformAppJS(code){
+  if(!esbuild) return code;
+  try{ return esbuild.transformSync(code, {define: {"__WB_APP__": "true"}}).code; }
+  catch(e){ console.warn("  ! App JS 注入失败，原样拷贝:", String(e.message).slice(0, 120)); return code; }
+}
+/* 递归拷贝 js 目录：.js 文件做 __WB_APP__ 注入，其余原样 */
+function copyJSApp(srcDir, outDir){
+  for(const entry of fs.readdirSync(srcDir, {withFileTypes: true})){
+    const s = path.join(srcDir, entry.name);
+    const o = path.join(outDir, entry.name);
+    if(entry.isDirectory()){
+      fs.mkdirSync(o, {recursive: true});
+      copyJSApp(s, o);
+    }else if(entry.name.endsWith(".js")){
+      fs.writeFileSync(o, transformAppJS(fs.readFileSync(s, "utf8")));
+    }else{
+      fs.copyFileSync(s, o);
+    }
+  }
+}
+
 function inlineCSS(css){
   // 字体 → base64
   css = css.replace(/url\(["']?([^"')]+\.woff2)["']?\)/g, (m, p1) => {
@@ -149,4 +174,18 @@ if(process.argv.includes("--tauri")){
      只在桌面产物里，网页版 / 单文件 / 云端都不带 —— 它也不加载工作台的任何脚本 */
   fs.copyFileSync("desktop/toast.html", path.join(dir, "toast.html"));
   console.log("✅ Tauri 完整目录产物已写入 desktop/dist/（与文件夹版同一份资源）");
+}
+
+/* App 移动端版（Capacitor）：完整文件夹拷贝 + 注入 __WB_APP__=true。
+   与 --tauri 对称，但不含桌面专属 toast.html；js 目录逐个做 define 替换（css/vendor 原样）。 */
+if(process.argv.includes("--app")){
+  const dir = safePath("mobile/dist");
+  fs.rmSync(dir, {recursive: true, force: true});
+  fs.mkdirSync(dir, {recursive: true});
+  fs.copyFileSync("index.html", path.join(dir, "index.html"));
+  fs.copyFileSync("manifest.webmanifest", path.join(dir, "manifest.webmanifest"));
+  for(const d of ["css", "vendor"]) fs.cpSync(d, path.join(dir, d), {recursive: true});
+  fs.mkdirSync(path.join(dir, "js"), {recursive: true});
+  copyJSApp("js", path.join(dir, "js"));
+  console.log("✅ App 完整目录产物已写入 mobile/dist/（与文件夹版同一份资源，__WB_APP__=true）");
 }

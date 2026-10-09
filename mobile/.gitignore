@@ -1,0 +1,25 @@
+# App web 产物（node build.js --app 生成）
+dist/
+
+# Android 构建产物（Capacitor 生成的 android/.gitignore 也会覆盖，这里兜底）
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+android/app/release/
+android/app/debug/
+android/capacitor-cordova-android-plugins/
+
+# 依赖
+node_modules/
+
+# 签名（绝不入库：丢失 = 无法覆盖安装 = 数据全丢）
+*.jks
+*.keystore
+keystore.properties
+*.keystore.bak
+
+# 系统 / 临时
+.DS_Store
+Thumbs.db
+*.log

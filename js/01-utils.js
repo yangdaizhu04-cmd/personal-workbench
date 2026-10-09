@@ -207,6 +207,11 @@ function notify(title, body, onClick){
       WB.desktop.notifyNow(title, body);
       return true;
     }
+    if(window.WB && WB.app && WB.app.available && WB.app.available()){
+      /* 移动端：走 19-app.js → Local Notifications（C 批）。App 里 WebView 的
+         new Notification() 不可用（同桌面版 WebView2），这条通道是唯一归宿 */
+      return WB.app.notify(title, body, onClick);
+    }
     if(!("Notification" in window)) return false;
     if(Notification.permission === "granted"){
       const n = new Notification(title, {body, silent: document.documentElement.classList.contains("no-motion")});
@@ -222,10 +227,22 @@ function ensureNotifyPermission(){
   }catch(e){}
 }
 
+/* 形态判定矩阵（唯一收口）：folder 文件夹 / single 单文件 / pwa 云端 / desktop 桌面 / app 移动端。
+   新功能判断形态只查 WB.env.mode，别裸写 isFile / inTauri / __WB_APP__ 组合（见 mobile/README §6）。
+   优先级：desktop > app > single > folder > pwa。__WB_APP__ 用 typeof 兜底：零构建形态天然 false。 */
+const env = { mode: (function(){
+  if(window.__TAURI_INTERNALS__ || (window.__TAURI__ && window.__TAURI__.core)) return "desktop";
+  if(typeof __WB_APP__ !== "undefined" && __WB_APP__) return "app";
+  if(window.WB_SINGLE_FILE) return "single";
+  /* typeof 兜底：node 测试沙箱里没有 location，直接引用会 ReferenceError */
+  if(typeof location !== "undefined" && location.protocol === "file:") return "folder";
+  return "pwa";
+})() };
+
 Object.assign(WB, {
   $, $$, el, esc, safeUrl, safeColor, amount, toInt, num, csvCell, uid, debounce, clamp, copyText, downloadFile, REMIND_AHEAD, TODO_WINDOW_MIN,
   dateStr, parseDate, addDays, addDaysStr, todayStr, bizDate, bizNow,
   WEEK_CN, weekdayCN, fmtDateCN, daysBetween, relDayLabel, fmtTime, fmtMonth, monthStr,
-  hexToRgba, shuffle, pickDaily, notify, ensureNotifyPermission,
+  hexToRgba, shuffle, pickDaily, notify, ensureNotifyPermission, env,
 });
 })();

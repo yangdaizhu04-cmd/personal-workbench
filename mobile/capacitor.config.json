@@ -1,0 +1,9 @@
+{
+  "appId": "com.personal.workbench",
+  "appName": "个人工作台",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#f6f1e7"
+  }
+}
