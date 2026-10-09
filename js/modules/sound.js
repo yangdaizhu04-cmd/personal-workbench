@@ -432,9 +432,8 @@ function playLocalIdx(i){
   if(!list.length) return;
   localAudio._idx = ((i % list.length) + list.length) % list.length;
   const item = list[localAudio._idx];
-  WB.idb.get("music:" + item.id).then(rec => {
-    if(!rec){ WB.ui.toast("找不到音频数据：" + item.name, "warn"); return; }
-    const url = URL.createObjectURL(rec.data);
+  WB.musicFile.url(item.id).then(url => {
+    if(!url){ WB.ui.toast("找不到音频数据：" + item.name, "warn"); return; }
     localAudio.src = url;
     const p = prefs();
     localAudio.volume = clamp01((WB.num(p.vol.local, .8)) * (WB.num(p.vol.master, .9)));
@@ -530,7 +529,7 @@ function renderPanelInto(root){
   fileIn.addEventListener("change", async () => {
     for(const f of fileIn.files){
       const id = WB.uid();
-      await WB.idb.put("music:" + id, f, {name: f.name});
+      await WB.musicFile.put(id, f);
       const st = WB.store.get("musicList", []);
       st.push({id, name: f.name.replace(/\.[^.]+$/, "")});
       WB.store.set("musicList", st);

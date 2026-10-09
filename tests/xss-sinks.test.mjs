@@ -48,7 +48,7 @@ const EXEMPT = {
   "js/modules/settings.js:392": "分组数与行数（数字）",
   "js/modules/settings.js:687": "关于页的固定文案（开源组件与许可说明）",
   "js/modules/settings.js:696": "sectionCard 的标题形参 —— 全部调用方传字面量",
-  "js/modules/sound.js:502": "showLabel 来自 SRC_META 静态音源表",
+  "js/modules/sound.js:501": "showLabel 来自 SRC_META 静态音源表",
   "js/modules/stats.js:13": "卡片标题由调用方写字面量",
   "js/modules/stats.js:398": "WB.icon 白名单",
   "js/modules/today.js:551": "日期串的前四位（年份数字）",
