@@ -44,11 +44,20 @@ function syncStatusBar(){
   }catch(e){}
 }
 
-/* 通知：A 批占位（返回 false，由 01-utils.js 的 notify 回落浏览器行为）。
-   C 批接 Local Notifications —— 注意 App 里 WebView 的 new Notification() 和
-   桌面版 WebView2 一样不可用，所以这条通道是「提醒可达」的最终归宿。 */
-function notify(/* title, body, onClick */){
-  return false;
+/* 通知：走 20-appdata.js 的 Local Notifications（C 批）。
+   App 里 WebView 的 new Notification() 和桌面版 WebView2 一样不可用，这条原生通道是
+   「提醒可达」的唯一归宿。同步返回 true 表示"已交给原生通道"；实际发送是异步的，
+   失败在 then 里用页内提示兜底（否则提醒会静默消失 —— 失败必须看得见）。 */
+function notify(title, body, onClick){
+  if(!isApp) return false;
+  const p = WB.appData && WB.appData.notifyNative;
+  if(!p) return false;
+  p(title, body, onClick).then(ok => {
+    if(!ok && WB.theme && WB.theme.all().remindToast && WB.ui){
+      WB.ui.toast(title + " · " + body, "warn");
+    }
+  }).catch(() => {});
+  return true;
 }
 
 if(isApp){

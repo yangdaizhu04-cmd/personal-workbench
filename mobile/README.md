@@ -116,6 +116,7 @@ cd mobile/android && gradlew.bat assembleDebug
 - [x] **B 批核心完成（2026-10-09）**：① Preferences 镜像（`js/20-appdata.js`：数据导入后防抖 + 每 60s 兜底 + **退后台走 `app:state`**，真机验证 `shared_prefs/CapacitorStorage.xml` 落盘、敏感键/netcache 正确剔除；本机空时启动自动恢复）；② 系统分享导出（`downloadFile` 加 App 分支 → `saveAndShare`：Filesystem(CACHE) + Share，JSON/MD/CSV/zip 全走通，真机验证分享面板弹出「个人工作台备份-2026-10-09.json」）。新增插件 preferences / filesystem / share
 - [x] **B 二阶段完成（2026-10-10）**：**本地音乐迁原生 Filesystem** —— 新增 `WB.musicFile` 抽象层（`20-appdata.js`，所有形态挂载：Web 委托 IndexedDB 行为不变、App 走 `Filesystem(DATA)/music/<id>.<ext>`，写失败自动降级回 IndexedDB）；`sound.js` 导入/播放两处改走它（运行时调用无时序问题）。**封面/涂鸦/照片主题刻意不迁**：均为几十 KB 小图片且可重新生成，IndexedDB 无配额压力，迁移成本大于收益（防卸载靠 B 批的分享导出）。真机 UI 验证（导入+播放）待手机解锁后补
 - [ ] B 批遗留：封面/涂鸦/照片主题如需原生落盘，走通用 idb 镜像方案（key↔文件名映射需 base64 编码）
-- [ ] C 批：通知去重复用 `18-desktop.js` 的 `firedIds` 双账机制
+- [x] **C 批完成（2026-10-10）**：① **到点提醒** —— `20-appdata.js` 用 Local Notifications 绝对时间调度（走系统 AlarmManager，App 退后台/被杀也能触发）；清单口径**复用 `18-desktop.js` 的 `buildList`**（纯函数、平台无关）、去重复用同一套 `fired` 记账键；只排未来时刻（到点仍在有效期内的归前台 `checkReminders`）；通知 id 用哈希从字符串 rid 派生；`allowWhileIdle` 让 Doze 下也能到点；点击通知按 rid 前缀跳页。② **屏幕常亮** —— 用 **Screen Wake Lock API**（`navigator.wakeLock`，**无需插件**；官方 `@capacitor/keep-awake` 已从 npm 下架），跟随 `pomo:phase`（计时中常亮）。③ **环境音退后台暂停/回前台恢复** —— 复用 `app:state`，只在退后台确实在播才记标记、才恢复；只动环境音七路，本地音乐/音频库不碰。新增插件 `@capacitor/local-notifications`（权限 POST_NOTIFICATIONS / SCHEDULE_EXACT_ALARM / RECEIVE_BOOT_COMPLETED 由插件清单自动合并）
+- [ ] C 批遗留：真机验证（通知弹出 / 常亮 / 后台暂停）待 USB 授权恢复后补；精确闹钟在 Android 12+ 是特殊权限，未授予时到点可能不准（必要时加设置页引导）
 - [ ] D 批：启动屏自定义资源（当前用系统默认；`assets/` 已留规格说明）
 - [ ] E 批（可选）：云同步联调 / 应用内检查更新 / 系统分享收文本
