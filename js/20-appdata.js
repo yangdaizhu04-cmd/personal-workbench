@@ -270,6 +270,23 @@ const phaseRunning = p => typeof p === "string" && p.indexOf("-running") >= 0;
    "回前台自动响起来"。只动环境音（番茄七路），本地音乐/音频库是用户自己放的，不碰。 */
 let bgWasPlaying = false;
 
+/* ---------- ⑦ 触觉反馈（Haptics） ----------
+   只在 App 里振动，Web 下 no-op。kind: light / medium / heavy / success / warning。
+   调用点放在 06-ui.js 的 celebrate/starBurst 里（庆祝体系），且在 motionOff() 之后 ——
+   「减弱动态效果」是用户的无障碍偏好，振动同属动态反馈，应当一并尊重。 */
+function haptic(kind){
+  if(!isApp) return;
+  const h = plug("Haptics");
+  if(!h) return;
+  try{
+    if(kind === "success" || kind === "warning"){
+      if(h.notification) h.notification({type: kind === "warning" ? "WARNING" : "SUCCESS"});
+    }else if(h.impact){
+      h.impact({style: kind === "heavy" ? "HEAVY" : kind === "medium" ? "MEDIUM" : "LIGHT"});
+    }
+  }catch(e){ /* 设备无振动马达等情况：静默 */ }
+}
+
 if(isApp){
   /* 启动时异步恢复（不阻塞首屏）；数据被清场景恢复成功后重载，让数据与 schema 迁移生效 */
   setTimeout(() => { restoreFromMirror().then(restored => { if(restored) location.reload(); }); }, 0);
@@ -308,7 +325,7 @@ if(isApp){
 }
 
 WB.appData = { available: () => isApp, mirror, restoreFromMirror, saveAndShare,
-  notifyNative, syncNotifications };
+  notifyNative, syncNotifications, haptic };
 /* 音乐抽象层：所有形态都挂（Web 委托 idb，App 走 Filesystem），sound.js 只认这一个出口 */
 WB.musicFile = { put: musicPut, url: musicUrl, remove: musicRemove };
 })();

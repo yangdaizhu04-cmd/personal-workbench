@@ -17,6 +17,12 @@
 
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <!-- Android 12 以下：用 @drawable/splash 位图 -->
         <item name="android:background">@drawable/splash</item>
+        <!-- Android 12+ 走系统 SplashScreen API：android:background **不再生效**，
+             背景色与图标必须单独给，否则用系统默认（实测是深色底）—— 见 mobile/踩坑记录 M05 -->
+        <item name="windowSplashScreenBackground">#f6f1e7</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>

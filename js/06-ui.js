@@ -248,6 +248,9 @@ function confetti(x, y, n = 60){
 }
 function starBurst(x, y, n = 12){
   if(motionOff()) return;
+  /* 触觉反馈（仅 App）：单次动作（勾选/打卡/愿望点亮）的轻反馈。
+     不在 confetti 里加 —— celebrate 内部会连调多次 confetti，会重复振动 */
+  if(WB.appData && WB.appData.haptic) WB.appData.haptic("light");
   x *= devicePixelRatio; y *= devicePixelRatio;
   for(let i = 0; i < n; i++){
     const a = (i / n) * Math.PI * 2 + Math.random() * .4, sp = (1.5 + Math.random() * 2.5) * devicePixelRatio;
@@ -286,6 +289,8 @@ function fxTick(){
 /* 页面内彩带（顶部撒落） */
 function celebrate({big} = {}){
   if(motionOff()) return;
+  /* 触觉反馈（仅 App；Web no-op）。放在 motionOff 之后：减弱动效时一并免振 */
+  if(WB.appData && WB.appData.haptic) WB.appData.haptic(big ? "success" : "light");
   confetti(innerWidth * .5, innerHeight * .28, big ? 130 : 60);
   if(big) setTimeout(() => confetti(innerWidth * .25, innerHeight * .2, 50), 200);
   if(big) setTimeout(() => confetti(innerWidth * .75, innerHeight * .2, 50), 400);
