@@ -164,10 +164,14 @@ function buildRing(){
      横向也只占左列（约 46%），两者取小 —— 旧算法只 clamp(…, 232, 520)，
      横屏 min(788,359)=359×.62=222 被抬回 232，塞不进 359 的高度（踩坑 #104） */
   const land = innerWidth > innerHeight && innerHeight <= 560;
+  /* 横屏同样按「高度取比例」：直接减固定值会把状态栏高度算漏 ——
+     真机横屏 inset-top 有 40px，减 64 得到的 295 会让环顶顶进状态栏 */
   const avail = land
-    ? Math.min(innerWidth * .46, innerHeight - 64)
+    ? Math.min(innerWidth * .46, innerHeight * .62)
     : Math.min(innerWidth, innerHeight) * .62;
   const size = Math.round(WB.clamp(avail, 148, 520));
+  /* 横屏排版据此把「阶段 / 呼吸提示 / 任务名」排在环的正下方（见 CSS 的横屏块） */
+  stage.style.setProperty("--fs-ring-half", Math.round(size / 2) + "px");
   const stroke = size <= 300 ? 1.4 : 1.6;
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
   ringCirc = c;
