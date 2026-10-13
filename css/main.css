@@ -1702,15 +1702,13 @@ html[data-theme="dark"] #focus-stage[data-scene="cloud"]{ --fs-ink:#f2ece0; --fs
 @keyframes fsPrepop{from{opacity:.12; transform:scale(.82);} to{opacity:1; transform:none;}}
 .fs-prep-text{font-size:13px; letter-spacing:.24em; text-indent:.24em; opacity:.6;}
 
-/* ---------- 移动端渲染降级（2026-10-14 换景/稳态卡顿整改） ----------
-   粗指针设备（手机/平板）上摘掉沉浸控件层的 backdrop-filter：视频在播时这些模糊
-   **每帧**都要重算（backdrop 一直在变），而且和视频上的 filter 一样会打断
-   <video> 的硬件叠加路径。控件本身很小，观感损失有限；其中 .fs-prep 是**全屏**大模糊
-   （进入沉浸的 3 秒倒数），最该摘。 */
-@media (pointer:coarse){
-  .fs-tool, .fs-btn, .fs-arrow, .fs-note, .fs-picker-box,
-  .fs-prep{backdrop-filter:none; -webkit-backdrop-filter:none;}
-}
+/* ---------- 移动端 backdrop-filter：**保留**毛玻璃（2026-10-14 晚，用户反馈后回退） ----------
+   这里原本（同日）在粗指针下把沉浸控件层的毛玻璃整片摘掉，理由是「视频在播时 backdrop
+   每帧都在变」。真机实测（OPPO PLB110 / Android 16，12 场景连续换景）证明换景抖峰来自
+   「换景期光斑复活 + 整页 DOM 重建 + 全屏视频的 filter」那几条，**毛玻璃不是主因**；
+   而用户明确表示「原来的毛玻璃效果很好」→ 观感优先，覆盖撤掉。
+   留意：这是**刻意的取舍**，不是遗漏。将来若在入门机上真的量到掉帧，首选对象是
+   `.fs-prep`（**全屏** blur(var(--blur-l))，只在那 3 秒倒数出现），其次才是控件那几个小方块。 */
 /* ---------- 低端设备分档（js/16-immersive.js 的 perfLite() 命中时挂在 #focus-stage 上） ----------
    同一个 blur(70px) 铺在两个 58vmax 光斑上：旗舰机是「质感」，入门机是「掉帧」；
    场景动态层（星点/波光/火光）同理。命中即降档：光斑 blur 70px → 20px，
