@@ -23,14 +23,30 @@ const chromePath = CHROME_CANDIDATES.find(p => fs.existsSync(p));
 if(!chromePath){ console.error("✗ 未找到 Chrome，设 CHROME_PATH 环境变量后重试"); process.exit(2); }
 
 const fast = process.argv.includes("--fast");
+/* --only=folder|single：只跑一个形态 —— 给「进程级并行」用（回归执行原则见 开发交接文档.md §9）：
+     node tools/test-immersive.mjs --only=folder
+     node tools/test-immersive.mjs --only=single
+   为什么不在这里用 Promise.all 并行（像 test-smoke.mjs 那样）：本脚本**刻意**让两个形态串行共用
+   一个浏览器上下文 —— 同一形态内的断言依赖前面步骤留下的场景/主题状态（例如「上一段已把场景
+   切到 deep，面板里当前项应是 deep」），两条并行会变成"互相改同一份 localStorage"，断言随机失败。
+   起两条进程则各自独立浏览器，天然隔离、零语义变化。 */
+const onlyArg = process.argv.find(a => a.startsWith("--only="));
+const only = onlyArg ? onlyArg.slice("--only=".length) : "";
 const targets = [{name: "folder", url: "file:///" + encodeURI(ROOT.replace(/\\/g, "/")) + "/index.html"}];
 if(!fast){
   const singleFile = path.join(ROOT, "个人工作台.html");
   if(!fs.existsSync(singleFile)) console.warn("! 单文件版不存在，跳过（先跑 node build.js）");
   else targets.push({name: "single", url: "file:///" + encodeURI(singleFile.replace(/\\/g, "/"))});
 }
+if(only){
+  const keep = targets.filter(t => t.name === only);
+  if(!keep.length){ console.error("✗ --only=" + only + " 无匹配形态（可选 folder | single）"); process.exit(2); }
+  targets.length = 0; targets.push(...keep);
+}
 
-fs.rmSync(OUT, {recursive: true, force: true});
+/* 截图：默认清空重建。带 --only 时**不清空** —— 两条并行进程共享同一个 .tmp/immersive，
+   后启动的那条会把先启动那条已拍好的删掉。文件名本身带 target.name 前缀，不会互相覆盖。 */
+if(!only) fs.rmSync(OUT, {recursive: true, force: true});
 fs.mkdirSync(OUT, {recursive: true});
 
 const results = [];
