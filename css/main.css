@@ -1022,6 +1022,10 @@ html[data-theme="dark"] .koi-card{border-color:rgba(150,150,200,.18); box-shadow
   position:fixed; inset:0; z-index:var(--z-sheet); overflow:hidden;
   color:var(--fs-ink); opacity:0; user-select:none; -webkit-tap-highlight-color:transparent;
   transition:opacity var(--dur-scene) var(--ease-cross);
+  /* 左右滑动换景的前提：水平手势归我们，否则浏览器会把它吃成「后退/前进」
+     （实测右滑直接触发了页面导航，连 JS 上下文都没了）。纵向仍交还浏览器 */
+  touch-action:pan-y;
+  overscroll-behavior:none;
 }
 #focus-stage[hidden]{display:none;}
 #focus-stage.is-on{opacity:1;}
@@ -1412,8 +1416,11 @@ html[data-theme="dark"] .fs-scene[data-scene="cloud"]{
   100%{transform:translate3d(-4vmax,-3vmax,0) scale(.95);}
 }
 html[data-theme="dark"] .fs-glow{opacity:.42;}
-/* 换场景：旧槽位叠在新层之上淡出（渐变不能插值，只能叠层换命） */
-.fs-scene-out{opacity:1; z-index:2;}
+/* 换场景：旧槽位叠在新层之上淡出（渐变不能插值，只能叠层换命）。
+   pointer-events:none 是必须的：这一层覆盖全屏、780ms 后会被 remove()，
+   若它接手了 touchstart，随后的移除会**直接中断这次触摸序列** ——
+   表现是"换完景马上再滑一次，第二次没反应"（踩坑 #105） */
+.fs-scene-out{opacity:1; z-index:2; pointer-events:none;}
 .fs-scene-out.is-gone{opacity:0;}
 .fs-veil{position:absolute; inset:0; background:var(--fs-veil);
   transition:background var(--dur-scene) ease, opacity var(--dur-scene) var(--ease-cross);}
@@ -1602,11 +1609,27 @@ html[data-theme="dark"] #focus-stage[data-scene="cloud"]{ --fs-ink:#f2ece0; --fs
 .fs-btn-main .fs-ic{font-size:20px;}
 .fs-btn-main .fs-lb{opacity:.8;}
 .fs-hint{font-size:11px; letter-spacing:.1em; opacity:.28;}
+/* 左右换景按钮：贴两侧垂直居中，同样只在控件层可见时出现。
+   注意这里用 transition 而不是 animation —— 该元素靠 transform 做垂直居中，
+   挂 animation 会被终态的 transform 冲掉居中（踩坑 #103） */
+.fs-arrow{
+  position:absolute; top:50%; transform:translateY(-50%); z-index:2;
+  width:44px; height:64px; border-radius:16px; font-size:26px; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--fs-ink); background:var(--fs-glass); border:1px solid var(--fs-line);
+  backdrop-filter:blur(var(--blur-s)); -webkit-backdrop-filter:blur(var(--blur-s));
+  opacity:.5; cursor:pointer; padding:0;
+  transition:opacity var(--dur), transform var(--dur-tap) var(--ease-std);}
+.fs-arrow:hover{opacity:.88;}
+.fs-arrow:active{transform:translateY(-50%) scale(.94);}
+.fs-arrow-l{left:10px;} .fs-arrow-r{right:10px;}
 /* 静止自动隐藏 / 准备倒数期间压暗 chrome */
 #focus-stage.chrome-hidden .fs-top,
-#focus-stage.chrome-hidden .fs-bottom{opacity:0; pointer-events:none;}
+#focus-stage.chrome-hidden .fs-bottom,
+#focus-stage.chrome-hidden .fs-arrow{opacity:0; pointer-events:none;}
 #focus-stage.is-prep .fs-top,
 #focus-stage.is-prep .fs-bottom{opacity:.22;}
+#focus-stage.is-prep .fs-arrow{opacity:.22;}
 
 /* ---------- 场景选择面板（12 场景：点「◐」弹出网格直接选） ---------- */
 .fs-picker{position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center;

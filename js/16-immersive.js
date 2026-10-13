@@ -110,6 +110,10 @@ function build(){
         '<div class="fs-hint">← → 换景 · M 静音 · 空格 暂停/继续 · Esc 退出</div>' +
       '</footer>' +
     '</div>' +
+    /* 左右换景按钮：桌面端有 ← → 键、移动端有左右滑动，这里再给"想直接点一下"的人
+       一个看得见的入口。与顶/底栏一起随控件层隐显（见 CSS 的 .chrome-hidden） */
+    '<button class="fs-arrow fs-arrow-l" data-act="prev" aria-label="上一个场景" title="上一个场景">‹</button>' +
+    '<button class="fs-arrow fs-arrow-r" data-act="next" aria-label="下一个场景" title="下一个场景">›</button>' +
     '<div class="fs-note" hidden></div>' +
     /* 场景选择面板（12 场景：点「◐」直接选，不再循环切换）：网格按钮 + 每个场景一个色点，
        点遮罩空白处或 Esc 关闭 */
@@ -137,7 +141,10 @@ function build(){
   parts.picker.addEventListener("click", onPickerClick);
   stage.addEventListener("click", onStageClick);
   stage.addEventListener("mousemove", () => wake(HIDE_MOUSE));
-  stage.addEventListener("touchstart", () => wake(HIDE_TOUCH), {passive: true});
+  /* 触屏：一次 touchstart 同时管唤醒控件层与记录滑动起点，避免挂两个同类型监听 */
+  stage.addEventListener("touchstart", e => { wake(HIDE_TOUCH); swipeStart(e); }, {passive: true});
+  stage.addEventListener("touchend", swipeEnd, {passive: true});
+  stage.addEventListener("touchcancel", () => { swipeOn = false; }, {passive: true});
   /* 面板开着时 Esc 先关面板、不退出沉浸：capture 阶段拦截并阻断冒泡，
      不让 main.js 的全局 Esc（退出沉浸）收到 */
   addEventListener("keydown", e => {
@@ -526,8 +533,35 @@ function paintRotateBtn(){
   b.title = "沉浸方向：" + ORIENT_LABEL[m] + "（点击切换）";
 }
 function onStageClick(e){
+  /* 左右箭头 = 上一个 / 下一个场景（与 ← → 键、左右滑动走同一个出口 step()） */
+  const arrow = e.target.closest(".fs-arrow");
+  if(arrow){ step(arrow.dataset.act === "next" ? 1 : -1); return; }
   if(e.target.closest(".fs-tools, .fs-controls")) return;
   toggleChrome();
+}
+
+/* ---------- 左右滑动换景（移动端等价于桌面端的 ← / →） ----------
+   #focus-stage 独占这道手势：js/15-gestures.js 的横滑切页在沉浸里已整体让位
+   （immersiveBusy() 早退），两边不会抢。阈值 48px、且水平位移要明显大于垂直，
+   否则会把"点一下切控件层""斜着滑"误判成换景 */
+const SWIPE_MIN = 48, SWIPE_RATIO = 1.4, SWIPE_MAX_MS = 700;
+let swipeOn = false, swipeX = 0, swipeY = 0, swipeT = 0;
+function swipeStart(e){
+  if(e.touches.length !== 1){ swipeOn = false; return; }
+  swipeOn = true;
+  swipeX = e.touches[0].clientX; swipeY = e.touches[0].clientY; swipeT = Date.now();
+}
+function swipeEnd(e){
+  if(!swipeOn) return;
+  swipeOn = false;
+  if(!active || pickerShown) return;                    // 场景面板开着时，手势归它
+  if(Date.now() - swipeT > SWIPE_MAX_MS) return;        // 太慢 = 拖拽 / 长按，不算滑动
+  const t = e.changedTouches && e.changedTouches[0];
+  if(!t) return;
+  const dx = t.clientX - swipeX, dy = t.clientY - swipeY;
+  if(Math.abs(dx) < SWIPE_MIN) return;
+  if(Math.abs(dx) < Math.abs(dy) * SWIPE_RATIO) return; // 更偏纵向 → 不是换景
+  step(dx < 0 ? 1 : -1);                                // 左滑 = 下一个，与 → 同向
 }
 
 /* ---------- 时钟 / 标题 / 锁屏 ---------- */
