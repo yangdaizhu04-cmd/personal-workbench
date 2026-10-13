@@ -1724,45 +1724,27 @@ html[data-theme="dark"] body.bg-dynamic-on.wb-islands #focus-stage[data-scene]{
 }
 
 /* ---------- 横屏（沉浸模式） ----------
-   以**屏幕正中**为基准排布：进度环 + 倒计时落在正中心，时钟/统计贴左、控制按钮贴右、
-   阶段与提示挂在环正下方，顶栏横跨顶部。
-   两处"以视口而非内容盒为准"的写法是必须的：
-   · .fs-center 用 position:absolute; inset:0 —— 它的包含块是 .fs-body 的 padding box，
-     也就是整个视口；留在网格流里的话，padding 里的 safe-area 会把基准整体推偏
-     （真机实测横屏 inset-top = 40px，环中心被顶到 (414,199)，而屏幕中心是 (394,180)）
-   · 两侧元素用 top:50% + translateY(-50%)，同理对齐到屏幕中线
-   只在小屏横屏生效，桌面宽窗不受影响 */
+   横屏的瓶颈是**高度**：三段纵向排布时 232px 的环塞进 359px 高，
+   实测环顶 21px、而顶栏底 48px —— 环直接压在顶栏上、下缘还被挤出去。
+   这里改成 grid：顶栏横跨一行，左列放大环与时间，右列放时钟与控件，
+   把横屏富余的横向空间用起来。只在小屏横屏生效，桌面宽窗不受影响 */
 @media (orientation: landscape) and (max-height: 560px){
   .fs-body{
     display:grid;
-    grid-template-columns:1fr auto 1fr;
+    grid-template-columns:1fr minmax(190px, 34%);
     grid-template-rows:auto 1fr;
-    justify-items:center; align-items:center; gap:0;
+    justify-items:center; align-items:center; gap:2px 16px;
     padding:calc(8px + env(safe-area-inset-top,0px)) calc(14px + env(safe-area-inset-right,0px))
             calc(8px + env(safe-area-inset-bottom,0px)) calc(14px + env(safe-area-inset-left,0px));
   }
-  .fs-top{grid-column:1 / -1; grid-row:1; align-self:start;}
-  /* 铺满视口：环才以「整屏」为中心。
-     pointer-events:none：它铺满全屏，别挡住左右两侧的时钟与按钮 */
-  .fs-center{position:absolute; inset:0; gap:0; pointer-events:none;}
-  /* 居中用 inset:0 + margin:auto（配合 fit-content），**不能**用 translate(-50%,-50%)：
-     环上挂着呼吸动画 fsBreath 的 transform:scale()，会把平移冲掉（踩坑 #103） */
-  .fs-ringwrap{position:absolute; inset:0; margin:auto; width:fit-content; height:fit-content;}
-  /* 阶段 / 呼吸提示 / 任务名：挂在环正下方，各自绝对定位、互不挤占 */
-  .fs-phase, .fs-breath, .fs-task{position:absolute; left:0; right:0; text-align:center;}
-  .fs-phase{top:calc(50% + var(--fs-ring-half, 110px) + 6px);}
-  .fs-breath{top:calc(50% + var(--fs-ring-half, 110px) + 26px);}
-  .fs-task{top:calc(50% + var(--fs-ring-half, 110px) + 46px); max-width:min(64vw, 560px); margin:0 auto;}
-  /* display:contents 让底栏「消失」在自己的盒子里，两个子元素直接归 .fs-body 管 */
-  .fs-bottom{display:contents;}
-  /* 两侧元素也以屏幕中线为准（translateY 只做居中，无动画冲突）。
-     左右各让出 74px：换景箭头垂直居中，正好与这两块同处一条水平带，
-     不让开就会被 ‹ 压住时钟、被 › 叠在「放弃」上 */
-  .fs-meta{position:absolute; left:74px; top:50%; transform:translateY(-50%);
-    flex-direction:column; gap:2px; text-align:left; font-size:12.5px;}
-  .fs-controls{position:absolute; right:74px; top:50%; transform:translateY(-50%);
-    flex-wrap:wrap; justify-content:flex-end; max-width:40%;}
-  .fs-hint{display:none;}
+  .fs-top{grid-column:1 / -1; grid-row:1;}
+  .fs-center{grid-column:1; grid-row:2; height:100%; gap:8px;}
+  .fs-bottom{grid-column:2; grid-row:2; justify-content:center; gap:8px; max-width:100%;}
+  /* 右列窄：时钟与日期竖排、控件换行，避免横向挤成一团 */
+  .fs-meta{flex-direction:column; gap:1px; text-align:center;}
+  .fs-controls{flex-wrap:wrap; justify-content:center; gap:10px;}
+  .fs-phase{letter-spacing:.2em; text-indent:.2em;}
+  .fs-task{max-width:100%;}
 }
 
 /* ============================================================
