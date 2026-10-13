@@ -21,3 +21,7 @@ desktop/src-tauri/target/
 
 # 测试图生成器（tools/export-test-photos.mjs）的产物：随时可由代码重建，不入库
 tools/test-photos/
+
+# 场景视频瘦身（tools/slim-videos.mjs）的对比样张：确认画质后用 --in-place 落盘，
+# 样张本身不入库
+vendor/video-slim/

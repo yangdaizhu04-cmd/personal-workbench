@@ -32,7 +32,7 @@ const EXEMPT = {
   "js/06-ui.js:181": "modal 的 content 契约：字符串按 HTML 处理（调用方自负），非字符串走 appendChild",
   "js/06-ui.js:221": "emptyState 的 hint 形参 —— 调用方全传字面量，唯一的动态值是 09-router 传的 esc(e.message)",
   "js/06-ui.js:306": "ring 的 svg 宽高是数字（外层已 clamp 0-100）",
-  "js/16-immersive.js:172": "沉浸层 svg 的尺寸，同上：数字",
+  "js/16-immersive.js:180": "沉浸层 svg 的尺寸，同上：数字（2026-10-14 换景优化加行后由 172 漂到这里）",
   "js/07b-custom-theme.js:389": "actionsMenu 的四个字面量 label（自定义主题的按钮名）",
   "js/09-router.js:119": "模块标题来自 registerModule 的字面量 title",
   "js/09-router.js:140": "底部导航 tabs 数组里的字面量 label",

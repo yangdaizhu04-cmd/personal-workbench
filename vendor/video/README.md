@@ -76,9 +76,13 @@ ffmpeg -y -ss {start} -t {T+0.6} -i {1080原片} -filter_complex "\
 
 ## 运行时行为
 
-- **不写进 Service Worker 预缓存清单**：首播时由 SW 的 fetch 处理器顺手缓存；同名换内容时 SW 的 stale-while-revalidate 会后台更新——**换视频不需要 bump SW 缓存版本**。
-- 文件缺失 / 解码失败 / 离线首访：该场景当次会话不再重试，画面仍是 CSS 场景——**视频永远是叠加层，不是唯一底**。
-- 视频播放时 `#focus-stage.has-video` 会：停掉 CSS 动态层、`.fs-veil` 降到 68%、亮起 `.fs-halo`（数字区与上下控件区的可读性雾）。
+- **不写进 Service Worker 预缓存清单**：首播时由 SW 的 fetch 处理器顺手缓存；同名换内容时 SW 的 stale-while-revalidate 会后台更新——**换视频不需要 bump SW 缓存版本**。**代价**是「每支视频的**第一次**切换要等一次全量加载」（最大的 glade 7.23MB）。
+- **相邻场景预热（2026-10-14）**：进入沉浸后与每次换景后，`js/16-immersive.js` 的 `warmScene()` / `warmNeighbors()` 会 `fetch` 预取**当前场景的前后各 1 支**（`cache:"force-cache"`，SW 顺手写进同一份缓存 → 切过去直接命中）；只预热 ±1，不做全量（38.68MB 全预热会把流量与磁盘吃满）；`file://`（文件夹版双击打开）直接跳过 —— 那里 fetch 本地文件会被 CORS 拦，而且既没有 SW 也没有网络等待（踩坑 #109）。
+- 文件缺失 / 解码失败 / 离线首访：该场景当次会话不再重试，画面仍是 CSS 场景——**视频永远是叠加层，不是唯一底**。预热失败会允许下次重试（网络抖动不算永久失败）。
+- 视频播放时 `#focus-stage.has-video` 会：停掉 CSS 动态层、`.fs-veil` 降到 68%、亮起 `.fs-halo`（数字区与上下控件区的可读性雾）。**这条规则在换景期间必须保持生效**（它是省 GPU 的开关，不是状态）—— 摘掉会让两个 `blur(70px)` 巨光斑与 `.fs-fx` 动画同时复活（踩坑 #107）。
+- **移动端不解码期外挂滤镜（2026-10-14）**：`@media (pointer:coarse)` 下把 `.fs-video` 的 `filter` 与沉浸控件层的 `backdrop-filter` 全部摘掉 —— 它们会打断 `<video>` 的硬件叠加直通，退化成每帧合成器色彩矩阵（手机掉帧与发热的主因）。观感补偿靠**已有的层**：视频态 `.fs-veil` 亮色 .58 / 暗色 .9，加上 `.fs-halo`，不新增合成层。桌面端不受影响，仍是原来的 filter。
+- **低端机不降视频**：`perfLite()`（只读 `deviceMemory` / `hardwareConcurrency`）命中的设备只降光斑 blur（70px → 20px）与场景动态层，**循环视频照常加载** —— 要关有设置里的 `pomoImmersiveVideo`。
+- **瘦身工具（可选，2026-10-14）**：`node tools/slim-videos.mjs` 转 720p / CRF 30，默认只输出到 `vendor/video-slim/`（已 gitignore）供**真机对比画质**，`--in-place` 才替换原片（原片自动备份到系统 TEMP）。实测两支：`glade` 7.23 → **2.33MB**、`star` 5.71 → **0.48MB**。另：**十二支原片本来就都是 faststart**（moov 前置），这一项无需处理。
 - **极性规则（换素材后必须截图复核）**：
 
 | 场景 | 亮色主题文字 | 视频态处理 |
@@ -88,5 +92,5 @@ ffmpeg -y -ss {start} -t {T+0.6} -i {1080原片} -filter_complex "\
 | **dune / fall / cloud**（v7） | 深色字（金沙、白瀑水帘、亮云层都在画面中央，深字直接可读） | 不翻转；halo 取浅色 |
 | **lake** | 深色字 → **视频态翻转成浅字**（日落剪影是大面积暗调） | `#focus-stage.has-video[data-scene="lake"]`，不带主题前缀、暗色主题的特异性更高不会盖它 |
 | **glade**（v7） | 深色字 → **视频态翻转成浅字**（幽绿森林 + 溪流倒影整体暗调） | 同 lake 的手法：`#focus-stage.has-video[data-scene="glade"]`，同样不带主题前缀 |
-- **暗色主题的亮度例外**：全局 `html[data-theme="dark"] .fs-video{filter:brightness(.86)}` 会把**雪山/碧海**这两支明亮素材压成灰调、失掉风景的呼吸感，已给它们单独放宽到 `.97`（可读性由深色 halo 兜底）。
+- **暗色主题的亮度例外**：全局 `html[data-theme="dark"] .fs-video{filter:brightness(.86)}` 会把**雪山/碧海**这两支明亮素材压成灰调、失掉风景的呼吸感，已给它们单独放宽到 `.97`（可读性由深色 halo 兜底）。**移动端（粗指针）不适用**：那里 filter 整条被摘掉，暗色压暗改由 `.fs-veil`（视频态提到 .9）承担，见上面的「移动端不解码期外挂滤镜」。
 - **特征动画一律放在 `.fs-fx::before`**（冷光/云影一类放 `::after`）——测试脚本约定"特征动画取 `::before` 的 animationName"，加新场景时注意分层。现有对应：`mist`→`fsMist`、`deep`→`fsSway`、`ember`→`fsFlicker`、`star`→`fsTwinkle`、`snow`→`fsSnow`、`lake`/`sea`→`fsShimmer`、`meadow`→`fsSway`、**`dune`→`fsSand`、`glade`→`fsDapple`、`fall`→`fsSpray`、`cloud`→`fsRoll`**（v7 新增；`fall` 的 `::after` 复用 `fsSnow` 做"溅起的水花"）。

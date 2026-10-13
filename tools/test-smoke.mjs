@@ -38,10 +38,14 @@ if(!chromePath){ console.error("✗ 未找到 Chrome，设 CHROME_PATH 环境变
 }
 
 const fast = process.argv.includes("--fast");
+/* --only=folder|single：只跑一个形态。默认两个形态在同一个进程里**并发**跑
+   （见文件末尾的 Promise.all），这个开关是留给"想再拆到进程级并行"的场合 */
+const onlyArg = process.argv.find(a => a.startsWith("--only="));
+const only = onlyArg ? onlyArg.slice("--only=".length) : "";
 const targets = [
   {name: "folder", url: "file:///" + encodeURI(ROOT.replace(/\\/g, "/")) + "/index.html"},
   ...(fast ? [] : [{name: "single", url: "file:///" + encodeURI(ROOT.replace(/\\/g, "/")) + "/" + encodeURI("个人工作台.html")}]),
-];
+].filter(t => !only || t.name === only);
 /* 九套主题都要过：只测亮暗会让新主题长期无人看守（2026-09-24 从三套扩到九套）。
    照片主题（批次 2）单列一路：没有它，apply 的行内 token / 照片壁纸 / 清理逻辑无人看守 */
 const THEMES = fast ? ["light"] : ["light", "dark", "rose", "spring", "sea", "maple", "snow", "ink", "hc"];
@@ -67,7 +71,10 @@ fs.mkdirSync(OUT, {recursive: true});
 let failed = 0;
 const report = [];
 
-for(const target of targets){
+/* 单个形态的完整一轮（含它内部 10 路主题的顺序遍历）。两个形态各自独立调用。 */
+async function runTarget(target){
+  const logs = [], rep = [];
+  let fail = 0;
   /* 每个形态一份独立存储分区（踩坑 #090）：folder 的 index.html 与 single 的 个人工作台.html
      都在 file:// 源下，默认共用一份 localStorage/IndexedDB —— 不隔离的话 single 那一轮开局就继承了
      folder 那一轮的主题与「我的主题」记录，两边截图里的主题其实是同一份数据，双形态等于只测了一遍 */
@@ -132,17 +139,31 @@ for(const target of targets){
       await page.screenshot({path: shot});
       // 控制台错误跨路由累积，取本路由窗口内的（简化：去重累计）
       if(errors.length){
-        failed++;
-        report.push({target: target.name, theme, route, errors: [...new Set(errors)]});
+        fail++;
+        rep.push({target: target.name, theme, route, errors: [...new Set(errors)]});
       }
     }
     await page.close();
-    if(setupFail){ failed++; report.push({target: target.name, theme, route: "-", errors: [setupFail]}); }
-    console.log((errors.length || setupFail ? "⚠" : "✓") + " " + target.name + "/" + theme + " · " + routes.length + " 路由已截图");
+    if(setupFail){ fail++; rep.push({target: target.name, theme, route: "-", errors: [setupFail]}); }
+    logs.push((errors.length || setupFail ? "⚠" : "✓") + " " + target.name + "/" + theme + " · " + routes.length + " 路由已截图");
   }
   await ctx.close();
+  return {logs, rep, fail};
 }
+
+/* 两形态**并发**跑（2026-10-14）：整轮是 2 形态 × 10 路 × 28 路由 ≈ 10 分钟，
+   而两种形态各用独立的 browser context、存储本来就隔离（踩坑 #090），跑起来互不干涉，
+   串行只是白等。**并行的粒度就停在形态这一层**：同一形态内部的 10 路必须顺序跑
+   （它们刻意共享一份 localStorage —— 第一路作出厂态自检，后面各路沿用同一分区）。
+   日志按形态缓冲后统一打印，免得两边输出交错。
+   想再拆到进程级：`--only=folder` 与 `--only=single` 各起一个进程。 */
+const results = await Promise.all(targets.map(runTarget));
 await browser.close();
+for(const r of results){
+  for(const line of r.logs) console.log(line);
+  for(const e of r.rep) report.push(e);
+  failed += r.fail;
+}
 
 if(report.length){
   console.error("\n✗ 冒烟发现错误：");

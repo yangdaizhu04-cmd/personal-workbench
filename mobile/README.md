@@ -71,6 +71,10 @@ cd mobile/android && gradlew.bat assembleDebug
 已串成一条：`npm run apk`（= `node build.js --app && cd mobile && npx cap sync android && cd android && gradlew.bat assembleDebug`）。
 
 - **首次**需先 `npx cap add android` 生成 `mobile/android/`（已提交仓库则跳过）。
+- **共享层（`js/` + `css/`）的改动一律要重跑整条链**：App 用的是与网页版同一份产物，
+  仓库里改了 `js/16-immersive.js` 之类**不会**自动进 APK。例：2026-10-14 的沉浸换景性能整改
+  （手机端换景卡顿，规范见 [开发交接文档 §8q](../开发交接文档.md)）作用于共享层，
+  必须重跑 `npm run apk` 才装机可见；`mobile/dist/` 与 APK 都不入库。
 - **release 签名**：侧载用 debug keystore 可装；稳定覆盖安装需自建 keystore（见 §5）。
 
 ## 5. 版本控制策略（硬规矩）

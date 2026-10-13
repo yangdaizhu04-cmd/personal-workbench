@@ -1259,6 +1259,21 @@ html[data-theme="dark"] .fs-video{filter:brightness(.86) saturate(1.06) contrast
    失掉"风景"的呼吸感。这两支单独放宽到 .97，可读性交给深色 halo 兜底 */
 html[data-theme="dark"] #focus-stage.has-video[data-scene="snow"] .fs-video,
 html[data-theme="dark"] #focus-stage.has-video[data-scene="sea"] .fs-video{filter:brightness(.97) saturate(1.06) contrast(1.03);}
+/* 移动端（粗指针）把全屏视频上的 filter 整条摘掉（2026-10-14 换景卡顿整改）。
+   Android WebView 里给 <video> 挂 filter 会让它**失去硬件直通叠加路径**，
+   转为每帧在合成器上做色彩矩阵 —— 1080p 全屏素材就是持续的掉帧与发热源，
+   换景那一瞬（旧片淡出 + 新片起播）最明显。观感补偿不用新层：
+   · 视频态雾面降一档（让素材本身更透，抵消"盖了雾面发灰"）；
+   · 暗色主题把视频态雾面**提**一档做压暗，替代原来的 brightness(.86) ——
+     纯 alpha 混合远便宜于逐帧色彩矩阵，且复用已有层，不新增合成层。 */
+@media (pointer:coarse){
+  .fs-video,
+  html[data-theme="dark"] .fs-video,
+  html[data-theme="dark"] #focus-stage.has-video[data-scene="snow"] .fs-video,
+  html[data-theme="dark"] #focus-stage.has-video[data-scene="sea"] .fs-video{filter:none;}
+  #focus-stage.has-video .fs-veil{opacity:.58;}
+  html[data-theme="dark"] #focus-stage.has-video .fs-veil{opacity:.9;}
+}
 /* 视频真正播起来时，把场景自带的动态层停掉（动画 pause 是真的省 GPU，不只是看不见） */
 #focus-stage.has-video .fs-glow,
 #focus-stage.has-video .fs-fx::before,
@@ -1686,6 +1701,24 @@ html[data-theme="dark"] #focus-stage[data-scene="cloud"]{ --fs-ink:#f2ece0; --fs
 .fs-prep-num.is-in{animation:fsPrepop .42s var(--ease-pop) both;}
 @keyframes fsPrepop{from{opacity:.12; transform:scale(.82);} to{opacity:1; transform:none;}}
 .fs-prep-text{font-size:13px; letter-spacing:.24em; text-indent:.24em; opacity:.6;}
+
+/* ---------- 移动端渲染降级（2026-10-14 换景/稳态卡顿整改） ----------
+   粗指针设备（手机/平板）上摘掉沉浸控件层的 backdrop-filter：视频在播时这些模糊
+   **每帧**都要重算（backdrop 一直在变），而且和视频上的 filter 一样会打断
+   <video> 的硬件叠加路径。控件本身很小，观感损失有限；其中 .fs-prep 是**全屏**大模糊
+   （进入沉浸的 3 秒倒数），最该摘。 */
+@media (pointer:coarse){
+  .fs-tool, .fs-btn, .fs-arrow, .fs-note, .fs-picker-box,
+  .fs-prep{backdrop-filter:none; -webkit-backdrop-filter:none;}
+}
+/* ---------- 低端设备分档（js/16-immersive.js 的 perfLite() 命中时挂在 #focus-stage 上） ----------
+   同一个 blur(70px) 铺在两个 58vmax 光斑上：旗舰机是「质感」，入门机是「掉帧」；
+   场景动态层（星点/波光/火光）同理。命中即降档：光斑 blur 70px → 20px，
+   漂移与动态层动画全部停下。循环视频不在此列（那是沉浸体验的核心，要关有设置里的开关）；
+   双槽位交叉淡入由 JS 侧关掉（见 setScene）。 */
+#focus-stage.fs-lite .fs-glow{filter:blur(20px); animation:none; will-change:auto;}
+#focus-stage.fs-lite .fs-fx::before,
+#focus-stage.fs-lite .fs-fx::after{animation:none;}
 
 /* ---------- 动态壁纸开着时：透出壁纸，只铺一层与主题同色的雾面 ----------
    动态壁纸本身跟随主题（亮=晨露奶油 / 暗=星座夜雾），所以压暗面也必须跟随主题：

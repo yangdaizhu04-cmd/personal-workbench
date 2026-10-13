@@ -64,6 +64,18 @@ function merge(patch){
   apply();
   WB.bus.emit("settings:changed", patch);
 }
+/* 只落盘 + 广播，**不跑 apply()**（2026-10-14 换景卡顿整改）。
+   给「不参与任何主题 token」的偏好用：沉浸场景 id（pomoImmersiveScene）改一下
+   本来不需要重算主题 —— 原来的 set() 会白跑一整条 apply()（约 19 个行内变量清理
+   + applyCustomCss + applyWallpaper → paintBgMode），而换景是高频路径。
+   settings:changed 照旧广播，云同步与其它订阅者的语义一个字不变。
+   注意：只对「非主题类」的键用这个出口，主题/背景/动效开关必须走 set()。 */
+function setQuiet(key, val){
+  const s = WB.store.get("settings", {});
+  s[key] = val;
+  WB.store.set("settings", s);
+  WB.bus.emit("settings:changed", {key, val});
+}
 
 function resolvedTheme(){
   const t = get("theme");
@@ -344,6 +356,6 @@ function init(){
   }
 }
 
-WB.theme = {DEFAULTS, THEMES, THEME_CN, themeMeta, all, get, set, merge, apply, toggleTheme, init, resolvedTheme, bgMode,
+WB.theme = {DEFAULTS, THEMES, THEME_CN, themeMeta, all, get, set, setQuiet, merge, apply, toggleTheme, init, resolvedTheme, bgMode,
   motionUserSet, adaptVeil, applyVars, previewVars, paintWallpaper, fallbackLight};
 })();

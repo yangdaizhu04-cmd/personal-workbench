@@ -38,6 +38,11 @@ const HIDE_MOUSE = 3200, HIDE_TOUCH = 4600;
 const BREATH_MS = 19000;      // 4-7-8：吸 4s / 屏 7s / 呼 8s，与 CSS 的 breathe-478 严格同步
 const DUCK_LEVEL = .55;       // 专注中环境音压到 55%
 const WARMTH_MAX = .28;       // 进度色温上限（专注走到头时场景"特征光"的浓度，太高会盖住可读性）
+/* 换景节流窗口（2026-10-14）：一次换景 = 换视频源 + 交叉淡入 + 偏好落盘 + 记账，
+   按住 ←/→ 或连续快滑会把它们串成队列（main.js 的注释写明「不防连发」是刻意的），
+   结果越按越卡。180ms 窗口内的重复请求直接丢弃 —— 用户感知仍是「连续翻景」 */
+const STEP_MIN_MS = 180;
+const WARM_DELAY = 900;       // 换景后多久去预热相邻场景（先让当下的合成跑完再吃网络）
 
 let active = false;           // 相位：是否在沉浸
 let gen = 0;                  // 代次令牌
@@ -47,6 +52,9 @@ let cells = [], lastTime = "", lastScene = "", ctrlSig = "", lastWarm = -1;
 let hideTimer = null, hideDelay = HIDE_MOUSE, lastWake = 0, chromeHidden = false;
 let prepTimer = null, prepCount = 0, breathTimer = null, clockTimer = null, noteTimer = null;
 let resizeTimer = null;
+let lastStepTs = 0;           // 上一次换景的时刻（连发节流用）
+let warmTimer = null;         // 相邻场景预热的排期
+let dirtyPending = false;     // 沉浸中换过景 → 退出时补刷一次视图
 let fsAsked = false, titleBefore = "";
 const mediaBound = [];
 
@@ -206,6 +214,25 @@ function setTime(str){
    ③ 单文件版（自包含）与 html.no-motion 一律不加载，两版能力一致降级 */
 const VIDEO_DIR = "vendor/video/";
 const videoBlocked = {};      // 出错过的场景：本次会话不再重试
+/* ---------- 性能分档（低端设备降级） ----------
+   同一套动画在旗舰机上是「质感」，在入门机上是「卡顿」。判定只看硬件画像
+   （deviceMemory / hardwareConcurrency），不做机型嗅探；命中即降档：
+     · CSS 侧（#focus-stage.fs-lite）：光斑 blur 70px → 20px、场景动态层与漂移全部停下；
+     · JS 侧（setScene）：不做双槽位交叉淡入（省掉克隆层与 780ms 的双份全屏重绘）。
+   循环视频**不**在降档范围内 —— 沉浸视频是这套体验的核心，低端机也不该被剥夺；
+   真要关有设置里的「沉浸视频背景」（pomoImmersiveVideo）。判不出来（Safari 无 deviceMemory）
+   一律按不降档处理：降档是兜底，不是默认。 */
+let liteCache = null;
+function perfLite(){
+  if(liteCache !== null) return liteCache;
+  liteCache = false;
+  try{
+    const dm = navigator.deviceMemory, hc = navigator.hardwareConcurrency;
+    if(typeof dm === "number" && dm > 0 && dm <= 4) liteCache = true;
+    else if(typeof hc === "number" && hc > 0 && hc <= 4) liteCache = true;
+  }catch(e){ /* 取不到就当不降档 */ }
+  return liteCache;
+}
 function videoAllowed(){
   return th().pomoImmersiveVideo !== false && !window.WB_SINGLE_FILE && !WB.ui.motionOff();
 }
@@ -216,7 +243,12 @@ function videoShow(id){
   if(v.__scene === id) return;                       // 已指向这一支，别重挂
   v.__scene = id;
   v.classList.remove("is-on");
-  stage.classList.remove("has-video");               // 先让场景动态层回来（换场时也有东西看）
+  /* 这里**刻意不摘** has-video（2026-10-14 换景卡顿整改）：摘掉会让 css 里那条
+     「#focus-stage.has-video .fs-glow/.fs-fx{opacity:0; animation-play-state:paused}」同时失效，
+     于是换景那一瞬要同时跑：旧场景克隆层 + 新场景层 + 两个 58vmax 的 blur(70px) 光斑
+     + .fs-fx 双伪元素动画 —— 手机 GPU 的峰值就是这么来的。
+     底下的 CSS 场景层一直都在，旧视频淡出时它自然露出来，不需要靠「恢复动态层」撑场面；
+     真正卸载视频（失败/退出）时才摘（见 videoUnload）。 */
   v.oncanplay = () => {
     if(!active || v.__scene !== id) return;
     const p = v.play();
@@ -245,13 +277,57 @@ function videoUnload(){
   v.removeAttribute("src");
   try{ v.load(); }catch(e){}                         // 真正释放缓冲与解码器
 }
+/* ---------- 相邻场景预热（换景不空窗） ----------
+   preload="none" + 「切到哪支才拉哪支」= 每支视频的第一次切换都要等一次全量加载
+   （glade 7.23MB / meadow 6.82MB / star 5.71MB，12 支合计 38.68MB）。
+   这里在进入沉浸后与每次换景后，把当前场景的**前后各 1 支**用 fetch 预取：
+     · Web/云版：Service Worker 是 cache-first，fetch 会把字节放进同一份缓存，之后切过去直接命中；
+     · App 版：走 WebView/本地 HTTP 缓存，命不中也只是多读一次本地文件，无副作用；
+     · 单文件版 / 低端降级（videoAllowed() === false）一律跳过。
+   只预热 ±1，不做全量 —— 全量预热会把流量、内存与磁盘全吃满。 */
+const warmed = {};            // 本会话已预热过的场景：同一个不重复拉
+function warmScene(id){
+  if(!id || !SCENES[id] || warmed[id] || videoBlocked[id]) return;
+  if(!videoAllowed()) return;
+  /* 只对 http(s) 预热。文件夹版双击打开是 file://，那里 fetch 会被 CORS 拦
+     （origin null → 控制台报错，而本项目「零 console error」是硬口径），
+     而且 file:// 下既没有 SW 也不存在网络等待，本来就不需要预热。
+     云版 / App（Capacitor 的本地 http 服务器）才走下面这条。 */
+  if(typeof location === "undefined" || location.protocol === "file:") return;
+  warmed[id] = true;
+  try{
+    /* 消费响应体是必须的：不消费的话浏览器可能直接掐掉这次下载（白拉一趟），
+       而 SW 那边也是靠 clone 的 body 被读取才真正写进 Cache Storage */
+    fetch(VIDEO_DIR + id + ".mp4", {cache: "force-cache"})
+      .then(r => (r && r.ok && r.arrayBuffer) ? r.arrayBuffer() : null)
+      .catch(() => { warmed[id] = false; });   // 网络抖动：允许下次再试（404 会走 ok=false 分支，不重试）
+  }catch(e){ warmed[id] = false; }             // fetch 不可用（老 WebView）：静默，退回原来的按需加载
+}
+function warmNeighbors(){
+  clearTimeout(warmTimer);
+  if(!active || !videoAllowed()) return;
+  warmTimer = setTimeout(() => {
+    if(!active) return;
+    const i = SCENE_ORDER.indexOf(lastScene);
+    if(i < 0) return;
+    const n = SCENE_ORDER.length;
+    warmScene(SCENE_ORDER[(i + 1) % n]);
+    warmScene(SCENE_ORDER[(i - 1 + n) % n]);
+  }, WARM_DELAY);
+}
 
 /* ---------- 场景（渐变不可插值 → 双槽位交叉淡入，沿用 §8c 的手法） ---------- */
 function setScene(id, fade){
   id = SCENES[id] ? id : "mist";
   if(!parts) return;
+  if(perfLite()) fade = false;    // 低端机：不叠交叉淡入层（渐变硬切，成本归零）
   if(fade && lastScene && lastScene !== id){
     const old = parts.scene.cloneNode(true);
+    /* 只留背景渐变（2026-10-14）：两个 58vmax 的 blur(70px) 光斑与 .fs-fx 动态层
+       在淡出的 780ms 里纯粹是白烧 GPU —— 它们本来被 has-video 压着，
+       但克隆体会把动画重新跑起来。清空内部 = 交叉淡入只剩一层渐变，
+       观感几乎无差别，成本几乎归零 */
+    old.innerHTML = "";
     old.dataset.scene = lastScene;
     old.classList.add("fs-scene-out");
     parts.scene.parentNode.insertBefore(old, parts.scene.nextSibling);
@@ -303,16 +379,32 @@ function closePicker(){
   pickerTimer = setTimeout(() => { if(parts && !pickerShown) parts.picker.hidden = true; }, 320);
 }
 /* 换景的唯一出口：记住偏好 + 在沉浸中就立即换（面板 / 番茄卡 / ⌘K 三处共用同一条路径）。
-   广播 view:dirty 是为了让番茄卡底部的场景色点条跟着高亮 —— 沉浸里换完再退出时它不是过期 DOM */
+   广播 view:dirty 是为了让番茄卡底部的场景色点条跟着高亮 —— 沉浸里换完再退出时它不是过期 DOM。
+   2026-10-14 换景卡顿整改两处：
+   ① 偏好用 setQuiet 落盘 —— 场景 id 不参与任何主题 token，没必要每次换景都跑整条 apply()
+      （19 个行内变量清理 + applyWallpaper/paintBgMode）；settings:changed 照旧广播，云同步语义不变；
+   ② 沉浸中不立刻广播 view:dirty —— 那时 #app 是 opacity:0，却会被 router.render() 整页重建
+      （今日页/番茄卡的 DOM 全量重建）。先记账，退出沉浸时补刷一次（见 exit）。 */
 function pick(id){
   if(!SCENES[id]) return;
-  WB.theme.set("pomoImmersiveScene", id);
-  if(active) setScene(id, true);
-  WB.bus.emit("view:dirty");
+  const put = (WB.theme && WB.theme.setQuiet) || (WB.theme && WB.theme.set);
+  if(put) put.call(WB.theme, "pomoImmersiveScene", id);
+  if(active){
+    setScene(id, true);
+    dirtyPending = true;
+    warmNeighbors();        // 换完景顺手把新邻居预热上
+  }else{
+    WB.bus.emit("view:dirty");
+  }
 }
 /* ← / → = 上一个 / 下一个场景，按 SCENE_ORDER 首尾循环。
    换景后把场景名浮一下：控件可能已自动隐藏，不提示就不知道换到了哪一支 */
 function step(dir){
+  /* 连发节流（2026-10-14）：键盘长按会以 30/s 重复触发，滑动/箭头连点也一样。
+     不设闸门的话每次都要换视频源 + 交叉淡入 + 落盘 + 记账，串成队列 = 越按越卡 */
+  const now = Date.now();
+  if(now - lastStepTs < STEP_MIN_MS) return;
+  lastStepTs = now;
   const i = SCENE_ORDER.indexOf(lastScene);
   if(i < 0) return;
   const n = SCENE_ORDER.length;
@@ -660,6 +752,30 @@ function soundSync(ms){
 }
 
 /* ---------- 渲染 ---------- */
+/* 进度色温：专注越往后场景的"特征光"越浓（0 → 0.28）；休息与待确认时退回 0。
+   只写 CSS 变量，过渡本身在 .fs-tint 里声明（不绕过 no-motion 熔断） */
+function paintWarmth(s, pct){
+  const warm = (s.mode === "focus" && !s.needConfirm) ? Math.round(pct * WARMTH_MAX * 1000) / 1000 : 0;
+  if(warm !== lastWarm){
+    lastWarm = warm;
+    stage.style.setProperty("--fs-warmth", String(warm));
+  }
+}
+/* 秒级心跳专走这一条（2026-10-14）：只有「每秒真的会变」的四样 —— 数字 / 进度环 / 色温 / 标题。
+   相位文案、控制条、今日番茄数、小花园、呼吸引导、声音按钮都是**状态变化**才需要的东西，
+   原来全挂在每秒的 pomo:tick 上 —— todayPomos() 与 gardenStats() 每秒各去 parse 一遍
+   pomoLog（store.get 是「每次读都 JSON.parse」的实现），在手机上就是纯烧 CPU。
+   现在它们只在 render()（状态变化：开始/暂停/继续/切段/进入）里跑。 */
+function renderTick(){
+  if(!active || !parts) return;
+  const s = session();
+  if(!s){ exit(); return; }
+  setTime(fmtClock(s.remainSec));
+  const pct = WB.clamp(s.plannedSec ? 1 - s.remainSec / s.plannedSec : 0, 0, 1);
+  if(ringFore) ringFore.style.strokeDashoffset = String(ringCirc * (1 - pct));
+  paintWarmth(s, pct);
+  titleSync();
+}
 function render(){
   if(!active || !parts) return;
   const s = session();
@@ -668,13 +784,7 @@ function render(){
   setTime(fmtClock(s.remainSec));
   const pct = WB.clamp(s.plannedSec ? 1 - s.remainSec / s.plannedSec : 0, 0, 1);
   if(ringFore) ringFore.style.strokeDashoffset = String(ringCirc * (1 - pct));
-  /* 进度色温：专注越往后场景的"特征光"越浓（0 → 0.28）；休息与待确认时退回 0。
-     只写 CSS 变量，过渡本身在 .fs-tint 里声明（不绕过 no-motion 熔断） */
-  const warm = (focus && !s.needConfirm) ? Math.round(pct * WARMTH_MAX * 1000) / 1000 : 0;
-  if(warm !== lastWarm){
-    lastWarm = warm;
-    stage.style.setProperty("--fs-warmth", String(warm));
-  }
+  paintWarmth(s, pct);
   setText(parts.phase, s.needConfirm ? (focus ? "专注完成" : "休息结束")
     : (s.running ? (focus ? "专注中" : "休息中") : "已暂停"));
   const bind = s.bindTitle ? ((s.bindType === "skill" ? "⚡ " : "☑ ") + s.bindTitle) : "";
@@ -721,8 +831,12 @@ function enter(opts){
   active = true;
   gen++;
   hintShown = null;                    // 每次进入沉浸，场景推荐提示可以再提一次
+  dirtyPending = false;                // 上次退出的补刷标记不许跨会话残留
+  lastStepTs = 0;
   build();
   const my = gen;
+  /* 性能分档（低端机）：CSS 侧降 blur / 停动态层，setScene 侧关交叉淡入 */
+  stage.classList.toggle("fs-lite", perfLite());
   /* 主题/场景/尺寸先落地，避免第一帧闪错配色 */
   setScene(sceneId(), false);
   buildRing();
@@ -742,6 +856,7 @@ function enter(opts){
   clockTimer = setInterval(paintClock, 15000);
   mediaBind();
   soundEnter();
+  warmNeighbors();                     // 预热前后各 1 支场景视频（见 warmScene）
   WB.bus.emit("immersive:changed", {active: true});
   if(!opts || !opts.auto) WB.ui.toast("沉浸专注 · 按 Esc 退出");
   if(my !== gen) exit();                                    // 极端竞态兜底
@@ -756,6 +871,7 @@ function exit(){
   clearInterval(breathTimer); breathTimer = null;
   clearInterval(clockTimer); clockTimer = null;
   clearTimeout(noteTimer); noteTimer = null;
+  clearTimeout(warmTimer); warmTimer = null;    // 退出了就别再吃网络去预热
   chromeHidden = false;
   ctrlSig = "";
   if(stage){
@@ -780,6 +896,9 @@ function exit(){
   mediaOff();
   document.title = titleBefore || document.title;
   soundSync(700);
+  /* 沉浸期间换过景 → 现在补刷一次视图（沉浸中刻意不刷，见 pick）。
+     此刻 #app 正在 immersive-fade 的淡入里，重建正是它该刷新的时候 */
+  if(dirtyPending){ dirtyPending = false; WB.bus.emit("view:dirty"); }
   WB.bus.emit("immersive:changed", {active: false});
   if(stage && my === gen) setTimeout(() => { if(my === gen && stage) stage.hidden = true; }, 720);
 }
@@ -814,7 +933,7 @@ async function abandon(){
 
 /* ---------- 事件订阅 ---------- */
 WB.bus.on("pomo:tick", () => {
-  if(active){ render(); mediaPos(); }
+  if(active){ renderTick(); mediaPos(); }   // 秒级只走轻量路径（见 renderTick）
 });
 WB.bus.on("pomo:phase", onPhase);
 /* 开始专注：环境音从 0 渐入到策略音量（专注中压低 / 其余恢复）。
