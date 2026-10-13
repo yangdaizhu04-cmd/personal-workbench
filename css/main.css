@@ -1724,27 +1724,23 @@ html[data-theme="dark"] body.bg-dynamic-on.wb-islands #focus-stage[data-scene]{
 }
 
 /* ---------- 横屏（沉浸模式） ----------
-   横屏的瓶颈是**高度**：三段纵向排布时 232px 的环塞进 359px 高，
-   实测环顶 21px、而顶栏底 48px —— 环直接压在顶栏上、下缘还被挤出去。
-   这里改成 grid：顶栏横跨一行，左列放大环与时间，右列放时钟与控件，
-   把横屏富余的横向空间用起来。只在小屏横屏生效，桌面宽窗不受影响 */
+   与桌面端**同一套骨架**：顶栏横跨 → 中央大数字居中 → 底部一行信息与控件。
+   （见桌面端的沉浸截图：数字落在屏幕正中，按钮沉在底部居中，两侧是换景箭头；
+   刻意**不**改成"左环右控件"的分栏 —— 那会把大数字挤到一侧，观感与桌面端不一致。）
+   横屏唯一的瓶颈是高度（359px），所以只做必要的两处让位：
+   · 底栏由竖排改横排：时钟/统计与按钮并成一行，省下一整块纵向空间；
+   · 环的尺寸交给 buildRing 按「较小边 × .62」缩到 222px，正好放得下。
+   字号与提示行由上面的 max-height:560px 规则处理 */
 @media (orientation: landscape) and (max-height: 560px){
-  .fs-body{
-    display:grid;
-    grid-template-columns:1fr minmax(190px, 34%);
-    grid-template-rows:auto 1fr;
-    justify-items:center; align-items:center; gap:2px 16px;
-    padding:calc(8px + env(safe-area-inset-top,0px)) calc(14px + env(safe-area-inset-right,0px))
-            calc(8px + env(safe-area-inset-bottom,0px)) calc(14px + env(safe-area-inset-left,0px));
+  /* 底栏只留控件，居中后即与桌面端一致。时钟/统计挪到左下角 ——
+     若让它与按钮同处一行，"整组居中"会把按钮整体推向右侧（实测偏 89px） */
+  .fs-bottom{justify-content:center;}
+  .fs-meta{
+    position:absolute; flex-direction:row; gap:10px; text-align:left;
+    left:calc(14px + env(safe-area-inset-left,0px));
+    bottom:calc(8px + env(safe-area-inset-bottom,0px));
   }
-  .fs-top{grid-column:1 / -1; grid-row:1;}
-  .fs-center{grid-column:1; grid-row:2; height:100%; gap:8px;}
-  .fs-bottom{grid-column:2; grid-row:2; justify-content:center; gap:8px; max-width:100%;}
-  /* 右列窄：时钟与日期竖排、控件换行，避免横向挤成一团 */
-  .fs-meta{flex-direction:column; gap:1px; text-align:center;}
-  .fs-controls{flex-wrap:wrap; justify-content:center; gap:10px;}
-  .fs-phase{letter-spacing:.2em; text-indent:.2em;}
-  .fs-task{max-width:100%;}
+  .fs-controls{flex-wrap:wrap; justify-content:center;}
 }
 
 /* ============================================================

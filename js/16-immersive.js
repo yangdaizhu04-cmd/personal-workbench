@@ -160,14 +160,10 @@ function build(){
 
 /* ---------- 进度环（自建：细线 + 起点 12 点 + 1s 线性补间，配色读场景变量） ---------- */
 function buildRing(){
-  /* 环的边长。竖屏：取宽高较小者 ×.62。横屏：纵向是瓶颈（要扣掉顶栏、内边距与间隙），
-     横向也只占左列（约 46%），两者取小 —— 旧算法只 clamp(…, 232, 520)，
-     横屏 min(788,359)=359×.62=222 被抬回 232，塞不进 359 的高度（踩坑 #104） */
-  const land = innerWidth > innerHeight && innerHeight <= 560;
-  const avail = land
-    ? Math.min(innerWidth * .46, innerHeight - 64)
-    : Math.min(innerWidth, innerHeight) * .62;
-  const size = Math.round(WB.clamp(avail, 148, 520));
+  /* 环的边长一律取「宽高较小者 × .62」。横屏的瓶颈是高度，直接套同一套算法即可 ——
+     359 × .62 ≈ 222px，配合横屏底栏改横排后剩下的高度正好放得下，
+     不需要为横屏单开一套系数 */
+  const size = Math.round(WB.clamp(Math.min(innerWidth, innerHeight) * .62, 148, 520));
   const stroke = size <= 300 ? 1.4 : 1.6;
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
   ringCirc = c;
