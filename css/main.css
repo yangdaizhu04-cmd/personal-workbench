@@ -268,7 +268,9 @@ html[data-theme="dark"][data-accent="mint"]{ --accent-ink:#dcefe7;}
 
 /* ---------- 基础 ---------- */
 *{box-sizing:border-box; margin:0; padding:0;}
-html,body{height:100%;}
+/* -webkit-text-size-adjust:100% 关掉移动端「文本自动放大」：
+   部分 WebView 在窄视口下会把正文按可读性放大，字号一大就把 flex 行顶破 */
+html,body{height:100%; -webkit-text-size-adjust:100%;}
 body{
   font-family:var(--font-kai);
   background:var(--bg); color:var(--ink);
@@ -292,8 +294,11 @@ a:hover{text-decoration:underline;}
    单独提到 --ink-2 保证对比度；纯装饰的 .faint 仍走最弱一档 */
 .small.faint{color:var(--ink-2);}
 .small{font-size:12.5px;} .big{font-size:19px;}
-.nowrap{white-space:nowrap;} .ellipsis{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-.grow{flex:1;} .row{display:flex; align-items:center; gap:10px;}
+/* min-width:0 是这三条的共同命门：flex 子项默认 min-width:auto，
+   等于"不许收缩到内容宽度以下"，于是省略号永远不出现、占满剩余的行会把容器顶破（踩坑 #101）。
+   min-width 对 inline 元素无效，写在这里无副作用 */
+.nowrap{white-space:nowrap;} .ellipsis{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;}
+.grow{flex:1; min-width:0;} .row{display:flex; align-items:center; gap:10px;}
 .col{display:flex; flex-direction:column;}
 .center{display:flex; align-items:center; justify-content:center;}
 .spacer{flex:1;}
@@ -525,22 +530,26 @@ body.app-mode #topbar{ padding-top: calc(16px + env(safe-area-inset-top, 0px)); 
 /* ---------- 卡片 ---------- */
 .card{
   background:var(--card); border:1px solid var(--card-border); border-radius:var(--radius);
-  box-shadow:var(--shadow); padding:18px 20px;
+  box-shadow:var(--shadow); padding:18px 20px; min-width:0;
   transition:transform var(--dur) ease, box-shadow var(--dur) ease,
              background var(--dur-scene) var(--ease-cross), border-color var(--dur-scene) var(--ease-cross);
 }
 .card.hoverable:hover{transform:translateY(-3px); box-shadow:0 16px 42px rgba(151,128,94,.18);}
 html[data-theme="dark"] .card.hoverable:hover{box-shadow:0 16px 42px rgba(0,0,0,.42);}
-.card-title{display:flex; align-items:center; gap:8px; font-weight:600; font-size:15.5px; margin-bottom:12px;}
+/* flex-wrap：标题行「图标 + 名称 + 副标题」在窄屏/大字号下折行，而不是把卡片顶破 */
+.card-title{display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-weight:600; font-size:15.5px; margin-bottom:12px; min-width:0;}
 .card-title svg{width:18px; height:18px; color:var(--accent);}
 .card-sub{font-size:12px; color:var(--ink-3); font-weight:400;}
 .grid{display:grid; gap:16px;}
-.grid-2{grid-template-columns:repeat(2,1fr);}
-.grid-3{grid-template-columns:repeat(3,1fr);}
+/* 列轨道一律 minmax(0,1fr)：裸 1fr 的隐含最小值是 min-content，
+   卡片里只要有一处不可断行的内容，整列就会被撑宽并溢出视口（踩坑 #101） */
+.grid-2{grid-template-columns:repeat(2,minmax(0,1fr));}
+.grid-3{grid-template-columns:repeat(3,minmax(0,1fr));}
 
 /* ---------- 控件 ---------- */
 .btn{
   display:inline-flex; align-items:center; gap:7px; padding:8px 16px;
+  max-width:100%; min-width:0;   /* 长文案按钮在窄屏折行，而不是把卡片顶破 */
   border-radius:13px; font-size:14px; color:var(--ink);
   background:var(--card-2); border:1px solid var(--card-border);
   transition:transform var(--dur-tap) var(--ease-std), box-shadow var(--dur), background var(--dur), opacity var(--dur);
@@ -629,7 +638,7 @@ textarea.input{resize:vertical; min-height:90px; line-height:1.7;}
 /* 列表行 */
 .list{display:flex; flex-direction:column;}
 .list-row{display:flex; align-items:center; gap:12px; padding:11px 6px; border-bottom:1px dashed var(--card-border);
-  transition:background var(--dur), opacity var(--dur), transform var(--dur);}
+  min-width:0; transition:background var(--dur), opacity var(--dur), transform var(--dur);}
 .list-row:last-child{border-bottom:none;}
 .list-row.dragging{opacity:.4;}
 .list-row.picked{background:var(--accent-soft); border-radius:12px;}
@@ -824,7 +833,7 @@ body.scrim-open #sidebar{backdrop-filter:none; -webkit-backdrop-filter:none;}
   #bottombar{display:flex;}
   #view{padding:2px 16px 90px;}
   #topbar{padding:12px 16px 8px;}
-  .grid-2,.grid-3{grid-template-columns:1fr;}
+  .grid-2,.grid-3{grid-template-columns:minmax(0,1fr);}
   /* 触屏热区：手指比鼠标粗，图标按钮与 chip 提到 ≥40px（桌面仍保持紧凑） */
   .icon-btn{width:44px; height:44px; border-radius:14px;}
   .chip{padding:8px 13px;}
@@ -849,7 +858,25 @@ body.scrim-open #sidebar{backdrop-filter:none; -webkit-backdrop-filter:none;}
   .stack-row > .grow{flex:1 0 100%;}
 }
 @media (min-width: 861px) and (max-width: 1100px){
-  .grid-3{grid-template-columns:repeat(2,1fr);}
+  .grid-3{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+
+/* 日期卡「左日期 + 右天气」：天气摘要必须能收缩，窄屏整块掉到下一行。
+   两条 flex 行各有自己的 min-content，不处理时 2.0 倍系统字号下实测把卡片撑破 424px（踩坑 #101） */
+.date-head{flex-wrap:wrap;}
+#weather-mini{min-width:0; text-align:right; font-size:13px; color:var(--ink-2);}
+@media (max-width: 640px){
+  #weather-mini{flex-basis:100%;}
+}
+/* 细窄屏 ≤380px：内边距与标题字号降一档。
+   视口这么窄可能是屏幕本身小，也可能是系统「显示大小」被调大 */
+@media (max-width: 380px){
+  #view{padding:2px 12px 90px;}
+  #topbar{padding:12px 12px 8px;}
+  .card{padding:15px 14px;}
+  #page-title{font-size:20px;}
+  .card-title{font-size:14.5px;}
+  .empty{padding:34px 12px;}
 }
 
 /* ---------- 照片自定义主题（设置页「我的主题」卡片） ----------

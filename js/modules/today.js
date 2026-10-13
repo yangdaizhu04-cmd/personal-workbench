@@ -563,15 +563,16 @@ WB.registerModule({
     const fest = WB.cal.festivalOf(dateStr);
     const lunar = WB.cal.lunarOf(dateStr);
 
-    const right = el("div", {class: "grow", id: "weather-mini",
-      style: {textAlign: "right", fontSize: "13px", color: "var(--ink-2)"}});
+    /* 样式收进 CSS 的 #weather-mini：内联样式无法被媒体查询覆盖，
+       而窄屏正需要改它的字号与占行方式（见 css/main.css 的 ≤380px / ≤640px） */
+    const right = el("div", {class: "grow", id: "weather-mini"});
     /* 骨架条代替"加载中…"：慢网下也有形状，数据到了 renderMini 会清空重填 */
     right.appendChild(el("div", {class: "row", style: {justifyContent: "flex-end", gap: "8px"}},
       WB.ui.skLine("22px", "22px", "50%"), WB.ui.skLine("96px", "14px")));
     if(WB.weather && WB.weather.renderMini) WB.weather.renderMini(right);
 
     return el("div", {class: "card hoverable"},
-      el("div", {class: "row", style: {alignItems: "flex-start"}},
+      el("div", {class: "row date-head", style: {alignItems: "flex-start"}},
         el("div", {},
           el("div", {style: {fontSize: "26px", fontWeight: "600", lineHeight: 1.3}},
             (d.getMonth() + 1) + " 月 " + d.getDate() + " 日 ",

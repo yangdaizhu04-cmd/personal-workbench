@@ -52,7 +52,7 @@ const EXEMPT = {
   "js/modules/stats.js:13": "卡片标题由调用方写字面量",
   "js/modules/stats.js:398": "WB.icon 白名单",
   "js/modules/today.js:551": "日期串的前四位（年份数字）",
-  "js/modules/today.js:649": "条数（数字）",
+  "js/modules/today.js:650": "条数（数字）",
   "js/modules/todos.js:369": "quads 是同函数内的静态字面量数组（重要且紧急 等四象限）",
   "js/modules/todos.js:584": "条数（数字）",
   "js/modules/wishes.js:123": "年份（数字）",
