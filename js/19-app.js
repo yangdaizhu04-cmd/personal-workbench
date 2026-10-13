@@ -102,4 +102,45 @@ if(isApp){
 }
 
 WB.app = { available: () => isApp, notify, syncStatusBar, isDark };
+
+/* ---------- 屏幕方向（沉浸模式的横屏 / 竖屏） ----------
+   为什么不用 Web 的 screen.orientation.lock()：Android WebView 实测直接抛
+   NotSupportedError（"not available on this device"），所以 App 形态必须走原生插件
+   @capacitor/screen-orientation —— 装好后它会自动出现在 window.Capacitor.Plugins 里
+   （与其它 12 个插件同一机制，见下面的 plug()）。
+   没有原生桥时退回 screen.orientation（浏览器 / PWA 全屏下可能可用），再不行就 no-op，
+   调用方据此只做布局适配、不报错。 */
+const ORIENT_MAP = { landscape: "landscape", portrait: "portrait" };
+function orientPlugin(){ return isApp ? plug("ScreenOrientation") : null; }
+let orientLocked = null;                    // 记住自己锁过什么，便于诊断
+WB.orientation = {
+  available(){
+    const p = orientPlugin();
+    return !!(p && p.lock) || !!(window.screen && screen.orientation && screen.orientation.lock);
+  },
+  async lock(mode){
+    const name = ORIENT_MAP[mode];
+    if(!name) return false;
+    const p = orientPlugin();
+    if(p && p.lock){
+      try{ await p.lock({ orientation: name }); orientLocked = mode; return true; }
+      catch(e){ console.warn("[orientation] 原生锁定失败", e); }
+    }
+    try{
+      if(screen.orientation && screen.orientation.lock){
+        await screen.orientation.lock(name); orientLocked = mode; return true;
+      }
+    }catch(e){ /* 桌面浏览器 / 未全屏时会被拒，静默降级 */ }
+    return false;
+  },
+  /* 退出沉浸一律交还方向控制权（不判断 orientLocked：锁可能是上一次会话留下的） */
+  async unlock(){
+    orientLocked = null;
+    const p = orientPlugin();
+    if(p && p.unlock){ try{ await p.unlock(); return true; }catch(e){} }
+    try{ if(screen.orientation && screen.orientation.unlock){ screen.orientation.unlock(); return true; } }catch(e){}
+    return false;
+  },
+  current(){ return orientLocked; },
+};
 })();

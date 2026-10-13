@@ -1700,6 +1700,30 @@ html[data-theme="dark"] body.bg-dynamic-on.wb-islands #focus-stage[data-scene]{
   .fs-hint{display:none;}
 }
 
+/* ---------- 横屏（沉浸模式） ----------
+   横屏的瓶颈是**高度**：三段纵向排布时 232px 的环塞进 359px 高，
+   实测环顶 21px、而顶栏底 48px —— 环直接压在顶栏上、下缘还被挤出去。
+   这里改成 grid：顶栏横跨一行，左列放大环与时间，右列放时钟与控件，
+   把横屏富余的横向空间用起来。只在小屏横屏生效，桌面宽窗不受影响 */
+@media (orientation: landscape) and (max-height: 560px){
+  .fs-body{
+    display:grid;
+    grid-template-columns:1fr minmax(190px, 34%);
+    grid-template-rows:auto 1fr;
+    justify-items:center; align-items:center; gap:2px 16px;
+    padding:calc(8px + env(safe-area-inset-top,0px)) calc(14px + env(safe-area-inset-right,0px))
+            calc(8px + env(safe-area-inset-bottom,0px)) calc(14px + env(safe-area-inset-left,0px));
+  }
+  .fs-top{grid-column:1 / -1; grid-row:1;}
+  .fs-center{grid-column:1; grid-row:2; height:100%; gap:8px;}
+  .fs-bottom{grid-column:2; grid-row:2; justify-content:center; gap:8px; max-width:100%;}
+  /* 右列窄：时钟与日期竖排、控件换行，避免横向挤成一团 */
+  .fs-meta{flex-direction:column; gap:1px; text-align:center;}
+  .fs-controls{flex-wrap:wrap; justify-content:center; gap:10px;}
+  .fs-phase{letter-spacing:.2em; text-indent:.2em;}
+  .fs-task{max-width:100%;}
+}
+
 /* ============================================================
    纸：日 / 周 / 月 / 季 / 年 五张可打印的页（js/modules/sheets.js）
    屏幕上是 A4 纸样的预览；打印时只留 #sheet-viewer 这一层（见文件末尾的 @media print）

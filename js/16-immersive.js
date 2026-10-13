@@ -94,6 +94,7 @@ function build(){
         '<div class="fs-tools">' +
           '<button class="fs-tool" data-act="scene" title="选择场景（12 套）">◐</button>' +
           '<button class="fs-tool" data-act="sound" title="环境音开关（M）">♪</button>' +
+          '<button class="fs-tool" data-act="rotate" title="切换横屏 / 竖屏">⟳</button>' +
           '<button class="fs-tool" data-act="close" title="退出沉浸（Esc）">✕</button>' +
         '</div>' +
       '</header>' +
@@ -152,7 +153,14 @@ function build(){
 
 /* ---------- 进度环（自建：细线 + 起点 12 点 + 1s 线性补间，配色读场景变量） ---------- */
 function buildRing(){
-  const size = Math.round(WB.clamp(Math.min(innerWidth, innerHeight) * .62, 232, 520));
+  /* 环的边长。竖屏：取宽高较小者 ×.62。横屏：纵向是瓶颈（要扣掉顶栏、内边距与间隙），
+     横向也只占左列（约 46%），两者取小 —— 旧算法只 clamp(…, 232, 520)，
+     横屏 min(788,359)=359×.62=222 被抬回 232，塞不进 359 的高度（踩坑 #104） */
+  const land = innerWidth > innerHeight && innerHeight <= 560;
+  const avail = land
+    ? Math.min(innerWidth * .46, innerHeight - 64)
+    : Math.min(innerWidth, innerHeight) * .62;
+  const size = Math.round(WB.clamp(avail, 148, 520));
   const stroke = size <= 300 ? 1.4 : 1.6;
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
   ringCirc = c;
@@ -479,6 +487,43 @@ function onToolClick(e){
   if(act === "close") exit();
   else if(act === "sound"){ toggleSound(); wake(); }
   else if(act === "scene"){ pickerShown ? closePicker() : openPicker(); wake(); }
+  else if(act === "rotate"){ cycleOrientation(); wake(); }
+}
+
+/* ---------- 沉浸方向（横屏 / 竖屏） ----------
+   auto → landscape → portrait 循环，偏好落盘（与 pomoImmersiveScene 同一套 th() 读取）。
+   真正的锁定交给 WB.orientation：App 里是原生插件（Web 的 screen.orientation.lock()
+   在 Android WebView 上实测被拒），网页版没有原生桥时能锁就锁、锁不了就只靠 CSS 布局适配 ——
+   所以无论能不能锁，"横屏时就该是横屏的样子"这件事由样式保证 */
+const ORIENT_MODES = ["auto", "landscape", "portrait"];
+const ORIENT_LABEL = {auto: "跟随系统", landscape: "横屏", portrait: "竖屏"};
+const ORIENT_GLYPH = {auto: "⟳", landscape: "▭", portrait: "▯"};
+function currentOrientation(){
+  const m = th().pomoOrientation;
+  return ORIENT_MODES.indexOf(m) >= 0 ? m : "auto";
+}
+function applyOrientation(mode){
+  if(WB.orientation){
+    if(mode === "auto") WB.orientation.unlock();
+    else WB.orientation.lock(mode);
+  }
+  paintRotateBtn();
+}
+function cycleOrientation(){
+  const next = ORIENT_MODES[(ORIENT_MODES.indexOf(currentOrientation()) + 1) % ORIENT_MODES.length];
+  WB.theme.set("pomoOrientation", next);
+  applyOrientation(next);
+  if(!WB.orientation) WB.ui.toast("沉浸方向偏好：" + ORIENT_LABEL[next] + "（当前环境不支持锁定，按内容自适应）");
+  else WB.ui.toast("沉浸方向：" + ORIENT_LABEL[next]);
+}
+function paintRotateBtn(){
+  if(!parts) return;
+  const b = stage.querySelector('[data-act="rotate"]');
+  if(!b) return;
+  const m = currentOrientation();
+  b.textContent = ORIENT_GLYPH[m];
+  b.classList.toggle("is-off", m === "auto");
+  b.title = "沉浸方向：" + ORIENT_LABEL[m] + "（点击切换）";
 }
 function onStageClick(e){
   if(e.target.closest(".fs-tools, .fs-controls")) return;
@@ -651,6 +696,7 @@ function enter(opts){
   /* 主题/场景/尺寸先落地，避免第一帧闪错配色 */
   setScene(sceneId(), false);
   buildRing();
+  applyOrientation(currentOrientation());   // 沿用上次的横/竖屏偏好（内含按钮图标刷新）
   stage.hidden = false;
   document.body.classList.add("immersive-on", "immersive-fade");
   stage.setAttribute("aria-hidden", "false");
@@ -700,6 +746,7 @@ function exit(){
   document.body.classList.remove("immersive-on");
   setTimeout(() => { if(my === gen) document.body.classList.remove("immersive-fade"); }, 760);
   if(fsAsked){ fsAsked = false; fullscreen(false); }
+  if(WB.orientation) WB.orientation.unlock();   // 退出沉浸即交还方向控制权，别让主界面也被锁着
   mediaOff();
   document.title = titleBefore || document.title;
   soundSync(700);
