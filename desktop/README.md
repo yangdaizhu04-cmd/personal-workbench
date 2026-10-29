@@ -1,6 +1,6 @@
 # 桌面 App（Tauri 2）打包指南
 
-> 产出 Windows 可执行文件（`target/release/personal-workbench.exe`，59.6 MB）与安装包。
+> 产出 Windows 可执行文件（`target/release/personal-workbench.exe`，59.9 MB，2026-10-05 最近一次重建）与安装包。
 > **打包是可选产物**，不影响浏览器版使用。
 > 桌面版能力：系统托盘常驻、全局快捷键 Ctrl+K 唤出命令面板、开机自启、独立窗口、
 > **关掉窗口后仍在托盘里按点提醒（待办到点 / 倒数日与生日 / 晨间 / 收工）**。

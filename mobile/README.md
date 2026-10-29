@@ -3,6 +3,7 @@
 > 个人工作台 · 移动端独立分支：**Capacitor 8 套壳，Android only + 侧载 APK（不上架）**。
 > 与桌面版（`desktop/`）对称：`mobile/` 放原生壳与配置，`js/19-app.js` 放前端桥（对应 `js/18-desktop.js`）。
 > 定位：**App 是纯增量**，网页版 / PWA / 桌面 / 扩展行为一律保持不变。
+> 文档对齐：2026-10-29（本次为文档-代码一致性对齐；插件表按 `mobile/package.json` 实际依赖更新）。
 
 ## 1. 关键决策（已与用户确认）
 
@@ -51,8 +52,10 @@ mobile/
   | `@capacitor/filesystem` | B | 本地音乐迁原生 / 快照写私有目录 |
   | `@capacitor/share` | B | 系统分享导出 / 导入 |
   | `@capacitor/local-notifications` | C | 到点提醒（绝对时间调度） |
-  | `@capacitor/keep-awake` | C | 番茄钟屏幕常亮 |
+  | `@capacitor/screen-orientation` | 沉浸移动交互（2026-10-13） | 沉浸层横竖屏锁定（WebView 的 `screen.orientation.lock()` 不可用） |
   | `@capacitor/haptics` | D | 触觉反馈 |
+
+  **屏幕常亮不装插件**：`@capacitor/keep-awake` 已从 npm 下架，改用标准 **Screen Wake Lock API**（`navigator.wakeLock.request("screen")`，跟随 `pomo:phase`），见 `js/20-appdata.js`。
 
 ## 4. 构建流程（命令链固定，漏第一步的症状是「代码写了没生效」）
 
@@ -88,7 +91,7 @@ cd mobile/android && gradlew.bat assembleDebug
 ## 6. 代码规范
 
 1. **`__WB_APP__` 是唯一 App 形态标记**（编译期裸标识符，`build.js --app` 用 esbuild `define` 注入 `true`，其余分支注入 `false`；死分支会被 minify 消除）。所有 App 专属差异只写 `if (__WB_APP__) {...}` 或 `__WB_APP__ ? A : B`，**禁止新造第二套判断**。
-2. **`js/19-app.js` 是唯一原生出口**：网页版 / PWA / 桌面 / 扩展里它整体 no-op。App 里也**不直接** `Capacitor.Plugins.*`，一律经 `WB.app.*` 封装，封装内部做「插件不可用 / 权限被拒 → 降级回 Web 行为」。
+2. **`js/19-app.js` 是唯一原生出口**：网页版 / PWA / 桌面 / 扩展里它整体 no-op。App 里也**不直接** `Capacitor.Plugins.*`，一律经 `WB.app.*` / `WB.orientation` 封装，封装内部做「插件不可用 / 权限被拒 → 降级回 Web 行为」。
 3. **形态判定只看 `WB.env.mode`**（在 `01-utils.js` 固化），不裸写 `isFile` / `inTauri` / `__WB_APP__` 组合。5 种形态：`folder` / `single` / `pwa` / `desktop` / `app`。
 4. **前端不许自己 `new Notification()`**（沿用桌面版 #079 教训）：App 里走 `WB.notify()` → `19-app.js` → Local Notifications。
 5. **App 能力全部可降级**：任何原生调用 `catch` 后回落 Web 行为并给一句可恢复提示，绝不因原生失败而白屏 / 抛错。
@@ -101,6 +104,7 @@ cd mobile/android && gradlew.bat assembleDebug
 | 返回键 | 逐层关闭浮层（modal / 抽屉 / cmdk / 沉浸层 / 窗景 / 书架），到底层「今日」再按则退到后台（`App.minimizeApp` 或退出，待真机定）；**不直接杀进程** |
 | edge-to-edge | Android 15 强制；策略 = **透明状态栏 + 顶栏按 `safe-area-inset-top` 留白**，状态栏文字色随主题深浅切换 |
 | 后台 | 番茄计时时间戳制，退后台照走、重开恢复；环境音退后台暂停、回前台恢复；到点提醒走 Local Notifications 绝对时间 |
+| 屏幕方向 | 沉浸层顶栏 `⟳` 循环 `auto → 横屏 → 竖屏`（偏好 `pomoOrientation`）；App 里走 `WB.orientation` → `@capacitor/screen-orientation`，网页端退回 `screen.orientation`，再不行 no-op；退出沉浸即 `unlock()`。横屏版式由 CSS 两列网格保证（见开发交接 §8r） |
 | 数据 | localStorage 文字数据 + IndexedDB 大文件，B 批加原生落盘（Preferences / Filesystem / 系统分享）；App 卸载/清数据前用户需靠「导出分享」带走 |
 | 云同步 | 默认关闭；`14-cloud.js` 在 App 里 `cloudBaseUrl` 为空 → 静默，不误触发 |
 
@@ -125,3 +129,4 @@ cd mobile/android && gradlew.bat assembleDebug
 - [ ] C 批遗留：精确闹钟（SCHEDULE_EXACT_ALARM）在 Android 12+ 是特殊权限，未授予时到点可能不准（必要时加设置页引导）；到点提醒的"锁屏/免打扰下是否显示"未专项验证
 - [x] **D 批完成（2026-10-10）**：① **触觉反馈** —— `@capacitor/haptics`，`WB.appData.haptic(kind)`（Web no-op），落点在 `06-ui.js` 的 `celebrate`（success）/`starBurst`（light）且**在 `motionOff()` 之后**（减弱动效时免振）；不在 `confetti` 里加（`celebrate` 会连调多次）；② **启动屏自定义** —— 奶油底 `#f6f1e7` + 品牌 mark（白圆 + 雾蓝/淡紫圆），覆盖 11 张 `@drawable/splash`（各密度）+ **Android 12+ 的 `windowSplashScreenBackground`/`windowSplashScreenAnimatedIcon`**（`android:background` 在 12+ 不生效，见踩坑 M05）。真机验证：启动屏奶油底 ✅、勾选待办 logcat 见 `Haptics impact {"style":"LIGHT"}` ✅。**音频瘦身跳过**（7 个 Ogg 中 6 个已是 Opus、仅 lofi 是 Vorbis，收益有限且转码可能破坏无缝循环）
 - [ ] E 批（可选）：云同步联调 / 应用内检查更新 / 系统分享收文本
+- [x] **沉浸横竖屏（2026-10-13）**：新增插件 `@capacitor/screen-orientation`，`WB.orientation`（lock / unlock / available），沉浸层顶栏 `⟳` 三态循环、偏好 `pomoOrientation`；真机 `lock("landscape")` 788×359 / `lock("portrait")` 359×788 均返回 true（根因与教训见 `开发踩坑.md` #104，规范见开发交接文档 §8r）

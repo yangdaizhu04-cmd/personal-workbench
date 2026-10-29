@@ -9,7 +9,7 @@ const groups = [
   {id: "today",   label: "今日", items: ["today"]},
   {id: "plan",    label: "计划", items: ["todos", "calendar", "goals", "countdown", "wishes"]},
   {id: "record",  label: "记录", items: ["habits", "journal", "mood", "notes", "ledger", "media", "health", "skills"]},
-  {id: "tool",    label: "工具", items: ["pomodoro", "links", "fun"]},
+  {id: "tool",    label: "工具", items: ["pomodoro", "links", "fun", "assistant"]},
   {id: "content", label: "内容", items: ["podcasts", "books"]},
   {id: "review",  label: "回顾", items: ["stats"]},
   {id: "bottom",  label: "",    items: ["trash", "settings"]},

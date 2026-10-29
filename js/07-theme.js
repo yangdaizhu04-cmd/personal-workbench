@@ -20,11 +20,12 @@ const DEFAULTS = {
   /* 沉浸专注层（js/16-immersive.js）：默认手动进入，快捷键 F 或计时卡「沉浸」 */
   pomoImmersive: true,           // 总开关
   pomoImmersiveAuto: false,      // 开始专注时自动进入
-  pomoImmersiveScene: "mist",    // mist 晨雾 | deep 深海 | ember 篝火 | star 星野
+  pomoImmersiveScene: "mist",    // 场景 id，见 16-immersive.js 的 SCENES（12 套）
   pomoImmersiveFull: true,       // 进入时请求浏览器全屏（被拒也能用）
   pomoImmersiveGuide: true,      // 3-2-1 准备 + 休息呼吸引导 + 静止自动隐藏控件
   pomoImmersiveVideo: true,      // 沉浸层的循环视频背景（vendor/video，4.5MB，仅沉浸时加载）
   pomoSoundDuck: true,           // 专注运行中把环境音压到约 55%
+  pomoOrientation: "auto",       // 沉浸方向：auto | landscape | portrait（见 js/16-immersive.js）
   offworkHour: 18, birthdayAhead: 7,
   morningHour: 8,                // 晨间提醒时刻（只被桌面版后台提醒用；网页版的晨间仪式仍是"当天首次打开"触发）
   /* 桌面版（Tauri）：关窗后由 Rust 后台线程继续发系统通知，见 js/18-desktop.js。
